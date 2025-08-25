@@ -2,7 +2,6 @@
 
 # Claude Relay Service 管理脚本
 # 用于安装、更新、卸载、启动、停止、重启服务
-# 可以使用 crs 快捷命令调用
 
 # 颜色定义
 RED='\033[0;31m'
@@ -14,7 +13,7 @@ BOLD='\033[1m'
 NC='\033[0m' # No Color
 
 # 默认配置
-DEFAULT_INSTALL_DIR="$HOME/claude-relay-service"
+DEFAULT_INSTALL_DIR="$HOME/crs"
 DEFAULT_REDIS_HOST="localhost"
 DEFAULT_REDIS_PORT="6379"
 DEFAULT_REDIS_PASSWORD=""
@@ -355,11 +354,55 @@ install_local_redis() {
 }
 
 
+# 检测是否为有效的本地项目目录
+detect_local_project() {
+    local check_dir="${1:-$(pwd)}"
+    
+    # 检查关键文件是否存在
+    if [ -f "$check_dir/package.json" ] && \
+       [ -f "$check_dir/src/app.js" ] && \
+       [ -f "$check_dir/config/config.example.js" ]; then
+        
+        # 检查 package.json 中的项目名称
+        local project_name=$(grep '"name"' "$check_dir/package.json" | grep 'claude-relay-service')
+        if [ -n "$project_name" ]; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+# 获取部署类型
+get_deployment_type() {
+    local dir="${1:-$APP_DIR}"
+    if [ -f "$dir/.deployment_type" ]; then
+        cat "$dir/.deployment_type"
+    else
+        echo "unknown"
+    fi
+}
+
+# 设置部署类型
+set_deployment_type() {
+    local type="$1"
+    local dir="${2:-$APP_DIR}"
+    echo "$type" > "$dir/.deployment_type"
+}
+
 # 检查是否已安装
 check_installation() {
+    # 检查传统安装方式（克隆到独立目录）
     if [ -d "$APP_DIR" ] && [ -f "$APP_DIR/package.json" ]; then
         return 0
     fi
+    
+    # 检查本地项目部署
+    if detect_local_project; then
+        # 如果是本地项目目录，即使没有 .deployment_type 文件也认为已安装
+        # 这样可以处理用户手动删除标记文件或首次运行的情况
+        return 0
+    fi
+    
     return 1
 }
 
@@ -367,11 +410,48 @@ check_installation() {
 install_service() {
     print_info "开始安装 Claude Relay Service..."
     
-    # 询问安装目录
-    echo -n "安装目录 (默认: $DEFAULT_INSTALL_DIR): "
-    read input
-    INSTALL_DIR=${input:-$DEFAULT_INSTALL_DIR}
-    APP_DIR="$INSTALL_DIR/app"
+    # 检测当前是否在项目目录中
+    local is_local_project=false
+    local current_dir=$(pwd)
+    
+    if detect_local_project "$current_dir"; then
+        is_local_project=true
+        print_info "检测到当前在项目目录中: $current_dir"
+        echo ""
+        print_warning "请选择安装模式："
+        echo "  1) 本地安装 - 基于当前项目目录进行就地部署（推荐）"
+        echo "  2) 克隆安装 - 克隆到独立目录（传统方式）"
+        echo ""
+        echo -n "请选择 [1-2] (默认: 1): "
+        read install_mode
+        
+        # 如果用户没有输入，默认选择本地安装
+        install_mode=${install_mode:-1}
+        
+        case "$install_mode" in
+            1)
+                print_info "使用本地安装模式"
+                INSTALL_DIR="$current_dir"
+                APP_DIR="$current_dir"
+                ;;
+            2)
+                print_info "使用克隆安装模式"
+                is_local_project=false
+                ;;
+            *)
+                print_error "无效选项"
+                return 1
+                ;;
+        esac
+    fi
+    
+    # 如果不是本地项目或选择克隆安装，询问安装目录
+    if [ "$is_local_project" = false ]; then
+        echo -n "安装目录 (默认: $DEFAULT_INSTALL_DIR): "
+        read input
+        INSTALL_DIR=${input:-$DEFAULT_INSTALL_DIR}
+        APP_DIR="$INSTALL_DIR/app"
+    fi
     
     # 询问服务端口
     echo -n "服务端口 (默认: $DEFAULT_APP_PORT): "
@@ -396,26 +476,48 @@ install_service() {
         read -n 1 reinstall
         echo
         if [[ ! "$reinstall" =~ ^[Yy]$ ]]; then
+            # 即使不重新安装，也要确保设置正确的变量和部署类型标记
+            if [ "$is_local_project" = true ]; then
+                # 确保 .deployment_type 文件存在
+                if [ ! -f "$APP_DIR/.deployment_type" ]; then
+                    set_deployment_type "local" "$APP_DIR"
+                    print_success "已设置本地部署标记"
+                fi
+                print_info "保持现有的本地部署配置"
+            fi
             return 0
         fi
     fi
     
-    # 创建安装目录
-    mkdir -p "$INSTALL_DIR"
-    
-    # 克隆项目
-    print_info "克隆项目代码..."
-    if [ -d "$APP_DIR" ]; then
-        rm -rf "$APP_DIR"
+    # 根据安装模式处理项目代码
+    if [ "$is_local_project" = true ]; then
+        # 本地安装模式：使用当前目录
+        print_info "使用本地项目目录: $APP_DIR"
+        cd "$APP_DIR"
+        
+        # 设置部署类型标记
+        set_deployment_type "local" "$APP_DIR"
+        print_success "已标记为本地部署"
+    else
+        # 克隆安装模式：创建目录并克隆项目
+        mkdir -p "$INSTALL_DIR"
+        
+        print_info "克隆项目代码..."
+        if [ -d "$APP_DIR" ]; then
+            rm -rf "$APP_DIR"
+        fi
+        
+        if ! git clone https://github.com/Wei-Shaw/claude-relay-service.git "$APP_DIR"; then
+            print_error "克隆项目失败"
+            return 1
+        fi
+        
+        cd "$APP_DIR"
+        
+        # 设置部署类型标记
+        set_deployment_type "cloned" "$APP_DIR"
+        print_success "已标记为克隆部署"
     fi
-    
-    if ! git clone https://github.com/Wei-Shaw/claude-relay-service.git "$APP_DIR"; then
-        print_error "克隆项目失败"
-        return 1
-    fi
-    
-    # 进入项目目录
-    cd "$APP_DIR"
     
     # 安装npm依赖
     print_info "安装项目依赖..."
@@ -430,13 +532,32 @@ install_service() {
     # 创建配置文件
     print_info "创建配置文件..."
     
-    # 复制示例配置
-    if [ -f "config/config.example.js" ]; then
+    # 复制示例配置（如果不存在）
+    if [ -f "config/config.example.js" ] && [ ! -f "config/config.js" ]; then
         cp config/config.example.js config/config.js
+        print_success "已创建 config.js"
     fi
     
-    # 创建.env文件
-    cat > .env << EOF
+    # 创建.env文件（如果不存在或强制覆盖）
+    local create_env=true
+    if [ -f ".env" ] && [ "$is_local_project" = true ]; then
+        print_warning "检测到已存在 .env 文件"
+        echo -n "是否要覆盖现有配置？(y/N): "
+        read -n 1 overwrite_env
+        echo
+        if [[ ! "$overwrite_env" =~ ^[Yy]$ ]]; then
+            create_env=false
+            print_info "保留现有 .env 配置"
+            # 确保端口配置正确
+            if ! grep -q "^PORT=" .env; then
+                echo "PORT=$APP_PORT" >> .env
+                print_info "已添加端口配置到现有 .env 文件"
+            fi
+        fi
+    fi
+    
+    if [ "$create_env" = true ]; then
+        cat > .env << EOF
 # 环境变量配置
 NODE_ENV=production
 PORT=$APP_PORT
@@ -455,6 +576,8 @@ REDIS_PASSWORD=$REDIS_PASSWORD
 # 日志配置
 LOG_LEVEL=info
 EOF
+        print_success "已创建 .env 配置文件"
+    fi
     
     # 运行setup命令
     print_info "运行初始化设置..."
@@ -516,9 +639,6 @@ EOF
         fi
     fi
     
-    # 创建软链接
-    create_symlink
-    
     print_success "安装完成！"
     
     # 自动启动服务
@@ -543,9 +663,9 @@ EOF
         echo -e "  公网 API: ${GREEN}http://$public_ip:$APP_PORT/api/v1${NC}"
     fi
     echo -e "\n${YELLOW}管理命令：${NC}"
-    echo "  查看状态: crs status"
-    echo "  停止服务: crs stop"
-    echo "  重启服务: crs restart"
+    echo "  查看状态: $(basename $0) status"
+    echo "  停止服务: $(basename $0) stop"
+    echo "  重启服务: $(basename $0) restart"
 }
 
 
@@ -737,9 +857,6 @@ update_service() {
         fi
     fi
     
-    # 更新软链接到最新版本
-    create_symlink
-    
     # 如果之前在运行，则重新启动服务
     if [ "$was_running" = true ]; then
         print_info "重新启动服务..."
@@ -778,19 +895,62 @@ update_service() {
 
 # 卸载服务
 uninstall_service() {
-    if [ -z "$INSTALL_DIR" ]; then
-        echo -n "请输入安装目录 (默认: $DEFAULT_INSTALL_DIR): "
-        read input
-        INSTALL_DIR=${input:-$DEFAULT_INSTALL_DIR}
-        APP_DIR="$INSTALL_DIR/app"
+    # 自动检测安装类型和目录
+    local deployment_type="unknown"
+    local auto_detected=false
+    
+    # 首先检查当前目录是否为本地部署
+    if [ -f "./.deployment_type" ]; then
+        deployment_type=$(get_deployment_type ".")
+        INSTALL_DIR="$(pwd)"
+        APP_DIR="$(pwd)"
+        auto_detected=true
+        print_info "检测到本地部署: $INSTALL_DIR"
+    elif [ -n "$APP_DIR" ] && [ -f "$APP_DIR/.deployment_type" ]; then
+        # 检查已设置的 APP_DIR
+        deployment_type=$(get_deployment_type "$APP_DIR")
+        auto_detected=true
+        print_info "检测到部署类型: $deployment_type, 目录: $APP_DIR"
     fi
     
-    if [ ! -d "$INSTALL_DIR" ]; then
-        print_error "安装目录不存在"
-        return 1
+    # 如果未自动检测到，询问用户
+    if [ "$auto_detected" = false ]; then
+        if [ -z "$INSTALL_DIR" ]; then
+            echo -n "请输入安装目录 (默认: $DEFAULT_INSTALL_DIR): "
+            read input
+            INSTALL_DIR=${input:-$DEFAULT_INSTALL_DIR}
+            APP_DIR="$INSTALL_DIR/app"
+        fi
+        
+        if [ ! -d "$INSTALL_DIR" ]; then
+            print_error "安装目录不存在"
+            return 1
+        fi
+        
+        # 尝试获取部署类型
+        deployment_type=$(get_deployment_type "$APP_DIR")
     fi
     
     print_warning "即将卸载 Claude Relay Service"
+    print_info "部署类型: $deployment_type"
+    print_info "安装目录: $INSTALL_DIR"
+    
+    # 根据部署类型显示不同的提示
+    if [ "$deployment_type" = "local" ]; then
+        echo ""
+        print_warning "检测到本地工程部署，卸载将:"
+        echo "  ✓ 停止服务进程"
+        echo "  ✓ 清理配置文件 (.env、logs 等)"
+        echo "  ✗ 保留项目源代码文件"
+        echo ""
+    else
+        echo ""
+        print_warning "检测到克隆部署，卸载将:"
+        echo "  ✓ 停止服务进程"
+        echo "  ✓ 删除整个安装目录"
+        echo ""
+    fi
+    
     echo -n "确定要卸载吗？(y/N): "
     read -n 1 confirm
     echo
@@ -800,6 +960,7 @@ uninstall_service() {
     fi
     
     # 停止服务
+    print_info "停止服务..."
     stop_service
     
     # 备份数据
@@ -824,8 +985,47 @@ uninstall_service() {
         print_success "数据已备份到: $backup_dir"
     fi
     
-    # 删除安装目录
-    rm -rf "$INSTALL_DIR"
+    # 根据部署类型执行不同的清理逻辑
+    if [ "$deployment_type" = "local" ]; then
+        # 本地部署：只清理服务相关文件，保留源代码
+        print_info "清理本地部署的服务文件..."
+        
+        # 清理配置文件（可选）
+        echo -n "是否要删除配置文件 (.env, config.js)？(y/N): "
+        read -n 1 delete_config
+        echo
+        
+        if [[ "$delete_config" =~ ^[Yy]$ ]]; then
+            rm -f "$APP_DIR/.env" 2>/dev/null
+            rm -f "$APP_DIR/config/config.js" 2>/dev/null
+            print_success "已删除配置文件"
+        fi
+        
+        # 清理服务运行文件
+        rm -rf "$APP_DIR/logs" 2>/dev/null
+        rm -f "$APP_DIR/.pid" 2>/dev/null
+        rm -f "$APP_DIR/.deployment_type" 2>/dev/null
+        
+        # 清理node_modules（可选）
+        if [ -d "$APP_DIR/node_modules" ]; then
+            echo -n "是否要删除 node_modules？(y/N): "
+            read -n 1 delete_modules
+            echo
+            
+            if [[ "$delete_modules" =~ ^[Yy]$ ]]; then
+                rm -rf "$APP_DIR/node_modules"
+                print_success "已删除 node_modules"
+            fi
+        fi
+        
+        print_success "本地部署清理完成！项目源代码已保留"
+        
+    else
+        # 克隆部署：删除整个安装目录
+        print_info "删除克隆部署的整个目录..."
+        rm -rf "$INSTALL_DIR"
+        print_success "克隆部署删除完成！"
+    fi
     
     print_success "卸载完成！"
 }
@@ -835,6 +1035,17 @@ start_service() {
     if ! check_installation; then
         print_error "服务未安装，请先运行: $0 install"
         return 1
+    fi
+    
+    # 确保APP_DIR变量正确设置
+    if [ -z "$APP_DIR" ]; then
+        if detect_local_project; then
+            APP_DIR="$(pwd)"
+            INSTALL_DIR="$(pwd)"
+        else
+            print_error "无法确定应用目录"
+            return 1
+        fi
     fi
     
     print_info "启动服务..."
@@ -1222,7 +1433,7 @@ switch_branch() {
     fi
     
     echo ""
-    print_info "提示：如遇到问题，可以运行 'crs update' 强制更新到最新版本"
+    print_info "提示：如遇到问题，可以运行 '$(basename $0) update' 强制更新到最新版本"
 }
 
 # 显示状态
@@ -1304,17 +1515,22 @@ show_help() {
     echo "用法: $0 [命令]"
     echo ""
     echo "命令:"
-    echo "  install        - 安装服务"
+    echo "  install        - 安装服务（支持本地和克隆两种模式）"
     echo "  update         - 更新服务"
-    echo "  uninstall      - 卸载服务"
+    echo "  uninstall      - 卸载服务（本地部署时保护源代码）"
     echo "  start          - 启动服务"
     echo "  stop           - 停止服务"
     echo "  restart        - 重启服务"
     echo "  status         - 查看状态"
     echo "  switch-branch  - 切换分支"
     echo "  update-pricing - 更新模型价格数据"
-    echo "  symlink        - 创建 crs 快捷命令"
     echo "  help           - 显示帮助"
+    echo ""
+    echo "安装模式说明:"
+    echo "  本地安装      - 在项目目录中运行，就地部署服务"
+    echo "  克隆安装      - 克隆项目到独立目录（传统方式）"
+    echo ""
+    echo "注意: 在项目目录中运行 install 命令将自动检测并提供安装模式选择"
     echo ""
 }
 
@@ -1432,9 +1648,6 @@ handle_menu_choice() {
                 
                 # 安装服务
                 install_service
-                
-                # 创建软链接
-                create_symlink
                 
                 echo -n "按回车键继续..."
                 read
@@ -1566,8 +1779,8 @@ create_symlink() {
     
     # 创建软链接
     if sudo ln -s "$script_path" "$symlink_path"; then
-        print_success "已创建快捷命令 'crs'"
-        echo "您现在可以在任何地方使用 'crs' 命令管理服务"
+        print_success "已创建快捷命令"
+        echo "您现在可以在任何地方使用快捷命令管理服务"
         
         # 验证软链接
         if [ -L "$symlink_path" ]; then
@@ -1585,30 +1798,37 @@ create_symlink() {
 
 # 加载已安装的配置
 load_config() {
-    # 尝试找到安装目录
-    if [ -z "$INSTALL_DIR" ]; then
-        if [ -d "$DEFAULT_INSTALL_DIR" ]; then
-            INSTALL_DIR="$DEFAULT_INSTALL_DIR"
+    # 优先检查当前目录是否为本地部署
+    if [ -f "./.deployment_type" ] && detect_local_project; then
+        INSTALL_DIR="$(pwd)"
+        APP_DIR="$(pwd)"
+        print_info "检测到本地部署在当前目录: $APP_DIR"
+    else
+        # 尝试找到传统安装目录
+        if [ -z "$INSTALL_DIR" ]; then
+            if [ -d "$DEFAULT_INSTALL_DIR" ]; then
+                INSTALL_DIR="$DEFAULT_INSTALL_DIR"
+            fi
+        fi
+        
+        if [ -n "$INSTALL_DIR" ]; then
+            # 检查是否使用了标准的安装结构（项目在 app 子目录）
+            if [ -d "$INSTALL_DIR/app" ] && [ -f "$INSTALL_DIR/app/package.json" ]; then
+                APP_DIR="$INSTALL_DIR/app"
+            # 检查是否直接克隆了项目（项目在根目录）
+            elif [ -f "$INSTALL_DIR/package.json" ]; then
+                APP_DIR="$INSTALL_DIR"
+            else
+                APP_DIR="$INSTALL_DIR/app"
+            fi
         fi
     fi
     
-    if [ -n "$INSTALL_DIR" ]; then
-        # 检查是否使用了标准的安装结构（项目在 app 子目录）
-        if [ -d "$INSTALL_DIR/app" ] && [ -f "$INSTALL_DIR/app/package.json" ]; then
-            APP_DIR="$INSTALL_DIR/app"
-        # 检查是否直接克隆了项目（项目在根目录）
-        elif [ -f "$INSTALL_DIR/package.json" ]; then
-            APP_DIR="$INSTALL_DIR"
-        else
-            APP_DIR="$INSTALL_DIR/app"
-        fi
-        
-        # 加载.env配置
-        if [ -f "$APP_DIR/.env" ]; then
-            export $(cat "$APP_DIR/.env" | grep -v '^#' | xargs)
-            # 特别加载端口配置
-            APP_PORT=$(grep "^PORT=" "$APP_DIR/.env" 2>/dev/null | cut -d'=' -f2)
-        fi
+    # 加载.env配置
+    if [ -n "$APP_DIR" ] && [ -f "$APP_DIR/.env" ]; then
+        export $(cat "$APP_DIR/.env" | grep -v '^#' | xargs 2>/dev/null) 2>/dev/null
+        # 特别加载端口配置
+        APP_PORT=$(grep "^PORT=" "$APP_DIR/.env" 2>/dev/null | cut -d'=' -f2)
     fi
 }
 
@@ -1650,9 +1870,6 @@ main() {
             
             # 安装服务
             install_service
-            
-            # 创建软链接
-            create_symlink
             ;;
         update)
             update_service
@@ -1677,16 +1894,6 @@ main() {
             ;;
         update-pricing)
             update_model_pricing
-            ;;
-        symlink)
-            # 单独创建软链接
-            # 确保 APP_DIR 已设置
-            if [ -z "$APP_DIR" ]; then
-                print_error "请先安装项目后再创建软链接"
-                print_info "运行: $0 install"
-                exit 1
-            fi
-            create_symlink
             ;;
         help)
             show_help

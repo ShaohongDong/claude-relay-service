@@ -242,3 +242,5 @@ web/apiStats/
 
 # Admin SPA build files
 web/admin-spa/dist/
+
+.deployment_type
