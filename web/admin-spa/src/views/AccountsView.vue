@@ -526,7 +526,7 @@
                         !account.isActive)
                     "
                     :class="[
-                      'rounded px-2.5 py-1 text-xs font-medium transition-colors',
+                      'min-w-[80px] rounded px-2.5 py-1 text-xs font-medium transition-colors',
                       account.isResetting
                         ? 'cursor-not-allowed bg-gray-100 text-gray-400'
                         : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
@@ -540,7 +540,7 @@
                   </button>
                   <button
                     :class="[
-                      'rounded px-2.5 py-1 text-xs font-medium transition-colors',
+                      'min-w-[80px] rounded px-2.5 py-1 text-xs font-medium transition-colors',
                       account.isTogglingSchedulable
                         ? 'cursor-not-allowed bg-gray-100 text-gray-400'
                         : account.schedulable
@@ -555,7 +555,7 @@
                     <span class="ml-1">{{ account.schedulable ? '调度' : '停用' }}</span>
                   </button>
                   <button
-                    class="rounded bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-200"
+                    class="min-w-[80px] rounded bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-200"
                     :title="'编辑账户'"
                     @click="editAccount(account)"
                   >
@@ -563,7 +563,7 @@
                     <span class="ml-1">编辑</span>
                   </button>
                   <button
-                    class="rounded bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-200"
+                    class="min-w-[80px] rounded bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-200"
                     :title="'删除账户'"
                     @click="deleteAccount(account)"
                   >
