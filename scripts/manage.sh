@@ -1291,6 +1291,12 @@ start_service_direct() {
 stop_service() {
     print_info "停止服务..."
     
+    # 检查是否有进程在运行
+    if ! pgrep -f "node.*src/app.js" > /dev/null; then
+        print_info "服务未运行"
+        return 0
+    fi
+    
     # 尝试使用pm2停止
     if command_exists pm2 && [ -n "$APP_DIR" ] && [ -d "$APP_DIR" ]; then
         cd "$APP_DIR" 2>/dev/null
@@ -1307,8 +1313,32 @@ stop_service() {
         fi
     fi
     
-    # 强制停止所有相关进程
+    # 优雅停止所有相关进程
     pkill -f "node.*src/app.js" 2>/dev/null || true
+    
+    # 等待进程停止，最多等待10秒
+    local wait_count=0
+    while pgrep -f "node.*src/app.js" > /dev/null && [ $wait_count -lt 10 ]; do
+        print_info "等待进程停止... ($((wait_count + 1))/10)"
+        sleep 1
+        wait_count=$((wait_count + 1))
+    done
+    
+    # 如果进程仍在运行，强制终止
+    if pgrep -f "node.*src/app.js" > /dev/null; then
+        print_warning "进程未能优雅停止，强制终止..."
+        pkill -9 -f "node.*src/app.js" 2>/dev/null || true
+        sleep 2
+        
+        # 再次检查
+        if pgrep -f "node.*src/app.js" > /dev/null; then
+            print_error "无法停止服务进程"
+            return 1
+        fi
+    fi
+    
+    # 清理PID文件
+    rm -f "$APP_DIR/.pid" 2>/dev/null || true
     
     print_success "服务已停止"
 }
@@ -1316,8 +1346,23 @@ stop_service() {
 # 重启服务
 restart_service() {
     print_info "重启服务..."
-    stop_service
-    sleep 2
+    
+    # 停止服务并检查是否成功
+    if ! stop_service; then
+        print_error "停止服务失败，无法重启"
+        return 1
+    fi
+    
+    # 额外等待确保所有资源被释放
+    sleep 3
+    
+    # 再次确认没有遗留进程
+    if pgrep -f "node.*src/app.js" > /dev/null; then
+        print_error "检测到遗留进程，重启失败"
+        return 1
+    fi
+    
+    # 启动服务
     start_service
 }
 
