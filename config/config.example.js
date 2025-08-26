@@ -84,6 +84,18 @@ const config = {
     timezoneOffset: parseInt(process.env.TIMEZONE_OFFSET) || 8 // UTC偏移小时数，默认+8
   },
 
+  // 🔄 重试机制配置
+  retry: {
+    enable429Retry: process.env.ENABLE_429_RETRY !== 'false', // 默认启用429错误重试
+    enable5xxRetry: process.env.ENABLE_5XX_RETRY !== 'false', // 默认启用5xx错误重试
+    maxRetries: parseInt(process.env.MAX_RETRY_ATTEMPTS) || 5, // 最大重试次数
+    retryDelay: parseInt(process.env.RETRY_DELAY_MS) || 100, // 重试延迟毫秒数
+    temporaryUnavailableDuration: parseInt(process.env.TEMP_UNAVAILABLE_DURATION) || 300, // 临时不可用标记持续时间（秒）
+    retryableStatusCodes: process.env.RETRYABLE_STATUS_CODES
+      ? process.env.RETRYABLE_STATUS_CODES.split(',').map((code) => parseInt(code.trim()))
+      : [502, 503, 504] // 默认可重试的5xx状态码
+  },
+
   // 🎨 Web界面配置
   web: {
     title: process.env.WEB_TITLE || 'Claude Relay Service',
