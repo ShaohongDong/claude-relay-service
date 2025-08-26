@@ -1316,10 +1316,10 @@ stop_service() {
     # 优雅停止所有相关进程
     pkill -f "node.*src/app.js" 2>/dev/null || true
     
-    # 等待进程停止，最多等待10秒
+    # 等待进程停止，最多等待15秒 (给应用内部10秒超时留出缓冲)
     local wait_count=0
-    while pgrep -f "node.*src/app.js" > /dev/null && [ $wait_count -lt 10 ]; do
-        print_info "等待进程停止... ($((wait_count + 1))/10)"
+    while pgrep -f "node.*src/app.js" > /dev/null && [ $wait_count -lt 15 ]; do
+        print_info "等待进程优雅关闭... ($((wait_count + 1))/15)"
         sleep 1
         wait_count=$((wait_count + 1))
     done
@@ -1353,8 +1353,8 @@ restart_service() {
         return 1
     fi
     
-    # 额外等待确保所有资源被释放
-    sleep 3
+    # 额外等待确保所有资源被释放 (Redis连接、文件句柄等)
+    sleep 2
     
     # 再次确认没有遗留进程
     if pgrep -f "node.*src/app.js" > /dev/null; then
