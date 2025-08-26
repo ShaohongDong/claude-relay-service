@@ -519,6 +519,122 @@ class ClaudeRelayService {
     }
   }
 
+  /**
+   * 诊断网络连接错误发生的阶段
+   * @param {Error} error - 网络错误对象
+   * @param {Agent|null} proxyAgent - 代理Agent实例
+   * @param {string} accountId - 账户ID
+   * @returns {Object} 诊断结果
+   */
+  async _diagnoseConnectionError(error, proxyAgent, accountId) {
+    const diagnosis = {
+      stage: 'unknown',
+      description: 'Unknown connection error',
+      isProxyIssue: false,
+      isAPIIssue: false,
+      proxyInfo: null
+    }
+
+    try {
+      // 获取账户的代理配置信息
+      let proxyConfig = null
+      if (accountId) {
+        const accountData = await claudeAccountService.getAllAccounts()
+        const account = accountData.find((acc) => acc.id === accountId)
+        proxyConfig = account?.proxy
+      }
+
+      // 无代理模式 - 所有错误都是API连接问题
+      if (!proxyAgent || !proxyConfig) {
+        diagnosis.stage = 'api_connection'
+        diagnosis.description = 'Direct connection to Claude API failed'
+        diagnosis.isAPIIssue = true
+        diagnosis.proxyInfo = 'No proxy configured'
+        return diagnosis
+      }
+
+      // 有代理模式 - 分析错误发生阶段
+      let proxy
+      try {
+        proxy = typeof proxyConfig === 'string' ? JSON.parse(proxyConfig) : proxyConfig
+      } catch (parseError) {
+        logger.warn('⚠️ Failed to parse proxy config for diagnosis:', parseError)
+        diagnosis.stage = 'config_error'
+        diagnosis.description = 'Invalid proxy configuration format'
+        diagnosis.isProxyIssue = true
+        diagnosis.proxyInfo = 'Invalid proxy config'
+        return diagnosis
+      }
+      diagnosis.proxyInfo = ProxyHelper.maskProxyInfo(proxyConfig)
+
+      // 通过错误地址和端口判断失败阶段
+      if (error.address && error.port) {
+        // 如果错误地址和端口匹配代理配置，说明是代理连接失败
+        if (error.address === proxy.host && error.port === proxy.port) {
+          diagnosis.stage = 'proxy_connection'
+          diagnosis.description = `Failed to connect to proxy server ${proxy.type}://${proxy.host}:${proxy.port}`
+          diagnosis.isProxyIssue = true
+        } 
+        // 如果是api.anthropic.com或其他地址，说明是API连接失败
+        else if (error.address === 'api.anthropic.com' || error.address === 'api.claude.ai') {
+          diagnosis.stage = 'api_connection'
+          diagnosis.description = `Failed to connect to Claude API through proxy`
+          diagnosis.isAPIIssue = true
+        } else {
+          diagnosis.stage = 'dns_resolution'
+          diagnosis.description = `DNS resolution failed for ${error.address}`
+          diagnosis.isAPIIssue = true
+        }
+      } else {
+        // 根据错误代码推断阶段
+        switch (error.code) {
+          case 'ECONNREFUSED':
+            // 连接被拒绝，可能是代理服务器问题
+            diagnosis.stage = 'proxy_connection'
+            diagnosis.description = 'Connection refused - likely proxy server issue'
+            diagnosis.isProxyIssue = true
+            break
+          case 'ENOTFOUND':
+            // 域名解析失败
+            diagnosis.stage = 'dns_resolution'
+            diagnosis.description = 'DNS resolution failed'
+            diagnosis.isAPIIssue = true
+            break
+          case 'ECONNRESET':
+            // 连接重置，可能发生在任一阶段
+            diagnosis.stage = 'connection_reset'
+            diagnosis.description = 'Connection reset - could be proxy or API server issue'
+            diagnosis.isProxyIssue = false
+            diagnosis.isAPIIssue = false
+            break
+          case 'ETIMEDOUT':
+            // 超时，可能发生在任一阶段
+            diagnosis.stage = 'timeout'
+            diagnosis.description = 'Connection timeout - check proxy and API connectivity'
+            diagnosis.isProxyIssue = false
+            diagnosis.isAPIIssue = false
+            break
+          case 'EHOSTUNREACH':
+            // 主机不可达，通常是网络路由问题
+            diagnosis.stage = 'network_unreachable'
+            diagnosis.description = 'Host unreachable - network routing issue'
+            diagnosis.isAPIIssue = true
+            break
+          default:
+            diagnosis.stage = 'unknown_error'
+            diagnosis.description = `Unknown network error: ${error.code || error.message}`
+            break
+        }
+      }
+
+    } catch (diagnosisError) {
+      logger.warn('⚠️ Failed to diagnose connection error:', diagnosisError)
+      diagnosis.description = 'Failed to diagnose connection error'
+    }
+
+    return diagnosis
+  }
+
   // 🔧 过滤客户端请求头
   _filterClientHeaders(clientHeaders) {
     // 需要移除的敏感 headers
@@ -678,26 +794,42 @@ class ClaudeRelayService {
         onRequest(req)
       }
 
-      req.on('error', (error) => {
+      req.on('error', async (error) => {
         console.error(': ❌ ', error)
+        
+        // 使用新的连接诊断功能
+        const diagnosis = await this._diagnoseConnectionError(error, proxyAgent, accountId)
+        
         logger.error('❌ Claude API request error:', error.message, {
           code: error.code,
           errno: error.errno,
           syscall: error.syscall,
           address: error.address,
-          port: error.port
+          port: error.port,
+          // 增强的诊断信息
+          connectionStage: diagnosis.stage,
+          connectionDescription: diagnosis.description,
+          isProxyIssue: diagnosis.isProxyIssue,
+          isAPIIssue: diagnosis.isAPIIssue,
+          proxyInfo: diagnosis.proxyInfo
         })
 
-        // 根据错误类型提供更具体的错误信息
-        let errorMessage = 'Upstream request failed'
-        if (error.code === 'ECONNRESET') {
-          errorMessage = 'Connection reset by Claude API server'
-        } else if (error.code === 'ENOTFOUND') {
-          errorMessage = 'Unable to resolve Claude API hostname'
-        } else if (error.code === 'ECONNREFUSED') {
-          errorMessage = 'Connection refused by Claude API server'
-        } else if (error.code === 'ETIMEDOUT') {
-          errorMessage = 'Connection timed out to Claude API server'
+        // 使用诊断结果提供更精确的错误信息
+        let errorMessage = diagnosis.description || 'Upstream request failed'
+        
+        // 根据诊断结果提供针对性建议
+        if (diagnosis.isProxyIssue) {
+          logger.error(`🔍 Connection diagnosis: PROXY ISSUE - ${diagnosis.description}`)
+          logger.error(`🔧 Suggestion: Check proxy server connectivity and configuration`)
+          if (diagnosis.proxyInfo) {
+            logger.error(`📡 Proxy details: ${diagnosis.proxyInfo}`)
+          }
+        } else if (diagnosis.isAPIIssue) {
+          logger.error(`🔍 Connection diagnosis: API ISSUE - ${diagnosis.description}`)
+          logger.error(`🔧 Suggestion: Check Claude API connectivity and account status`)
+        } else {
+          logger.error(`🔍 Connection diagnosis: NETWORK ISSUE - ${diagnosis.description}`)
+          logger.error(`🔧 Suggestion: Check network connectivity and proxy configuration`)
         }
 
         reject(new Error(errorMessage))
@@ -1186,28 +1318,44 @@ class ClaudeRelayService {
         })
       })
 
-      req.on('error', (error) => {
+      req.on('error', async (error) => {
+        // 使用新的连接诊断功能
+        const diagnosis = await this._diagnoseConnectionError(error, proxyAgent, accountId)
+        
         logger.error('❌ Claude stream request error:', error.message, {
           code: error.code,
           errno: error.errno,
-          syscall: error.syscall
+          syscall: error.syscall,
+          address: error.address,
+          port: error.port,
+          // 增强的诊断信息
+          connectionStage: diagnosis.stage,
+          connectionDescription: diagnosis.description,
+          isProxyIssue: diagnosis.isProxyIssue,
+          isAPIIssue: diagnosis.isAPIIssue,
+          proxyInfo: diagnosis.proxyInfo
         })
 
-        // 根据错误类型提供更具体的错误信息
-        let errorMessage = 'Upstream request failed'
+        // 使用诊断结果提供更精确的错误信息
+        let errorMessage = diagnosis.description || 'Upstream request failed'
         let statusCode = 500
-        if (error.code === 'ECONNRESET') {
-          errorMessage = 'Connection reset by Claude API server'
+        
+        // 根据诊断结果设置状态码和错误消息
+        if (diagnosis.isProxyIssue) {
           statusCode = 502
-        } else if (error.code === 'ENOTFOUND') {
-          errorMessage = 'Unable to resolve Claude API hostname'
-          statusCode = 502
-        } else if (error.code === 'ECONNREFUSED') {
-          errorMessage = 'Connection refused by Claude API server'
-          statusCode = 502
-        } else if (error.code === 'ETIMEDOUT') {
-          errorMessage = 'Connection timed out to Claude API server'
-          statusCode = 504
+          logger.error(`🔍 Stream diagnosis: PROXY ISSUE - ${diagnosis.description}`)
+          logger.error(`🔧 Suggestion: Check proxy server connectivity and configuration`)
+          if (diagnosis.proxyInfo) {
+            logger.error(`📡 Proxy details: ${diagnosis.proxyInfo}`)
+          }
+        } else if (diagnosis.isAPIIssue) {
+          statusCode = diagnosis.stage === 'timeout' ? 504 : 502
+          logger.error(`🔍 Stream diagnosis: API ISSUE - ${diagnosis.description}`)
+          logger.error(`🔧 Suggestion: Check Claude API connectivity and account status`)
+        } else {
+          statusCode = diagnosis.stage === 'timeout' ? 504 : 502
+          logger.error(`🔍 Stream diagnosis: NETWORK ISSUE - ${diagnosis.description}`)
+          logger.error(`🔧 Suggestion: Check network connectivity and proxy configuration`)
         }
 
         if (!responseStream.headersSent) {
@@ -1330,28 +1478,44 @@ class ClaudeRelayService {
         })
       })
 
-      req.on('error', (error) => {
+      req.on('error', async (error) => {
+        // 使用新的连接诊断功能（传递null作为accountId，因为此方法没有accountId参数）
+        const diagnosis = await this._diagnoseConnectionError(error, proxyAgent, null)
+        
         logger.error('❌ Claude stream request error:', error.message, {
           code: error.code,
           errno: error.errno,
-          syscall: error.syscall
+          syscall: error.syscall,
+          address: error.address,
+          port: error.port,
+          // 增强的诊断信息
+          connectionStage: diagnosis.stage,
+          connectionDescription: diagnosis.description,
+          isProxyIssue: diagnosis.isProxyIssue,
+          isAPIIssue: diagnosis.isAPIIssue,
+          proxyInfo: diagnosis.proxyInfo
         })
 
-        // 根据错误类型提供更具体的错误信息
-        let errorMessage = 'Upstream request failed'
+        // 使用诊断结果提供更精确的错误信息
+        let errorMessage = diagnosis.description || 'Upstream request failed'
         let statusCode = 500
-        if (error.code === 'ECONNRESET') {
-          errorMessage = 'Connection reset by Claude API server'
+        
+        // 根据诊断结果设置状态码和错误消息
+        if (diagnosis.isProxyIssue) {
           statusCode = 502
-        } else if (error.code === 'ENOTFOUND') {
-          errorMessage = 'Unable to resolve Claude API hostname'
-          statusCode = 502
-        } else if (error.code === 'ECONNREFUSED') {
-          errorMessage = 'Connection refused by Claude API server'
-          statusCode = 502
-        } else if (error.code === 'ETIMEDOUT') {
-          errorMessage = 'Connection timed out to Claude API server'
-          statusCode = 504
+          logger.error(`🔍 Stream diagnosis: PROXY ISSUE - ${diagnosis.description}`)
+          logger.error(`🔧 Suggestion: Check proxy server connectivity and configuration`)
+          if (diagnosis.proxyInfo) {
+            logger.error(`📡 Proxy details: ${diagnosis.proxyInfo}`)
+          }
+        } else if (diagnosis.isAPIIssue) {
+          statusCode = diagnosis.stage === 'timeout' ? 504 : 502
+          logger.error(`🔍 Stream diagnosis: API ISSUE - ${diagnosis.description}`)
+          logger.error(`🔧 Suggestion: Check Claude API connectivity and account status`)
+        } else {
+          statusCode = diagnosis.stage === 'timeout' ? 504 : 502
+          logger.error(`🔍 Stream diagnosis: NETWORK ISSUE - ${diagnosis.description}`)
+          logger.error(`🔧 Suggestion: Check network connectivity and proxy configuration`)
         }
 
         if (!responseStream.headersSent) {
