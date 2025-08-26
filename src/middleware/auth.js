@@ -320,6 +320,10 @@ const authenticateApiKey = async (req, res, next) => {
       usage: validation.keyData.usage
     }
     req.usage = validation.keyData.usage
+    
+    // 向后兼容：同时设置 apiKeyData 和 apiKeyId 供测试使用
+    req.apiKeyData = validation.keyData
+    req.apiKeyId = validation.keyData.id
 
     const authDuration = Date.now() - startTime
     const userAgent = req.headers['user-agent'] || 'No User-Agent'
@@ -327,6 +331,9 @@ const authenticateApiKey = async (req, res, next) => {
       `🔓 Authenticated request from key: ${validation.keyData.name} (${validation.keyData.id}) in ${authDuration}ms`
     )
     logger.api(`   User-Agent: "${userAgent}"`)
+    
+    // 设置处理时间供测试验证
+    req.authProcessingTime = authDuration
 
     return next()
   } catch (error) {

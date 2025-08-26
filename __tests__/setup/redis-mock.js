@@ -284,6 +284,40 @@ class RedisMock {
   async ping() {
     return 'PONG'
   }
+  
+  // 并发控制方法 (用于API Key中间件测试)
+  async incrConcurrency(apiKeyId) {
+    const key = `concurrency:${apiKeyId}`
+    const current = parseInt(this.data.get(key) || '0')
+    const newValue = current + 1
+    this.data.set(key, String(newValue))
+    return newValue
+  }
+  
+  async decrConcurrency(apiKeyId) {
+    const key = `concurrency:${apiKeyId}`
+    const current = parseInt(this.data.get(key) || '0')
+    const newValue = Math.max(0, current - 1)
+    if (newValue === 0) {
+      this.data.delete(key)
+    } else {
+      this.data.set(key, String(newValue))
+    }
+    return newValue
+  }
+
+  // Redis client模拟 (用于认证中间件)
+  getClient() {
+    return this
+  }
+
+  // 增量操作
+  async incr(key) {
+    const current = parseInt(this.data.get(key) || '0')
+    const newValue = current + 1
+    this.data.set(key, String(newValue))
+    return newValue
+  }
 
   // 事务支持
   multi() {

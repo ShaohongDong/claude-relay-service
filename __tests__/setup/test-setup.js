@@ -1,5 +1,6 @@
 // 测试环境设置文件
 const path = require('path')
+const { RedisMock } = require('./redis-mock')
 
 // 设置环境变量
 process.env.NODE_ENV = 'test'
@@ -11,6 +12,22 @@ process.env.API_KEY_SALT = 'test-api-key-salt-for-testing-only'
 
 // 设置测试配置路径
 const configPath = path.join(__dirname, '../../config/test-config.js')
+
+// 创建全局Redis Mock实例
+global.testRedisInstance = new RedisMock()
+
+// Mock Redis模块
+jest.mock('../../src/models/redis', () => {
+  return {
+    getClient: () => global.testRedisInstance,
+    incrConcurrency: (apiKeyId) => global.testRedisInstance.incrConcurrency(apiKeyId),
+    decrConcurrency: (apiKeyId) => global.testRedisInstance.decrConcurrency(apiKeyId),
+    get: (key) => global.testRedisInstance.get(key),
+    set: (key, value, ...args) => global.testRedisInstance.set(key, value, ...args),
+    del: (...keys) => global.testRedisInstance.del(...keys),
+    exists: (...keys) => global.testRedisInstance.exists(...keys)
+  }
+})
 
 // 全局测试超时
 jest.setTimeout(10000)
@@ -30,6 +47,10 @@ afterAll(async () => {
 beforeEach(() => {
   // 清理模拟和重置状态
   jest.clearAllMocks()
+  // 清理Redis Mock数据
+  if (global.testRedisInstance) {
+    global.testRedisInstance.flushall()
+  }
 })
 
 // 全局错误处理
@@ -56,6 +77,10 @@ global.testUtils = {
     query: {},
     get: jest.fn((header) => overrides.headers?.[header.toLowerCase()] || null),
     originalUrl: '/test',
+    // 添加事件监听方法用于并发限制测试
+    on: jest.fn(),
+    once: jest.fn(),
+    removeListener: jest.fn(),
     ...overrides
   }),
   
@@ -67,7 +92,11 @@ global.testUtils = {
       send: jest.fn().mockReturnThis(),
       setHeader: jest.fn().mockReturnThis(),
       write: jest.fn().mockReturnThis(),
-      end: jest.fn().mockReturnThis()
+      end: jest.fn().mockReturnThis(),
+      // 添加事件监听方法用于并发限制测试
+      on: jest.fn().mockReturnThis(),
+      once: jest.fn().mockReturnThis(),
+      removeListener: jest.fn().mockReturnThis()
     }
     return res
   },
