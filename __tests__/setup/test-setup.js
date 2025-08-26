@@ -6,6 +6,7 @@ const { RedisMock } = require('./redis-mock')
 process.env.NODE_ENV = 'test'
 process.env.JWT_SECRET = 'test-jwt-secret-key-for-testing-only'
 process.env.ENCRYPTION_KEY = '12345678901234567890123456789012' // 32字符测试密钥
+process.env.ENCRYPTION_SALT = 'test-encryption-salt-for-testing-only' // 加密盐值
 process.env.REDIS_HOST = 'localhost'
 process.env.REDIS_PORT = '6379'
 process.env.API_KEY_SALT = 'test-api-key-salt-for-testing-only'
@@ -16,16 +17,43 @@ const configPath = path.join(__dirname, '../../config/test-config.js')
 // 创建全局Redis Mock实例
 global.testRedisInstance = new RedisMock()
 
+// Mock Logger模块以防止异步日志文件创建
+jest.mock('../../src/utils/logger', () => ({
+  error: jest.fn(),
+  warn: jest.fn(),
+  info: jest.fn(),
+  debug: jest.fn(),
+  verbose: jest.fn(),
+  success: jest.fn(),
+  authDetail: jest.fn()
+}))
+
+// Mock定时器以防止setInterval在测试中运行
+global.setInterval = jest.fn()
+global.clearInterval = jest.fn()
+
 // Mock Redis模块
 jest.mock('../../src/models/redis', () => {
   return {
     getClient: () => global.testRedisInstance,
+    client: global.testRedisInstance,
     incrConcurrency: (apiKeyId) => global.testRedisInstance.incrConcurrency(apiKeyId),
     decrConcurrency: (apiKeyId) => global.testRedisInstance.decrConcurrency(apiKeyId),
     get: (key) => global.testRedisInstance.get(key),
     set: (key, value, ...args) => global.testRedisInstance.set(key, value, ...args),
+    setex: (key, seconds, value) => global.testRedisInstance.setex(key, seconds, value),
     del: (...keys) => global.testRedisInstance.del(...keys),
-    exists: (...keys) => global.testRedisInstance.exists(...keys)
+    exists: (...keys) => global.testRedisInstance.exists(...keys),
+    keys: (pattern) => global.testRedisInstance.keys(pattern),
+    // Claude account specific methods
+    getClaudeAccount: jest.fn(),
+    setClaudeAccount: jest.fn(),
+    getAllClaudeAccounts: jest.fn(),
+    deleteClaudeAccount: jest.fn(),
+    // Session mapping methods
+    getSessionAccountMapping: jest.fn(),
+    setSessionAccountMapping: jest.fn(),
+    deleteSessionAccountMapping: jest.fn()
   }
 })
 

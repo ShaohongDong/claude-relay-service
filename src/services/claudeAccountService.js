@@ -1050,7 +1050,7 @@ class ClaudeAccountService {
   _performSecurityCleanup() {
     try {
       // 强制清理所有解密缓存
-      const cacheSize = this._decryptCache.size()
+      const cacheSize = this._decryptCache.cache.size
       if (cacheSize > 0) {
         this._decryptCache.clear()
         logger.info(`🧹 Security cleanup: cleared ${cacheSize} cached decryption results`)
@@ -1389,7 +1389,14 @@ class ClaudeAccountService {
     try {
       const accountData = await redis.getClaudeAccount(accountId)
       if (!accountData || Object.keys(accountData).length === 0) {
-        return null
+        return {
+          hasActiveWindow: false,
+          windowStart: null,
+          windowEnd: null,
+          progress: 0,
+          remainingTime: null,
+          lastRequestTime: null
+        }
       }
 
       // 如果没有会话窗口信息，返回null

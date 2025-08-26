@@ -311,6 +311,11 @@ class RedisMock {
     return this
   }
 
+  // client property for direct access
+  get client() {
+    return this
+  }
+
   // 增量操作
   async incr(key) {
     const current = parseInt(this.data.get(key) || '0')

@@ -40,6 +40,8 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
   
   beforeEach(() => {
     jest.clearAllMocks()
+    jest.restoreAllMocks()
+    
     // 重置服务内部缓存
     claudeAccountService._encryptionKeyCache = null
     claudeAccountService._cachedEncryptionKey = null
@@ -48,13 +50,23 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
       claudeAccountService._decryptCache.clear()
     }
     
-    // Mock methods that might not exist in the current implementation
-    claudeAccountService.isAccountRateLimited = jest.fn()
-    claudeAccountService.getAccountRateLimitInfo = jest.fn()
-    claudeAccountService.updateSessionWindow = jest.fn()
-    claudeAccountService.getSessionWindowInfo = jest.fn()
-    claudeAccountService.markAccountRateLimited = jest.fn().mockResolvedValue({ success: true })
-    claudeAccountService.removeAccountRateLimit = jest.fn().mockResolvedValue({ success: true })
+    // Reset all Redis mocks to default values
+    redis.getClaudeAccount.mockReset()
+    redis.setClaudeAccount.mockReset()
+    redis.getAllClaudeAccounts.mockReset()
+    redis.deleteClaudeAccount.mockReset()
+    redis.getSessionAccountMapping.mockReset()
+    redis.setSessionAccountMapping.mockReset()
+    redis.deleteSessionAccountMapping.mockReset()
+    
+    // Ensure default mock implementations
+    redis.getClaudeAccount.mockResolvedValue(null)
+    redis.setClaudeAccount.mockResolvedValue(true)
+    redis.getAllClaudeAccounts.mockResolvedValue([])
+    redis.deleteClaudeAccount.mockResolvedValue(true)
+    redis.getSessionAccountMapping.mockResolvedValue(null)
+    redis.setSessionAccountMapping.mockResolvedValue(true)
+    redis.deleteSessionAccountMapping.mockResolvedValue(true)
   })
 
   describe('账户创建和基础操作', () => {
@@ -1104,11 +1116,9 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
         rateLimitEndAt: new Date(Date.now() + 1800000).toISOString()  // 30分钟后结束
       }
 
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(rateLimitedAccountData)
-      claudeAccountService.isAccountRateLimited.mockResolvedValue(true)
+      redis.getClaudeAccount.mockResolvedValue(rateLimitedAccountData)
 
       const result = await claudeAccountService.isAccountRateLimited(mockAccountId)
-
       expect(result).toBe(true)
     })
 
@@ -1120,13 +1130,15 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
         rateLimitEndAt: new Date(Date.now() - 1800000).toISOString()  // 30分钟前就应该结束了
       }
 
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(expiredRateLimitData)
-      claudeAccountService.isAccountRateLimited.mockResolvedValue(false)
+      redis.getClaudeAccount.mockResolvedValue(expiredRateLimitData)
+      const removeRateLimitSpy = jest.spyOn(claudeAccountService, 'removeAccountRateLimit').mockResolvedValue({ success: true })
 
       const result = await claudeAccountService.isAccountRateLimited(mockAccountId)
 
       expect(result).toBe(false)
-      expect(claudeAccountService.removeAccountRateLimit).toHaveBeenCalledWith(mockAccountId)
+      expect(removeRateLimitSpy).toHaveBeenCalledWith(mockAccountId)
+      
+      removeRateLimitSpy.mockRestore()
     })
 
     test('应该返回详细的限流信息', async () => {
@@ -1138,21 +1150,14 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
       }
 
       redis.getClaudeAccount = jest.fn().mockResolvedValue(rateLimitedAccountData)
-      claudeAccountService.getAccountRateLimitInfo.mockResolvedValue({
-        isRateLimited: true,
-        rateLimitedAt: rateLimitedAccountData.rateLimitedAt,
-        minutesSinceRateLimit: 30,
-        minutesRemaining: 45,
-        rateLimitEndAt: rateLimitedAccountData.rateLimitEndAt
-      })
 
       const result = await claudeAccountService.getAccountRateLimitInfo(mockAccountId)
 
       expect(result).toMatchObject({
         isRateLimited: true,
         rateLimitedAt: rateLimitedAccountData.rateLimitedAt,
-        minutesSinceRateLimit: 30,
-        minutesRemaining: 45,
+        minutesSinceRateLimit: expect.any(Number),
+        minutesRemaining: expect.any(Number),
         rateLimitEndAt: rateLimitedAccountData.rateLimitEndAt
       })
     })
@@ -1164,13 +1169,6 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
       }
 
       redis.getClaudeAccount = jest.fn().mockResolvedValue(normalAccountData)
-      claudeAccountService.getAccountRateLimitInfo.mockResolvedValue({
-        isRateLimited: false,
-        rateLimitedAt: null,
-        minutesSinceRateLimit: 0,
-        minutesRemaining: 0,
-        rateLimitEndAt: null
-      })
 
       const result = await claudeAccountService.getAccountRateLimitInfo(mockAccountId)
 
@@ -1192,11 +1190,13 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
     }
 
     test('应该创建新的会话窗口', async () => {
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(mockAccountData)
+      redis.getClaudeAccount.mockResolvedValue(mockAccountData)
 
       const result = await claudeAccountService.updateSessionWindow(mockAccountId)
 
       expect(result).toMatchObject({
+        id: mockAccountId,
+        name: 'Session Window Test Account',
         sessionWindowStart: expect.any(String),
         sessionWindowEnd: expect.any(String),
         lastRequestTime: expect.any(String)
@@ -1217,7 +1217,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
         lastRequestTime: new Date(Date.now() - 1800000).toISOString()      // 30分钟前的请求
       }
 
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(existingWindowData)
+      redis.getClaudeAccount.mockResolvedValue(existingWindowData)
 
       const result = await claudeAccountService.updateSessionWindow(mockAccountId)
 
@@ -1236,7 +1236,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
         lastRequestTime: new Date(Date.now() - 3600000).toISOString()
       }
 
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(expiredWindowData)
+      redis.getClaudeAccount.mockResolvedValue(expiredWindowData)
 
       const result = await claudeAccountService.updateSessionWindow(mockAccountId)
 
@@ -1260,7 +1260,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
         lastRequestTime: new Date(now.getTime() - 900000).toISOString() // 15分钟前请求
       }
 
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(activeWindowData)
+      redis.getClaudeAccount.mockResolvedValue(activeWindowData)
 
       const result = await claudeAccountService.getSessionWindowInfo(mockAccountId)
 
@@ -1282,7 +1282,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
         lastRequestTime: new Date(Date.now() - 3600000).toISOString()
       }
 
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(expiredWindowData)
+      redis.getClaudeAccount.mockResolvedValue(expiredWindowData)
 
       const result = await claudeAccountService.getSessionWindowInfo(mockAccountId)
 
@@ -1297,7 +1297,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
     })
 
     test('应该处理没有会话窗口的账户', async () => {
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(mockAccountData) // 没有窗口字段
+      redis.getClaudeAccount.mockResolvedValue(mockAccountData) // 没有窗口字段
 
       const result = await claudeAccountService.getSessionWindowInfo(mockAccountId)
 
@@ -1759,18 +1759,25 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
     })
 
     test('应该正确执行安全清理', () => {
-      // 先填充一些缓存数据
-      claudeAccountService._encryptSensitiveData('test-data-1')
-      claudeAccountService._encryptSensitiveData('test-data-2')
+      // 先填充一些缓存数据 - 需要先加密再解密才会填充缓存
+      const longData1 = 'a'.repeat(200) // 200个字符，确保被认为是敏感数据
+      const longData2 = 'b'.repeat(200)
       
-      const initialSize = claudeAccountService._decryptCache.size
+      const encrypted1 = claudeAccountService._encryptSensitiveData(longData1)
+      const encrypted2 = claudeAccountService._encryptSensitiveData(longData2)
+      
+      // 解密操作会填充解密缓存
+      claudeAccountService._decryptSensitiveData(encrypted1)
+      claudeAccountService._decryptSensitiveData(encrypted2)
+      
+      const initialSize = claudeAccountService._decryptCache.cache.size
       expect(initialSize).toBeGreaterThan(0)
 
       // 执行安全清理
       claudeAccountService._performSecurityCleanup()
 
       // 验证缓存被清空
-      expect(claudeAccountService._decryptCache.size).toBe(0)
+      expect(claudeAccountService._decryptCache.cache.size).toBe(0)
     })
 
     test('应该正确识别敏感数据', () => {
@@ -1849,8 +1856,8 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
         refreshToken: claudeAccountService._encryptSensitiveData('refresh-token')
       }
 
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(mockAccountData)
-      redis.setClaudeAccount = jest.fn().mockResolvedValue(true)
+      redis.getClaudeAccount.mockResolvedValue(mockAccountData)
+      redis.setClaudeAccount.mockResolvedValue(true)
       
       const tokenRefreshService = require('../../../src/services/tokenRefreshService')
       tokenRefreshService.acquireRefreshLock = jest.fn().mockResolvedValue(true)
@@ -1877,16 +1884,16 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
     })
 
     test('应该正确管理解密缓存大小', () => {
-      // 加密多个不同的数据项
+      // 加密多个不同的数据项 - 使用长数据确保被缓存
       for (let i = 0; i < 10; i++) {
-        const data = `test-data-${i}`
+        const data = `test-data-${i}`.padEnd(200, 'x') // 确保数据足够长
         const encrypted = claudeAccountService._encryptSensitiveData(data)
         const decrypted = claudeAccountService._decryptSensitiveData(encrypted)
         expect(decrypted).toBe(data)
       }
 
       // 验证缓存有合理的大小
-      const cacheSize = claudeAccountService._decryptCache.size
+      const cacheSize = claudeAccountService._decryptCache.cache.size
       expect(cacheSize).toBeGreaterThan(0)
       expect(cacheSize).toBeLessThanOrEqual(10)
     })
@@ -1901,7 +1908,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
       claudeAccountService._performSecurityCleanup()
 
       // 验证缓存被清空
-      expect(claudeAccountService._decryptCache.size()).toBe(0)
+      expect(claudeAccountService._decryptCache.cache.size).toBe(0)
     })
   })
 })
