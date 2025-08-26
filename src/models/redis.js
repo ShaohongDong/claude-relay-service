@@ -1320,4 +1320,21 @@ redisClient.getDateInTimezone = getDateInTimezone
 redisClient.getDateStringInTimezone = getDateStringInTimezone
 redisClient.getHourInTimezone = getHourInTimezone
 
-module.exports = redisClient
+// 测试环境mock支持
+let mockRedis = null
+
+// 设置mock Redis实例（仅用于测试）
+function __setMockRedis(mockInstance) {
+  if (process.env.NODE_ENV === 'test') {
+    mockRedis = mockInstance
+  }
+}
+
+// 导出时检查是否是测试环境
+if (process.env.NODE_ENV === 'test' && mockRedis) {
+  module.exports = mockRedis
+  module.exports.__setMockRedis = __setMockRedis
+} else {
+  module.exports = redisClient
+  module.exports.__setMockRedis = __setMockRedis
+}
