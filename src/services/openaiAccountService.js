@@ -18,20 +18,46 @@ const LRUCache = require('../utils/lruCache')
 
 // 加密相关常量
 const ALGORITHM = 'aes-256-cbc'
-const ENCRYPTION_SALT = 'openai-account-salt'
+// 🚨 安全修复：使用配置化的盐值而不是硬编码
+// const ENCRYPTION_SALT = 'openai-account-salt' // 移除硬编码盐值
 const IV_LENGTH = 16
 
 // 🚀 性能优化：缓存派生的加密密钥，避免每次重复计算
 // scryptSync 是 CPU 密集型操作，缓存可以减少 95%+ 的 CPU 占用
 let _encryptionKeyCache = null
+let _cachedEncryptionKey = null  // 用于检测密钥变更
+let _cachedEncryptionSalt = null // 用于检测盐值变更
 
 // 🔄 解密结果缓存，提高解密性能
 const decryptCache = new LRUCache(500)
 
-// 生成加密密钥（使用与 claudeAccountService 相同的方法）
+// 生成加密密钥（与 claudeAccountService 保持一致）
 function generateEncryptionKey() {
+  // 获取当前配置值
+  const currentEncryptionKey = config.security.encryptionKey
+  const currentEncryptionSalt = config.security.encryptionSalt
+  
+  // 🔐 安全修复：检测密钥或盐值变更，自动失效缓存
+  if (_encryptionKeyCache && _cachedEncryptionKey !== null && _cachedEncryptionSalt !== null &&
+      (_cachedEncryptionKey !== currentEncryptionKey || 
+       _cachedEncryptionSalt !== currentEncryptionSalt)) {
+    logger.warn('🔑 OpenAI encryption key or salt changed, invalidating cache')
+    _encryptionKeyCache = null
+    decryptCache.clear() // 清理解密缓存
+  }
+
   if (!_encryptionKeyCache) {
-    _encryptionKeyCache = crypto.scryptSync(config.security.encryptionKey, ENCRYPTION_SALT, 32)
+    // 🚨 安全检查：确保使用配置化的盐值而不是硬编码
+    if (!currentEncryptionSalt || currentEncryptionSalt === 'CHANGE-THIS-ENCRYPTION-SALT-NOW') {
+      throw new Error('Encryption salt must be configured with a secure random value')
+    }
+    
+    _encryptionKeyCache = crypto.scryptSync(currentEncryptionKey, currentEncryptionSalt, 32)
+    
+    // 缓存当前配置值用于变更检测
+    _cachedEncryptionKey = currentEncryptionKey
+    _cachedEncryptionSalt = currentEncryptionSalt
+    
     logger.info('🔑 OpenAI encryption key derived and cached for performance optimization')
   }
   return _encryptionKeyCache

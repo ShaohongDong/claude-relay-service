@@ -23,22 +23,26 @@ class ClaudeAccountService {
 
     // 加密相关常量
     this.ENCRYPTION_ALGORITHM = 'aes-256-cbc'
-    this.ENCRYPTION_SALT = 'salt'
 
     // 🚀 性能优化：缓存派生的加密密钥，避免每次重复计算
     // scryptSync 是 CPU 密集型操作，缓存可以减少 95%+ 的 CPU 占用
     this._encryptionKeyCache = null
+    this._cachedEncryptionKey = null  // 用于检测密钥变更
+    this._cachedEncryptionSalt = null // 用于检测盐值变更
 
     // 🔄 解密结果缓存，提高解密性能
     this._decryptCache = new LRUCache(500)
 
-    // 🧹 定期清理缓存（每10分钟）
+    // 🧹 定期清理缓存（每2分钟，减少敏感数据在内存中的驻留时间）
     setInterval(
       () => {
         this._decryptCache.cleanup()
         logger.info('🧹 Claude decrypt cache cleanup completed', this._decryptCache.getStats())
+        
+        // 🔐 定期强制清理敏感缓存以提高安全性
+        this._performSecurityCleanup()
       },
-      10 * 60 * 1000
+      2 * 60 * 1000
     )
   }
 
@@ -892,8 +896,9 @@ class ClaudeAccountService {
       // 将IV和加密数据一起返回，用:分隔
       return `${iv.toString('hex')}:${encrypted}`
     } catch (error) {
-      logger.error('❌ Encryption error:', error)
-      return data
+      logger.error('❌ Critical encryption error - refusing to store unencrypted data:', error)
+      // 🚨 安全修复：加密失败时抛出异常而不是返回明文数据
+      throw new Error(`Encryption failed: ${error.message}`)
     }
   }
 
@@ -903,11 +908,18 @@ class ClaudeAccountService {
       return ''
     }
 
-    // 🎯 检查缓存
-    const cacheKey = crypto.createHash('sha256').update(encryptedData).digest('hex')
-    const cached = this._decryptCache.get(cacheKey)
-    if (cached !== undefined) {
-      return cached
+    // 🎯 安全修复：严格限制缓存范围，避免OAuth token等敏感数据被缓存
+    // 基于数据特征和长度进行更精确的敏感数据识别
+    const isSensitiveData = this._isSensitiveData(encryptedData)
+    let cacheKey = null
+    let cached = null
+    
+    if (!isSensitiveData) {
+      cacheKey = crypto.createHash('sha256').update(encryptedData).digest('hex')
+      cached = this._decryptCache.get(cacheKey)
+      if (cached !== undefined) {
+        return cached
+      }
     }
 
     try {
@@ -926,8 +938,10 @@ class ClaudeAccountService {
           decrypted = decipher.update(encrypted, 'hex', 'utf8')
           decrypted += decipher.final('utf8')
 
-          // 💾 存入缓存（5分钟过期）
-          this._decryptCache.set(cacheKey, decrypted, 5 * 60 * 1000)
+          // 💾 仅对非敏感数据存入缓存（30秒过期，进一步减少风险窗口）
+          if (!isSensitiveData && cacheKey) {
+            this._decryptCache.set(cacheKey, decrypted, 30 * 1000)
+          }
 
           // 📊 定期打印缓存统计
           if ((this._decryptCache.hits + this._decryptCache.misses) % 1000 === 0) {
@@ -938,44 +952,117 @@ class ClaudeAccountService {
         }
       }
 
-      // 旧格式或格式错误，尝试旧方式解密（向后兼容）
-      // 注意：在新版本Node.js中这将失败，但我们会捕获错误
-      try {
-        const decipher = crypto.createDecipher('aes-256-cbc', config.security.encryptionKey)
-        decrypted = decipher.update(encryptedData, 'hex', 'utf8')
-        decrypted += decipher.final('utf8')
-
-        // 💾 旧格式也存入缓存
-        this._decryptCache.set(cacheKey, decrypted, 5 * 60 * 1000)
-
-        return decrypted
-      } catch (oldError) {
-        // 如果旧方式也失败，返回原数据
-        logger.warn('⚠️ Could not decrypt data, returning as-is:', oldError.message)
-        return encryptedData
+      // 旧格式处理：crypto.createDecipher已在Node.js v17+中移除
+      // 对于旧格式数据，我们需要提示用户进行数据迁移
+      if (encryptedData.match(/^[0-9a-f]+$/i)) {
+        // 这可能是旧格式的十六进制数据
+        logger.warn('⚠️ Detected legacy encrypted data format that is no longer supported in current Node.js version')
+        logger.warn('⚠️ Data migration required. Please run data migration tool or re-add this account')
+        
+        // 标记需要迁移
+        this._markForMigration(encryptedData)
+        
+        // 返回一个特殊标记，让调用方知道需要重新输入数据
+        return '[LEGACY_DATA_MIGRATION_REQUIRED]'
       }
+      
+      // 🚨 安全修复：不应该直接返回可能的敏感数据
+      logger.warn('⚠️ Could not decrypt data, this may indicate data corruption or configuration issues')
+      logger.warn('⚠️ Refusing to return potentially sensitive unencrypted data')
+      
+      // 标记需要迁移
+      this._markForMigration(encryptedData)
+      
+      // 返回安全的占位符
+      return '[DECRYPTION_FAILED_MANUAL_INTERVENTION_REQUIRED]'
     } catch (error) {
       logger.error('❌ Decryption error:', error)
-      return encryptedData
+      // 🚨 安全修复：加密失败时绝不返回原文数据
+      return '[DECRYPTION_ERROR_OCCURRED]'
     }
   }
 
   // 🔑 生成加密密钥（辅助方法）
   _generateEncryptionKey() {
+    // 获取当前配置值
+    const currentEncryptionKey = config.security.encryptionKey
+    const currentEncryptionSalt = config.security.encryptionSalt
+    
+    // 🔐 安全修复：检测密钥或盐值变更，自动失效缓存
+    // 只有在缓存存在且配置实际发生变化时才失效缓存
+    if (this._encryptionKeyCache && this._cachedEncryptionKey !== null && this._cachedEncryptionSalt !== null &&
+        (this._cachedEncryptionKey !== currentEncryptionKey || 
+         this._cachedEncryptionSalt !== currentEncryptionSalt)) {
+      logger.warn('🔑 Encryption key or salt changed, invalidating cache')
+      this._encryptionKeyCache = null
+      this._decryptCache.clear() // 清理解密缓存，因为密钥变更后无法正确解密
+    }
+
     // 性能优化：缓存密钥派生结果，避免重复的 CPU 密集计算
     // scryptSync 是故意设计为慢速的密钥派生函数（防暴力破解）
     // 但在高并发场景下，每次都重新计算会导致 CPU 100% 占用
     if (!this._encryptionKeyCache) {
+      // 🚨 安全检查：确保使用配置化的盐值而不是硬编码
+      if (!currentEncryptionSalt || currentEncryptionSalt === 'CHANGE-THIS-ENCRYPTION-SALT-NOW') {
+        throw new Error('Encryption salt must be configured with a secure random value')
+      }
+      
       // 只在第一次调用时计算，后续使用缓存
       // 由于输入参数固定，派生结果永远相同，不影响数据兼容性
       this._encryptionKeyCache = crypto.scryptSync(
-        config.security.encryptionKey,
-        this.ENCRYPTION_SALT,
+        currentEncryptionKey,
+        currentEncryptionSalt,
         32
       )
+      
+      // 缓存当前配置值用于变更检测
+      this._cachedEncryptionKey = currentEncryptionKey
+      this._cachedEncryptionSalt = currentEncryptionSalt
+      
       logger.info('🔑 Encryption key derived and cached for performance optimization')
     }
     return this._encryptionKeyCache
+  }
+
+  // 🔍 敏感数据识别（更精确的判断逻辑）
+  _isSensitiveData(encryptedData) {
+    // 基于多个特征判断是否为敏感数据（OAuth token、refreshToken等）
+    if (!encryptedData) return false
+    
+    // 1. 长度检查：OAuth token通常很长
+    if (encryptedData.length > 150) return true
+    
+    // 2. 格式检查：包含冒号的加密格式且长度较长（可能是token）
+    if (encryptedData.includes(':') && encryptedData.length > 100) return true
+    
+    // 3. 特征字符串检查：明显的token特征
+    const sensitivePatterns = [
+      /^[a-f0-9]{32}:/i, // 32字符hex IV + 冒号开头
+      /token/i,
+      /oauth/i,
+      /bearer/i
+    ]
+    
+    return sensitivePatterns.some(pattern => pattern.test(encryptedData))
+  }
+
+  // 🔐 安全清理敏感缓存数据
+  _performSecurityCleanup() {
+    try {
+      // 强制清理所有解密缓存
+      const cacheSize = this._decryptCache.size()
+      if (cacheSize > 0) {
+        this._decryptCache.clear()
+        logger.info(`🧹 Security cleanup: cleared ${cacheSize} cached decryption results`)
+      }
+      
+      // Node.js的垃圾回收器建议
+      if (global.gc && typeof global.gc === 'function') {
+        global.gc()
+      }
+    } catch (error) {
+      logger.error('❌ Security cleanup error:', error)
+    }
   }
 
   // 🎭 掩码邮箱地址
@@ -1732,6 +1819,37 @@ class ClaudeAccountService {
     } catch (error) {
       logger.error(`❌ Failed to reset account status for ${accountId}:`, error)
       throw error
+    }
+  }
+
+  // 🏷️ 标记需要迁移的数据
+  _markForMigration(encryptedData) {
+    try {
+      const migrationKey = `migration_needed:${crypto.createHash('md5').update(encryptedData).digest('hex')}`
+      // 使用Redis存储迁移标记，过期时间30天
+      redis.setex(migrationKey, 30 * 24 * 60 * 60, JSON.stringify({
+        timestamp: new Date().toISOString(),
+        dataHash: crypto.createHash('sha256').update(encryptedData).digest('hex'),
+        reason: 'LEGACY_CRYPTO_API_REMOVED'
+      }))
+      
+      logger.info('🏷️ Marked legacy data for migration:', { migrationKey })
+    } catch (error) {
+      logger.error('❌ Failed to mark data for migration:', error)
+    }
+  }
+
+  // 📊 获取需要迁移的数据统计
+  async getMigrationStats() {
+    try {
+      const keys = await redis.keys('migration_needed:*')
+      return {
+        totalItemsNeedingMigration: keys.length,
+        migrationKeys: keys
+      }
+    } catch (error) {
+      logger.error('❌ Failed to get migration stats:', error)
+      return { totalItemsNeedingMigration: 0, migrationKeys: [] }
     }
   }
 }

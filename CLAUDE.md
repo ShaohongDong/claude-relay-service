@@ -209,11 +209,12 @@ npm run setup  # 自动生成密钥并创建管理员账户
 
 ### 重要架构决策
 
-- 所有敏感数据（OAuth token、refreshToken）都使用 AES 加密存储在 Redis
+- 所有敏感数据（OAuth token、refreshToken）都使用 AES-256-CBC 加密存储在 Redis
 - 每个 Claude 账户支持独立的代理配置，包括 SOCKS5 和 HTTP 代理
-- API Key 使用哈希存储，支持 `cr_` 前缀格式
+- **API Key 哈希已优化**：使用独立的 API_KEY_SALT，与数据加密解耦
 - 请求流程：API Key 验证 → 账户选择 → Token 刷新（如需）→ 请求转发
 - 支持流式和非流式响应，客户端断开时自动清理资源
+- **数据完整性保障**：智能密钥验证、旧数据迁移标记、完整性检查工具
 
 ### 核心数据流和性能优化
 

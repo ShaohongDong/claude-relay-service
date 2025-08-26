@@ -529,6 +529,150 @@ install_service() {
         print_success "已设置脚本执行权限"
     fi
     
+    # 备份关键配置密钥并进行安全验证
+    local backup_jwt_secret=""
+    local backup_encryption_key=""
+    local backup_encryption_salt=""
+    local backup_api_key_salt=""
+    local preserve_keys=false
+    local key_validation_passed=false
+    
+    # 🔐 强化的密钥验证函数
+    validate_keys() {
+        local jwt_key="$1"
+        local enc_key="$2"
+        local enc_salt="$3"
+        local api_salt="$4"
+        local issues=()
+        
+        # 清理引号
+        jwt_key=$(echo "$jwt_key" | sed 's/^["'"'"']//; s/["'"'"']$//')
+        enc_key=$(echo "$enc_key" | sed 's/^["'"'"']//; s/["'"'"']$//')
+        enc_salt=$(echo "$enc_salt" | sed 's/^["'"'"']//; s/["'"'"']$//')
+        api_salt=$(echo "$api_salt" | sed 's/^["'"'"']//; s/["'"'"']$//')
+        
+        # 检查JWT_SECRET
+        if [ -z "$jwt_key" ]; then
+            issues+=("JWT_SECRET为空")
+        elif [ ${#jwt_key} -lt 32 ]; then
+            issues+=("JWT_SECRET长度过短 (${#jwt_key}字符，建议至少32字符)")
+        elif [ "$jwt_key" = "CHANGE-THIS-JWT-SECRET-IN-PRODUCTION" ]; then
+            issues+=("JWT_SECRET使用默认不安全值")
+        elif ! echo "$jwt_key" | grep -q '[a-zA-Z]' || ! echo "$jwt_key" | grep -q '[0-9]'; then
+            issues+=("JWT_SECRET缺乏复杂性（建议包含字母和数字）")
+        fi
+        
+        # 检查ENCRYPTION_KEY
+        if [ -z "$enc_key" ]; then
+            issues+=("ENCRYPTION_KEY为空")
+        elif [ ${#enc_key} -ne 32 ]; then
+            issues+=("ENCRYPTION_KEY长度错误 (${#enc_key}字符，必须为32字符)")
+        elif [ "$enc_key" = "CHANGE-THIS-32-CHARACTER-KEY-NOW" ]; then
+            issues+=("ENCRYPTION_KEY使用默认不安全值")
+        elif ! echo "$enc_key" | grep -q '[a-zA-Z]' || ! echo "$enc_key" | grep -q '[0-9]'; then
+            issues+=("ENCRYPTION_KEY缺乏复杂性（建议包含字母和数字）")
+        fi
+        
+        # 🚨 检查ENCRYPTION_SALT（新增必需配置）
+        if [ -z "$enc_salt" ]; then
+            issues+=("ENCRYPTION_SALT为空（必需配置）")
+        elif [ ${#enc_salt} -lt 16 ]; then
+            issues+=("ENCRYPTION_SALT长度过短 (${#enc_salt}字符，建议至少16字符)")
+        elif [ "$enc_salt" = "CHANGE-THIS-ENCRYPTION-SALT-NOW" ]; then
+            issues+=("ENCRYPTION_SALT使用默认不安全值")
+        elif [ "$enc_salt" = "$enc_key" ]; then
+            issues+=("ENCRYPTION_SALT不能与ENCRYPTION_KEY相同")
+        fi
+        
+        # 🚨 检查API_KEY_SALT（强制必需配置）
+        if [ -z "$api_salt" ]; then
+            issues+=("API_KEY_SALT为空（强制必需配置）")
+        elif [ ${#api_salt} -lt 32 ]; then
+            issues+=("API_KEY_SALT长度过短 (${#api_salt}字符，建议至少32字符)")
+        elif [ "$api_salt" = "CHANGE-THIS-API-KEY-SALT-32CHAR_" ]; then
+            issues+=("API_KEY_SALT使用默认不安全值")
+        elif [ "$api_salt" = "$enc_key" ]; then
+            issues+=("API_KEY_SALT不能与ENCRYPTION_KEY相同（必须独立）")
+        elif [ "$api_salt" = "$enc_salt" ]; then
+            issues+=("API_KEY_SALT不能与ENCRYPTION_SALT相同（必须独立）")
+        fi
+        
+        # 返回验证结果
+        if [ ${#issues[@]} -eq 0 ]; then
+            # 更新清理后的密钥
+            backup_jwt_secret="$jwt_key"
+            backup_encryption_key="$enc_key"
+            backup_encryption_salt="$enc_salt"
+            backup_api_key_salt="$api_salt"
+            return 0
+        else
+            # 显示验证问题
+            echo -e "${RED}密钥验证失败：${NC}"
+            for issue in "${issues[@]}"; do
+                echo "  ❌ $issue"
+            done
+            return 1
+        fi
+    }
+    
+    if [ -f ".env" ]; then
+        # 提取原始密钥（包含可能的引号）
+        local raw_jwt_secret=$(grep "^JWT_SECRET=" .env 2>/dev/null | cut -d'=' -f2-)
+        local raw_encryption_key=$(grep "^ENCRYPTION_KEY=" .env 2>/dev/null | cut -d'=' -f2-)
+        local raw_encryption_salt=$(grep "^ENCRYPTION_SALT=" .env 2>/dev/null | cut -d'=' -f2-)
+        local raw_api_key_salt=$(grep "^API_KEY_SALT=" .env 2>/dev/null | cut -d'=' -f2-)
+        
+        if [ -n "$raw_jwt_secret" ] && [ -n "$raw_encryption_key" ]; then
+            echo ""
+            print_info "检测到现有的加密密钥配置，正在验证..."
+            
+            if validate_keys "$raw_jwt_secret" "$raw_encryption_key" "$raw_encryption_salt" "$raw_api_key_salt"; then
+                key_validation_passed=true
+                print_success "密钥验证通过"
+                echo ""
+                print_warning "重要提醒："
+                echo "  - 更改加密密钥将导致所有已保存的Claude账户OAuth token失效"
+                echo "  - 更改JWT密钥将导致所有管理员会话失效"
+                echo "  - 建议保留现有密钥以保持数据完整性"
+                echo ""
+                echo -n "是否保留现有的加密密钥？(Y/n): "
+                read -n 1 keep_keys
+                echo
+                if [[ ! "$keep_keys" =~ ^[Nn]$ ]]; then
+                    preserve_keys=true
+                    print_success "将保留现有加密密钥，避免数据失效"
+                else
+                    print_warning "将生成新的加密密钥（现有Claude账户和API Key将失效）"
+                    echo -n "确定要继续吗？这将需要重新配置所有账户 (y/N): "
+                    read -n 1 confirm_new_keys
+                    echo
+                    if [[ ! "$confirm_new_keys" =~ ^[Yy]$ ]]; then
+                        preserve_keys=true
+                        print_info "已选择保留现有密钥"
+                    fi
+                fi
+            else
+                echo ""
+                print_error "现有密钥存在安全问题，强烈建议生成新的安全密钥"
+                echo -e "${YELLOW}注意：生成新密钥将导致现有数据失效${NC}"
+                echo ""
+                echo -n "是否仍要保留这些不安全的密钥？(y/N): "
+                read -n 1 keep_unsafe_keys
+                echo
+                if [[ "$keep_unsafe_keys" =~ ^[Yy]$ ]]; then
+                    preserve_keys=true
+                    print_warning "保留不安全密钥（强烈不推荐）"
+                else
+                    print_info "将生成新的安全密钥"
+                fi
+            fi
+        else
+            print_info "现有.env文件中缺少必要的密钥配置"
+        fi
+    else
+        print_info "未检测到现有的.env文件"
+    fi
+    
     # 创建配置文件
     print_info "创建配置文件..."
     
@@ -538,9 +682,9 @@ install_service() {
         print_success "已创建 config.js"
     fi
     
-    # 创建.env文件（如果不存在或强制覆盖）
+    # 创建.env文件（智能处理现有配置）
     local create_env=true
-    if [ -f ".env" ] && [ "$is_local_project" = true ]; then
+    if [ -f ".env" ] && [ "$is_local_project" = true ] && [ "$preserve_keys" = false ]; then
         print_warning "检测到已存在 .env 文件"
         echo -n "是否要覆盖现有配置？(y/N): "
         read -n 1 overwrite_env
@@ -554,19 +698,32 @@ install_service() {
                 print_info "已添加端口配置到现有 .env 文件"
             fi
         fi
+    elif [ "$preserve_keys" = true ]; then
+        create_env=true
+        print_info "更新 .env 文件并保留加密密钥"
     fi
     
     if [ "$create_env" = true ]; then
+        # 使用保留的密钥或生成新的
+        local jwt_secret="${backup_jwt_secret:-$(generate_random_string 64)}"
+        local encryption_key="${backup_encryption_key:-$(generate_random_string 32)}"
+        local encryption_salt="${backup_encryption_salt:-$(generate_random_string 24)}"
+        local api_key_salt="${backup_api_key_salt:-$(generate_random_string 32)}"
+        
         cat > .env << EOF
 # 环境变量配置
 NODE_ENV=production
 PORT=$APP_PORT
 
 # JWT配置
-JWT_SECRET=$(generate_random_string 64)
+JWT_SECRET=$jwt_secret
 
-# 加密配置
-ENCRYPTION_KEY=$(generate_random_string 32)
+# 🔐 数据加密配置（重要：不要随意更改，会导致现有数据无法解密）
+ENCRYPTION_KEY=$encryption_key
+ENCRYPTION_SALT=$encryption_salt
+
+# 🔑 API Key哈希配置（完全独立于数据加密）
+API_KEY_SALT=$api_key_salt
 
 # Redis配置
 REDIS_HOST=$REDIS_HOST
@@ -576,7 +733,12 @@ REDIS_PASSWORD=$REDIS_PASSWORD
 # 日志配置
 LOG_LEVEL=info
 EOF
-        print_success "已创建 .env 配置文件"
+        if [ "$preserve_keys" = true ]; then
+            print_success "已更新 .env 配置文件（保留加密密钥）"
+            echo -e "${GREEN}✓${NC} 现有Claude账户和API Key将继续有效"
+        else
+            print_success "已创建 .env 配置文件"
+        fi
     fi
     
     # 运行setup命令
@@ -1529,6 +1691,16 @@ show_help() {
     echo "安装模式说明:"
     echo "  本地安装      - 在项目目录中运行，就地部署服务"
     echo "  克隆安装      - 克隆项目到独立目录（传统方式）"
+    echo ""
+    echo "数据保护功能 (已增强):"
+    echo "  智能密钥验证  - 检查密钥强度、长度和安全性"
+    echo "  分离哈希机制  - API Key哈希独立于数据加密密钥"
+    echo "  兼容性检查    - 自动检测和标记需要迁移的旧数据"
+    echo "  完整性工具    - 使用 node scripts/data-integrity-check.js 检查数据"
+    echo ""
+    echo "故障排除工具:"
+    echo "  数据完整性检查: node scripts/data-integrity-check.js"
+    echo "  查看迁移需求:   node scripts/data-integrity-check.js --show-migrations"
     echo ""
     echo "注意: 在项目目录中运行 install 命令将自动检测并提供安装模式选择"
     echo ""

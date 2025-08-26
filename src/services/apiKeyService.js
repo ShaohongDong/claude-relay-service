@@ -585,11 +585,18 @@ class ApiKeyService {
     return crypto.randomBytes(32).toString('hex')
   }
 
-  // 🔒 哈希API Key
+  // 🔒 哈希API Key (使用独立盐值，避免与数据加密密钥耦合)
   _hashApiKey(apiKey) {
+    // 🚨 安全修复：强制使用专用的API Key盐值，完全与数据加密解耦
+    const salt = config.security.apiKeySalt
+    
+    if (!salt || salt === 'CHANGE-THIS-API-KEY-SALT-32CHAR_') {
+      throw new Error('API_KEY_SALT must be configured with a secure random value independent of encryption key')
+    }
+    
     return crypto
       .createHash('sha256')
-      .update(apiKey + config.security.encryptionKey)
+      .update(apiKey + salt)
       .digest('hex')
   }
 
