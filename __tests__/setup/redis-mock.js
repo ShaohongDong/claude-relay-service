@@ -19,6 +19,25 @@ class RedisMock {
   }
 
   async set(key, value, ...args) {
+    // 🔒 增强版SET命令 - 支持分布式锁所需的原子性操作
+    
+    // 处理 NX 参数 (SET IF NOT EXISTS) - 分布式锁的核心
+    const nxIndex = args.indexOf('NX')
+    if (nxIndex !== -1) {
+      if (this.data.has(key)) {
+        return null // 键已存在，SET NX 失败
+      }
+    }
+    
+    // 处理 XX 参数 (SET IF EXISTS)
+    const xxIndex = args.indexOf('XX')
+    if (xxIndex !== -1) {
+      if (!this.data.has(key)) {
+        return null // 键不存在，SET XX 失败
+      }
+    }
+    
+    // 执行SET操作
     this.data.set(key, value)
     
     // 处理 EX 参数 (秒)
@@ -322,6 +341,64 @@ class RedisMock {
     const newValue = current + 1
     this.data.set(key, String(newValue))
     return newValue
+  }
+
+  // 🔒 分布式锁支持 - Lua脚本执行
+  async eval(script, numKeys, ...args) {
+    // 模拟Redis的EVAL命令，主要用于分布式锁的原子操作
+    
+    // 解析Lua脚本（简化版解释器）
+    const keys = args.slice(0, numKeys)
+    const argv = args.slice(numKeys)
+    
+    // 🔒 分布式锁释放脚本 (tokenRefreshService中使用)
+    if (script.includes('redis.call("get", KEYS[1]) == ARGV[1]') && 
+        script.includes('redis.call("del", KEYS[1])')) {
+      
+      const lockKey = keys[0]
+      const expectedValue = argv[0]
+      const currentValue = await this.get(lockKey)
+      
+      if (currentValue === expectedValue) {
+        await this.del(lockKey)
+        return 1 // 成功删除
+      }
+      return 0 // 值不匹配，未删除
+    }
+    
+    // 🔒 分布式锁获取脚本 (带TTL设置)
+    if (script.includes('redis.call("set", KEYS[1], ARGV[1], "NX", "EX", ARGV[2])')) {
+      const lockKey = keys[0]
+      const lockValue = argv[0]
+      const ttlSeconds = parseInt(argv[1])
+      
+      const result = await this.set(lockKey, lockValue, 'NX', 'EX', ttlSeconds)
+      return result === 'OK' ? 'OK' : null
+    }
+    
+    // 🔒 检查锁状态脚本
+    if (script.includes('redis.call("get", KEYS[1])')) {
+      const lockKey = keys[0]
+      return await this.get(lockKey)
+    }
+    
+    // 默认：不支持的脚本
+    throw new Error(`Unsupported Lua script: ${script.substring(0, 50)}...`)
+  }
+
+  // 🔒 安全的客户端获取方法 (用于tokenRefreshService)
+  getClientSafe() {
+    // 返回this，因为RedisMock本身就是客户端
+    return this
+  }
+
+  // 🔒 SETNX命令 (SET IF NOT EXISTS) - 分布式锁的经典实现
+  async setnx(key, value) {
+    if (this.data.has(key)) {
+      return 0 // 键已存在
+    }
+    this.data.set(key, value)
+    return 1 // 设置成功
   }
 
   // 事务支持
