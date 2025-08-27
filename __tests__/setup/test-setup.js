@@ -45,20 +45,50 @@ jest.mock('../../src/utils/logger', () => ({
 // Mock Redis模块
 jest.mock('../../src/models/redis', () => {
   return {
-    getClient: () => global.testRedisInstance,
-    getClientSafe: () => global.testRedisInstance, // 🔒 新增分布式锁支持
+    getClient: jest.fn(() => global.testRedisInstance),
+    getClientSafe: jest.fn(() => global.testRedisInstance), // 🔒 新增分布式锁支持
     client: global.testRedisInstance,
-    incrConcurrency: (apiKeyId) => global.testRedisInstance.incrConcurrency(apiKeyId),
-    decrConcurrency: (apiKeyId) => global.testRedisInstance.decrConcurrency(apiKeyId),
-    get: (key) => global.testRedisInstance.get(key),
-    set: (key, value, ...args) => global.testRedisInstance.set(key, value, ...args),
-    setex: (key, seconds, value) => global.testRedisInstance.setex(key, seconds, value),
-    del: (...keys) => global.testRedisInstance.del(...keys),
-    exists: (...keys) => global.testRedisInstance.exists(...keys),
-    keys: (pattern) => global.testRedisInstance.keys(pattern),
+    incrConcurrency: jest.fn((apiKeyId) => global.testRedisInstance.incrConcurrency(apiKeyId)),
+    decrConcurrency: jest.fn((apiKeyId) => global.testRedisInstance.decrConcurrency(apiKeyId)),
+    get: jest.fn((key) => global.testRedisInstance.get(key)),
+    set: jest.fn((key, value, ...args) => global.testRedisInstance.set(key, value, ...args)),
+    setex: jest.fn((key, seconds, value) => global.testRedisInstance.setex(key, seconds, value)),
+    del: jest.fn((...keys) => global.testRedisInstance.del(...keys)),
+    exists: jest.fn((...keys) => global.testRedisInstance.exists(...keys)),
+    keys: jest.fn((pattern) => global.testRedisInstance.keys(pattern)),
     // 🔒 分布式锁相关方法
-    eval: (...args) => global.testRedisInstance.eval(...args),
-    setnx: (key, value) => global.testRedisInstance.setnx(key, value),
+    eval: jest.fn((...args) => global.testRedisInstance.eval(...args)),
+    setnx: jest.fn((key, value) => global.testRedisInstance.setnx(key, value)),
+    ttl: jest.fn((key) => global.testRedisInstance.ttl(key)),
+    // Hash operations
+    hget: jest.fn((key, field) => global.testRedisInstance.hget(key, field)),
+    hgetall: jest.fn((key) => global.testRedisInstance.hgetall(key)),
+    hset: jest.fn((key, field, value) => global.testRedisInstance.hset(key, field, value)),
+    // API Key specific methods
+    findApiKeyByHash: jest.fn((hashedKey) => {
+      // 默认返回 null，测试中会覆盖此行为
+      return null
+    }),
+    getUsageStats: jest.fn((keyId) => {
+      return Promise.resolve({
+        totalRequests: 0,
+        totalTokensUsed: 0,
+        dailyRequests: 0,
+        dailyTokensUsed: 0
+      })
+    }),
+    getDailyCost: jest.fn((keyId) => {
+      return Promise.resolve({
+        cost: 0,
+        requests: 0
+      })
+    }),
+    incrementTokenUsage: jest.fn((keyId, totalTokens, inputTokens, outputTokens, cacheCreateTokens, cacheReadTokens, model) => {
+      return Promise.resolve('OK')
+    }),
+    incrementDailyCost: jest.fn((keyId, cost) => {
+      return Promise.resolve('OK')
+    }),
     // Claude account specific methods
     getClaudeAccount: jest.fn(),
     setClaudeAccount: jest.fn(),

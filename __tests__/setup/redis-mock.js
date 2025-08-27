@@ -24,9 +24,35 @@ class RedisMock {
     // 处理 NX 参数 (SET IF NOT EXISTS) - 分布式锁的核心
     const nxIndex = args.indexOf('NX')
     if (nxIndex !== -1) {
+      // 原子性检查和设置：先检查TTL是否过期
+      if (this.ttls.has(key) && this.ttls.get(key) < Date.now()) {
+        this.data.delete(key)
+        this.ttls.delete(key)
+      }
+      
+      // 原子性检查：如果键已存在，SET NX 失败
       if (this.data.has(key)) {
         return null // 键已存在，SET NX 失败
       }
+      
+      // 原子性设置：立即设置键和值，防止并发竞争
+      this.data.set(key, value)
+      
+      // 处理 EX 参数 (秒)
+      const exIndex = args.indexOf('EX')
+      if (exIndex !== -1 && args[exIndex + 1]) {
+        const seconds = parseInt(args[exIndex + 1])
+        this.ttls.set(key, Date.now() + seconds * 1000)
+      }
+      
+      // 处理 PX 参数 (毫秒)
+      const pxIndex = args.indexOf('PX')
+      if (pxIndex !== -1 && args[pxIndex + 1]) {
+        const milliseconds = parseInt(args[pxIndex + 1])
+        this.ttls.set(key, Date.now() + milliseconds)
+      }
+      
+      return 'OK' // SET NX 成功
     }
     
     // 处理 XX 参数 (SET IF EXISTS)
@@ -37,7 +63,7 @@ class RedisMock {
       }
     }
     
-    // 执行SET操作
+    // 执行常规SET操作
     this.data.set(key, value)
     
     // 处理 EX 参数 (秒)

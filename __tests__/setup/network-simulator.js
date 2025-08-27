@@ -367,67 +367,88 @@ class NetworkSimulator {
     return {
       // 连接超时
       timeout: (url, delay = 30000) => {
-        return nock(url)
-          .persist()
-          .get(() => true)
-          .post(() => true)
-          .put(() => true)
-          .patch(() => true)
-          .delete(() => true)
-          .delay(delay)
-          .replyWithError({ code: 'ETIMEDOUT', message: 'Request timeout' })
+        const scope = nock(url).persist()
+        const methods = ['get', 'post', 'put', 'patch', 'delete']
+        
+        methods.forEach(method => {
+          scope[method](() => true)
+            .delay(delay)
+            .replyWithError({ code: 'ETIMEDOUT', message: 'Request timeout' })
+        })
+        
+        return scope
       },
 
       // 连接拒绝
       connectionRefused: (url) => {
-        return nock(url)
-          .persist()
-          .get(() => true)
-          .post(() => true)
-          .replyWithError({ code: 'ECONNREFUSED', message: 'Connection refused' })
+        const scope = nock(url).persist()
+        const methods = ['get', 'post', 'put', 'patch', 'delete']
+        
+        methods.forEach(method => {
+          scope[method](() => true)
+            .replyWithError({ code: 'ECONNREFUSED', message: 'Connection refused' })
+        })
+        
+        return scope
       },
 
       // DNS解析失败
       dnsError: (url) => {
-        return nock(url)
-          .persist()
-          .get(() => true)
-          .post(() => true)
-          .replyWithError({ code: 'ENOTFOUND', message: 'DNS lookup failed' })
+        const scope = nock(url).persist()
+        const methods = ['get', 'post', 'put', 'patch', 'delete']
+        
+        methods.forEach(method => {
+          scope[method](() => true)
+            .replyWithError({ code: 'ENOTFOUND', message: 'DNS lookup failed' })
+        })
+        
+        return scope
       },
 
       // SSL/TLS错误
       sslError: (url) => {
-        return nock(url)
-          .persist()
-          .get(() => true)
-          .post(() => true)
-          .replyWithError({ code: 'DEPTH_ZERO_SELF_SIGNED_CERT', message: 'SSL certificate error' })
+        const scope = nock(url).persist()
+        const methods = ['get', 'post', 'put', 'patch', 'delete']
+        
+        methods.forEach(method => {
+          scope[method](() => true)
+            .replyWithError({ code: 'DEPTH_ZERO_SELF_SIGNED_CERT', message: 'SSL certificate error' })
+        })
+        
+        return scope
       },
 
       // 网络中断（间歇性错误）
       intermittentError: (url, successRate = 0.5) => {
-        return nock(url)
-          .persist()
-          .get(() => true)
-          .post(() => true)
-          .reply(() => {
-            if (Math.random() < successRate) {
-              return [200, { success: true }]
-            } else {
-              return [500, { error: 'Service temporarily unavailable' }]
-            }
-          })
+        const scope = nock(url).persist()
+        const methods = ['get', 'post', 'put', 'patch', 'delete']
+        
+        methods.forEach(method => {
+          scope[method](() => true)
+            .reply(() => {
+              if (Math.random() < successRate) {
+                return [200, { success: true }]
+              } else {
+                return [500, { error: 'Service temporarily unavailable' }]
+              }
+            })
+        })
+        
+        return scope
       },
 
       // 慢速网络
       slowNetwork: (url, minDelay = 5000, maxDelay = 15000) => {
-        return nock(url)
-          .persist()
-          .get(() => true)
-          .post(() => true)
-          .delay(() => Math.random() * (maxDelay - minDelay) + minDelay)
-          .reply(200, { data: 'slow response' })
+        const scope = nock(url).persist()
+        const methods = ['get', 'post', 'put', 'patch', 'delete']
+        
+        methods.forEach(method => {
+          scope[method](() => true)
+            .delay(() => Math.random() * (maxDelay - minDelay) + minDelay)
+            .reply(200, { data: 'slow response' })
+        })
+        
+        return scope
       }
     }
   }
@@ -587,6 +608,75 @@ class NetworkSimulator {
       throw new Error(`Pending mocks not satisfied: ${pending.join(', ')}`)
     }
     return true
+  }
+
+  /**
+   * 便捷API - 直接模拟超时错误
+   * @param {string} url - 要模拟的URL
+   * @param {number} delay - 超时延迟时间
+   */
+  simulateTimeout(url, delay = 30000) {
+    const errors = this.mockNetworkErrors()
+    return errors.timeout(url, delay)
+  }
+
+  /**
+   * 便捷API - 直接模拟HTTP错误
+   * @param {string} url - 要模拟的URL
+   * @param {number} statusCode - HTTP状态码
+   * @param {string|Object} errorData - 错误数据
+   */
+  simulateHttpError(url, statusCode = 500, errorData = 'Server Error') {
+    const errorResponse = typeof errorData === 'string' 
+      ? { error: errorData }
+      : errorData
+
+    const scope = nock(url).persist()
+    const methods = ['get', 'post', 'put', 'patch', 'delete']
+    
+    methods.forEach(method => {
+      scope[method](() => true)
+        .reply(statusCode, errorResponse)
+    })
+    
+    return scope
+  }
+
+  /**
+   * 便捷API - 直接模拟连接被拒绝错误
+   * @param {string} url - 要模拟的URL
+   */
+  simulateConnectionRefused(url) {
+    const errors = this.mockNetworkErrors()
+    return errors.connectionRefused(url)
+  }
+
+  /**
+   * 便捷API - 直接模拟DNS错误
+   * @param {string} url - 要模拟的URL
+   */
+  simulateDnsError(url) {
+    const errors = this.mockNetworkErrors()
+    return errors.dnsError(url)
+  }
+
+  /**
+   * 便捷API - 直接模拟SSL错误
+   * @param {string} url - 要模拟的URL
+   */
+  simulateSslError(url) {
+    const errors = this.mockNetworkErrors()
+    return errors.sslError(url)
+  }
+
+  /**
+   * 便捷API - 直接模拟网络中断
+   * @param {string} url - 要模拟的URL
+   * @param {number} successRate - 成功率 (0-1)
+   */
+  simulateIntermittentError(url, successRate = 0.5) {
+    const errors = this.mockNetworkErrors()
+    return errors.intermittentError(url, successRate)
   }
 }
 

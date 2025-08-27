@@ -35,12 +35,12 @@ class ComprehensiveErrorSimulator extends NetworkSimulator {
         
         hangingResponse: () => nock('https://read-timeout.test')
           .post('/hanging')
-          .socketDelay(20000) // 模拟socket挂起
+          .delay(20000) // 模拟响应延迟
           .reply(200, { data: 'Eventually responds' }),
 
         slowUpload: () => nock('https://read-timeout.test')
           .put('/upload')
-          .delayBody(15000) // 上传过程中延迟
+          .delay(15000) // 上传过程中延迟
           .reply(200, { uploaded: true })
       },
 
@@ -321,12 +321,17 @@ class ComprehensiveErrorSimulator extends NetworkSimulator {
    * 创建超时错误的辅助方法
    */
   _createTimeoutError(url, delay) {
-    return nock(url)
-      .persist()
-      .get(() => true)
-      .post(() => true)
-      .delay(delay)
-      .replyWithError({ code: 'ETIMEDOUT', message: `Timeout after ${delay}ms` })
+    // 对每种HTTP方法分别设置拦截器
+    const scope = nock(url).persist()
+    const methods = ['get', 'post', 'put', 'patch', 'delete']
+    
+    methods.forEach(method => {
+      scope[method](() => true)
+        .delay(delay)
+        .replyWithError({ code: 'ETIMEDOUT', message: `Timeout after ${delay}ms` })
+    })
+    
+    return scope
   }
 
   /**

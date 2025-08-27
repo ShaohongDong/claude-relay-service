@@ -209,7 +209,8 @@ class ConcurrencySimulator extends EventEmitter {
         await redis.eval(releaseScript, 1, lockKey, lockValue)
         
       } else {
-        throw new Error(`Lock ${lockKey} is already held by another process`)
+        // 锁获取失败是正常的竞争结果，不应该抛出异常
+        result = { message: `Lock ${lockKey} is already held by another process` }
       }
     } catch (err) {
       error = err.message
@@ -378,6 +379,7 @@ class ConcurrencySimulator extends EventEmitter {
       averageTime: 0,
       minTime: Infinity,
       maxTime: 0,
+      throughput: 0, // 添加吞吐量计算
       concurrencyIssues: [],
       performanceMetrics: {},
       completedProcesses: this.completedProcesses // 包含完整的进程信息
@@ -414,6 +416,13 @@ class ConcurrencySimulator extends EventEmitter {
       summary.minTime = 0
     }
 
+    // 计算吞吐量 (requests per second)
+    if (summary.maxTime > 0) {
+      summary.throughput = (summary.successful / summary.maxTime) * 1000 // 转换为每秒
+    } else if (summary.totalTime > 0) {
+      summary.throughput = (summary.successful / summary.totalTime) * 1000 // 备用计算方式
+    }
+
     // 检测潜在的并发问题
     if (summary.averageTime > 0 && summary.maxTime > summary.averageTime * 3) {
       summary.concurrencyIssues.push('High variance in execution times detected')
@@ -444,7 +453,8 @@ class ConcurrencySimulator extends EventEmitter {
     
     // 分析completedProcesses中的结果
     for (const process of results.completedProcesses || []) {
-      if (process.result && process.result.lockAcquired) {
+      // process.result 是 _attemptLockAndExecute 的返回值，包含 lockAcquired 属性
+      if (process.result && process.result.lockAcquired === true) {
         analysis.lockAcquisitions++
         analysis.lockHolders.push(process.result.processId)
         totalLockTime += process.result.lockAcquireTime || 0
