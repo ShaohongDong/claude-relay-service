@@ -104,7 +104,7 @@ class ApiKeyService {
   }
 
   // 🔍 验证API Key
-  async validateApiKey(apiKey) {
+  async validateApiKey(apiKey, req = null) {
     try {
       if (!apiKey || !apiKey.startsWith(this.prefix)) {
         return { valid: false, error: 'Invalid API key format' }
@@ -128,6 +128,44 @@ class ApiKeyService {
       // 检查是否过期
       if (keyData.expiresAt && new Date() > new Date(keyData.expiresAt)) {
         return { valid: false, error: 'API key has expired' }
+      }
+
+      // 如果提供了请求对象，进行速率限制和并发检查
+      if (req) {
+        // 检查并发限制
+        const maxConcurrency = parseInt(keyData.maxConcurrency || keyData.concurrencyLimit || 0)
+        if (maxConcurrency > 0) {
+          try {
+            const currentConcurrency = await redis.incrConcurrency(keyData.id)
+            if (currentConcurrency > maxConcurrency) {
+              await redis.decrConcurrency(keyData.id) // 回滚并发计数
+              return { valid: false, error: 'API key concurrency limit exceeded' }
+            }
+          } catch (concurrencyError) {
+            logger.error('Concurrency check failed:', concurrencyError)
+            return { valid: false, error: 'Internal validation error' }
+          }
+        }
+        
+        // 检查速率限制
+        const rateLimitRequests = parseInt(keyData.limit || keyData.rateLimitRequests || 0)
+        if (rateLimitRequests > 0) {
+          const limitType = keyData.limitType || 'hour'
+          const windowSeconds = limitType === 'minute' ? 60 : 3600
+          const windowKey = `rate_limit:${keyData.id}:${Math.floor(Date.now() / (windowSeconds * 1000))}`
+          
+          try {
+            const currentRequests = parseInt(await redis.get(windowKey) || '0')
+            if (currentRequests >= rateLimitRequests) {
+              return { valid: false, error: 'Rate limit exceeded' }
+            }
+            // 增加请求计数
+            await redis.set(windowKey, currentRequests + 1, 'EX', windowSeconds)
+          } catch (rateLimitError) {
+            logger.error('Rate limit check failed:', rateLimitError)
+            return { valid: false, error: 'Internal validation error' }
+          }
+        }
       }
 
       // 获取使用统计（供返回数据使用）
@@ -167,6 +205,33 @@ class ApiKeyService {
 
       return {
         valid: true,
+        apiKeyData: {
+          id: keyData.id,
+          name: keyData.name,
+          description: keyData.description,
+          createdAt: keyData.createdAt,
+          expiresAt: keyData.expiresAt,
+          claudeAccountId: keyData.claudeAccountId,
+          claudeConsoleAccountId: keyData.claudeConsoleAccountId,
+          geminiAccountId: keyData.geminiAccountId,
+          openaiAccountId: keyData.openaiAccountId,
+          azureOpenaiAccountId: keyData.azureOpenaiAccountId,
+          bedrockAccountId: keyData.bedrockAccountId, // 添加 Bedrock 账号ID
+          permissions: keyData.permissions || 'all',
+          tokenLimit: parseInt(keyData.tokenLimit),
+          concurrencyLimit: parseInt(keyData.concurrencyLimit || 0),
+          rateLimitWindow: parseInt(keyData.rateLimitWindow || 0),
+          rateLimitRequests: parseInt(keyData.rateLimitRequests || 0),
+          enableModelRestriction: keyData.enableModelRestriction === 'true',
+          restrictedModels,
+          enableClientRestriction: keyData.enableClientRestriction === 'true',
+          allowedClients,
+          dailyCostLimit: parseFloat(keyData.dailyCostLimit || 0),
+          dailyCost: dailyCost || 0,
+          tags,
+          usage
+        },
+        // Also provide keyData for backward compatibility
         keyData: {
           id: keyData.id,
           name: keyData.name,

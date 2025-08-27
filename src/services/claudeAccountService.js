@@ -386,7 +386,7 @@ class ClaudeAccountService {
       // 检查token是否过期
       const expiresAt = parseInt(accountData.expiresAt)
       const now = Date.now()
-      const isExpired = !expiresAt || now >= expiresAt - 60000 // 60秒提前刷新
+      const isExpired = !expiresAt || now >= expiresAt - 1000 // 1秒提前刷新
 
       // 记录token使用情况
       logTokenUsage(accountId, accountData.name, 'claude', accountData.expiresAt, isExpired)
