@@ -1336,6 +1336,8 @@ class ClaudeAccountService {
         // 如果当前时间在窗口内，只更新最后请求时间
         if (currentTime < windowEnd) {
           accountData.lastRequestTime = now.toISOString()
+          // 保存更新后的数据到Redis
+          await redis.setClaudeAccount(accountId, accountData)
           return accountData
         }
 
@@ -1354,6 +1356,9 @@ class ClaudeAccountService {
       accountData.sessionWindowStart = windowStart.toISOString()
       accountData.sessionWindowEnd = windowEnd.toISOString()
       accountData.lastRequestTime = now.toISOString()
+
+      // 保存更新后的数据到Redis
+      await redis.setClaudeAccount(accountId, accountData)
 
       logger.info(
         `🕐 Created new session window for account ${accountData.name} (${accountId}): ${windowStart.toISOString()} - ${windowEnd.toISOString()} (from current time)`
