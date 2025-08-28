@@ -788,8 +788,13 @@ EOF
             if [ -f "web/admin-spa/package.json" ]; then
                 print_info "开始本地构建前端..."
                 cd web/admin-spa
+                
+                print_info "安装依赖..."
                 npm install
+                
+                print_info "构建前端项目..."
                 npm run build
+                
                 cd ../..
                 print_success "前端本地构建完成"
             else
@@ -1069,8 +1074,13 @@ update_service() {
             if [ -f "web/admin-spa/package.json" ]; then
                 print_info "开始本地构建前端..."
                 cd web/admin-spa
+                
+                print_info "安装依赖..."
                 npm install
+                
+                print_info "构建前端项目..."
                 npm run build
+                
                 cd ../..
                 print_success "前端本地构建完成"
             else
