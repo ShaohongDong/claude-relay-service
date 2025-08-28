@@ -859,38 +859,49 @@ update_service() {
     # 检查本地修改
     print_info "检查本地文件修改..."
     local has_changes=false
+    local force_reset=false
     if git status --porcelain | grep -v "^??" | grep -q .; then
         has_changes=true
         print_warning "检测到本地文件已修改："
         git status --short | grep -v "^??"
         echo ""
-        echo -e "${YELLOW}警告：更新将使用远程版本覆盖本地修改！${NC}"
-        
-        # 创建本地修改的备份
-        local backup_branch="backup-$(date +%Y%m%d-%H%M%S)"
-        print_info "创建本地修改备份分支: $backup_branch"
-        git stash push -m "Backup before update $(date +%Y-%m-%d)" >/dev/null 2>&1
-        git branch "$backup_branch" 2>/dev/null || true
-        
-        echo -e "${GREEN}已创建备份分支: $backup_branch${NC}"
-        echo "如需恢复，可执行: git checkout $backup_branch"
+        echo -e "${YELLOW}更新策略选择：${NC}"
+        echo "  1) 智能合并 - 尝试保留本地修改并合并远程更新（推荐）"
+        echo "  2) 备份覆盖 - 备份本地修改后强制使用远程版本"  
+        echo "  3) 取消更新 - 保持现状不进行任何更新"
         echo ""
+        echo -n "请选择策略 [1-3] (默认: 1): "
+        read update_strategy
+        update_strategy=${update_strategy:-1}
         
-        echo -n "是否继续更新？(y/N): "
-        read -n 1 confirm_update
-        echo
-        
-        if [[ ! "$confirm_update" =~ ^[Yy]$ ]]; then
-            print_info "已取消更新"
-            # 恢复 stash 的修改
-            git stash pop >/dev/null 2>&1 || true
-            # 如果之前在运行，重新启动服务
-            if [ "$was_running" = true ]; then
-                print_info "重新启动服务..."
-                start_service
-            fi
-            return 0
-        fi
+        case "$update_strategy" in
+            1)
+                print_info "将尝试智能合并，保留本地修改"
+                # 继续执行，后续使用 merge 而非 reset
+                ;;
+            2)
+                print_warning "将备份本地修改并强制使用远程版本"
+                # 创建本地修改的备份
+                local backup_branch="backup-$(date +%Y%m%d-%H%M%S)"
+                print_info "创建本地修改备份分支: $backup_branch"
+                git stash push -m "Backup before force update $(date +%Y-%m-%d)" >/dev/null 2>&1
+                git branch "$backup_branch" 2>/dev/null || true
+                
+                echo -e "${GREEN}已创建备份分支: $backup_branch${NC}"
+                echo "如需恢复，可执行: git checkout $backup_branch"
+                # 设置标志位，后续强制重置
+                force_reset=true
+                ;;
+            3|*)
+                print_info "已取消更新"
+                # 如果之前在运行，重新启动服务
+                if [ "$was_running" = true ]; then
+                    print_info "重新启动服务..."
+                    start_service
+                fi
+                return 0
+                ;;
+        esac
     fi
     
     # 获取最新代码（使用当前分支）
@@ -909,14 +920,59 @@ update_service() {
         return 1
     fi
     
-    # 强制重置到远程版本
+    # 根据用户选择的策略执行更新
     print_info "应用远程更新..."
-    if ! git reset --hard "origin/$current_branch"; then
-        print_error "重置到远程版本失败"
-        # 尝试恢复
-        print_info "尝试恢复..."
-        git reset --hard HEAD
-        return 1
+    
+    if [ "$force_reset" = true ]; then
+        # 策略2：强制重置到远程版本
+        print_info "强制使用远程版本..."
+        if ! git reset --hard "origin/$current_branch"; then
+            print_error "重置到远程版本失败"
+            return 1
+        fi
+        print_success "已强制同步到远程版本"
+    else
+        # 策略1：智能合并，保留本地修改
+        if git merge "origin/$current_branch" --no-edit; then
+            print_success "成功合并远程更新，保留本地修改"
+        else
+            print_warning "合并冲突，尝试使用rebase方式..."
+            git merge --abort 2>/dev/null
+            if git rebase "origin/$current_branch"; then
+                print_success "成功通过rebase应用更新"
+            else
+                print_error "自动合并失败，存在冲突"
+                git rebase --abort 2>/dev/null
+                echo ""
+                print_warning "由于存在冲突，您可以选择："
+                echo "  1) 手动解决冲突后继续"
+                echo "  2) 放弃本地修改，强制使用远程版本"
+                echo "  3) 取消更新"
+                echo ""
+                echo -n "请选择 [1-3]: "
+                read conflict_choice
+                
+                case "$conflict_choice" in
+                    1)
+                        print_info "请手动解决冲突后运行: git rebase --continue"
+                        print_info "或者运行: git merge origin/$current_branch"
+                        return 1
+                        ;;
+                    2)
+                        print_warning "强制使用远程版本（将丢失本地修改）"
+                        if ! git reset --hard "origin/$current_branch"; then
+                            print_error "重置到远程版本失败"
+                            return 1
+                        fi
+                        print_success "已强制同步到远程版本"
+                        ;;
+                    3|*)
+                        print_info "已取消更新"
+                        return 1
+                        ;;
+                esac
+            fi
+        fi
     fi
     
     # 清理未跟踪的文件（可选，保留用户新建的文件）
