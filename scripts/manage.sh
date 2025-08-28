@@ -787,24 +787,10 @@ EOF
         
         # 检查是否有 Node.js 和 npm
         if command_exists npm; then
-            # 回退到原始构建方式
-            if [ -f "web/admin-spa/package.json" ]; then
-                print_info "开始本地构建前端..."
-                cd web/admin-spa
-                
-                print_info "安装依赖..."
-                npm install
-                
-                # 自动修复前端项目安全漏洞
-                auto_fix_vulnerabilities "前端项目"
-                
-                print_info "构建前端项目..."
-                npm run build
-                
-                cd ../..
-                print_success "前端本地构建完成"
-            else
-                print_error "无法找到前端项目文件"
+            # 回退到原始构建方式，使用通用构建函数
+            if ! build_frontend; then
+                print_error "前端构建失败"
+                return 1
             fi
         else
             print_error "无法获取前端文件，且本地环境不支持构建"
@@ -1079,24 +1065,10 @@ update_service() {
         
         # 检查是否有 Node.js 和 npm
         if command_exists npm; then
-            # 回退到原始构建方式
-            if [ -f "web/admin-spa/package.json" ]; then
-                print_info "开始本地构建前端..."
-                cd web/admin-spa
-                
-                print_info "安装依赖..."
-                npm install
-                
-                # 自动修复前端项目安全漏洞
-                auto_fix_vulnerabilities "前端项目"
-                
-                print_info "构建前端项目..."
-                npm run build
-                
-                cd ../..
-                print_success "前端本地构建完成"
-            else
-                print_error "无法找到前端项目文件"
+            # 回退到原始构建方式，使用通用构建函数
+            if ! build_frontend; then
+                print_error "前端构建失败，但更新将继续"
+                # 不返回错误，允许更新继续
             fi
         else
             print_error "无法获取前端文件，且本地环境不支持构建"
@@ -1449,6 +1421,59 @@ restart_service() {
     
     # 启动服务
     start_service
+}
+
+# 构建前端项目（通用函数）
+build_frontend() {
+    if [ ! -f "web/admin-spa/package.json" ]; then
+        print_error "无法找到前端项目文件"
+        return 1
+    fi
+    
+    print_info "开始本地构建前端..."
+    cd web/admin-spa
+    
+    # 确保依赖完全安装
+    print_info "清理并重新安装依赖..."
+    rm -rf node_modules package-lock.json 2>/dev/null || true
+    if ! npm install; then
+        print_error "前端依赖安装失败"
+        cd ../..
+        return 1
+    fi
+    
+    # 自动修复前端项目安全漏洞
+    auto_fix_vulnerabilities "前端项目"
+    
+    print_info "构建前端项目..."
+    # 使用 npx 确保能找到 vite 命令，并检查构建结果
+    if npm run build; then
+        print_success "前端本地构建完成"
+        cd ../..
+        return 0
+    else
+        print_error "前端构建失败，尝试使用 npx vite build..."
+        if npx vite build; then
+            print_success "前端本地构建完成（使用 npx）"
+            cd ../..
+            return 0
+        else
+            print_error "前端构建完全失败"
+            # 检查是否存在 vite 配置
+            if [ ! -f "vite.config.js" ] && [ ! -f "vite.config.ts" ]; then
+                print_warning "未找到 vite 配置文件，这可能是问题原因"
+            fi
+            # 显示更多调试信息
+            print_info "Node.js 版本: $(node -v 2>/dev/null || echo '未安装')"
+            print_info "npm 版本: $(npm -v 2>/dev/null || echo '未安装')"
+            if [ -f "package.json" ]; then
+                print_info "package.json 中的 scripts:"
+                grep -A 10 '"scripts"' package.json 2>/dev/null || echo "无法读取 scripts"
+            fi
+            cd ../..
+            return 1
+        fi
+    fi
 }
 
 # 自动修复npm安全漏洞
