@@ -15,6 +15,7 @@ const {
 } = require('../utils/tokenRefreshLogger')
 const tokenRefreshService = require('./tokenRefreshService')
 const LRUCache = require('../utils/lruCache')
+const webhookNotifier = require('../utils/webhookNotifier')
 
 class ClaudeAccountService {
   constructor() {
@@ -329,7 +330,6 @@ class ClaudeAccountService {
 
         // 发送Webhook通知
         try {
-          const webhookNotifier = require('../utils/webhookNotifier')
           await webhookNotifier.sendAccountAnomalyNotification({
             accountId,
             accountName: accountData.name,

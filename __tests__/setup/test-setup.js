@@ -112,13 +112,45 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  // 🕒 确保时间控制器被正确清理
-  if (globalTimeController.isActive) {
-    globalTimeController.stop()
+  try {
+    // 🕒 确保时间控制器被正确清理
+    if (globalTimeController && globalTimeController.isActive) {
+      await globalTimeController.stop()
+    }
+    
+    // 🧹 清理全局资源
+    if (global.testRedisInstance) {
+      global.testRedisInstance.flushall()
+    }
+    
+    // 🌐 清理网络模拟器
+    const nock = require('nock')
+    nock.cleanAll()
+    nock.restore()
+    
+    // ⏰ 强制清理任何残留的定时器（仅在启用FakeTimers时）
+    try {
+      if (jest.isMockFunction && jest.isMockFunction(setTimeout)) {
+        // FakeTimers已启用，可以安全调用
+        if (jest.getTimerCount() > 0) {
+          jest.clearAllTimers()
+        }
+      }
+    } catch (error) {
+      // 忽略定时器清理错误
+    }
+    
+    // 🗑️ 触发垃圾回收
+    if (global.gc) {
+      global.gc()
+    }
+    
+    // 测试结束后的清理
+    console.log('✅ Test suite completed')
+  } catch (error) {
+    // 即使清理失败也要继续，避免阻止测试退出
+    console.warn('⚠️ Cleanup warning:', error.message)
   }
-  
-  // 测试结束后的清理
-  console.log('✅ Test suite completed')
 })
 
 // 每个测试前的设置

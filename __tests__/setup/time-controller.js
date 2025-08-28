@@ -19,18 +19,16 @@ class TimeController {
    * @param {Object} [options] - 配置选项
    */
   async start(startTime = this.startTime, options = {}) {
-    // 如果强制重启或需要清理现有状态
-    if (this.isActive || options.forceRestart) {
-      this.stop()
+    // 如果已经激活，先停止
+    if (this.isActive) {
+      await this.stop()
     }
 
-    // 额外安全检查：全面清理所有可能的FakeTimers状态
-    await this._forceCleanup()
+    // 异步清理，确保完全卸载
+    await this._syncCleanup()
 
-    let attempts = 0
-    const maxAttempts = 3
-
-    while (attempts < maxAttempts) {
+    const maxRetries = 3
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         this.clock = FakeTimers.install({
           now: startTime,
@@ -39,37 +37,26 @@ class TimeController {
             'setInterval', 
             'clearTimeout',
             'clearInterval',
-            'Date',
-            'performance'
+            'Date'
           ],
-          shouldAdvanceTime: options.shouldAdvanceTime || false,
-          advanceTimeDelta: options.advanceTimeDelta || 20
+          shouldAdvanceTime: false // 简化，不使用自动推进
         })
 
         this.isActive = true
         this.startTime = startTime
-        
-        // 重置定时器跟踪
         this.activeTimers.clear()
         
         return this
       } catch (error) {
-        attempts++
-        
-        if (error.message.includes('fake timers twice')) {
-          // 如果安装失败，尝试更彻底的清理
-          await this._emergencyCleanup()
-          
-          // 短暂延迟后重试
-          await new Promise(resolve => setTimeout(resolve, 5))
-          
-          if (attempts >= maxAttempts) {
-            throw new Error(`Failed to install FakeTimers after ${maxAttempts} attempts: ${error.message}`)
-          }
+        if (error.message.includes('fake timers twice') && attempt < maxRetries) {
+          console.warn(`TimeController: FakeTimers conflict detected, retry ${attempt}/${maxRetries}`)
+          // 等待更长时间让之前的清理完成
+          await new Promise(resolve => setTimeout(resolve, 50 * attempt))
+          await this._syncCleanup()
           continue
         }
         
-        throw error
+        throw new Error(`TimeController start failed after ${maxRetries} attempts: ${error.message}`)
       }
     }
   }
@@ -77,7 +64,7 @@ class TimeController {
   /**
    * 停止时间控制器
    */
-  stop() {
+  async stop() {
     if (this.clock) {
       this.clock.uninstall()
       this.clock = null
@@ -85,6 +72,9 @@ class TimeController {
     
     this.isActive = false
     this.activeTimers.clear()
+    
+    // 等待清理完成
+    await new Promise(resolve => process.nextTick(resolve))
     
     return this
   }
@@ -98,19 +88,8 @@ class TimeController {
     
     const beforeTime = this.now()
     
-    // 使用tickAsync确保异步回调被正确执行
     try {
       this.clock.tick(milliseconds)
-      
-      // 强制执行所有待执行的微任务
-      if (typeof process !== 'undefined' && process.nextTick) {
-        // Node.js环境下刷新微任务队列
-        process.nextTick(() => {})
-      }
-      
-      // 给Promise.resolve()一个机会执行微任务
-      Promise.resolve().then(() => {})
-      
     } catch (error) {
       console.warn(`TimeController advance warning: ${error.message}`)
     }
@@ -172,19 +151,36 @@ class TimeController {
   /**
    * 跳转到特定时间点
    * @param {Date|number} targetTime - 目标时间
+   * @param {Object} options - 跳转选项
+   * @param {boolean} options.allowBackwards - 是否允许时间回跳（默认false）
    */
-  jumpTo(targetTime) {
+  jumpTo(targetTime, options = {}) {
     this._ensureActive()
     
     const target = targetTime instanceof Date ? targetTime.getTime() : targetTime
     const current = this.now()
     const diff = target - current
     
+    if (diff < 0 && !options.allowBackwards) {
+      throw new Error('Cannot jump backwards in time. Use jumpTo(time, {allowBackwards: true}) to override.')
+    }
+    
     if (diff < 0) {
-      throw new Error('Cannot jump backwards in time')
+      // 时间回跳需要重置时钟
+      this.clock.reset()
+      this.clock.setSystemTime(target)
+      return target
     }
     
     return this.advance(diff)
+  }
+
+  /**
+   * 重置时间到指定时间点（允许回跳）
+   * @param {Date|number} time - 重置到的时间点
+   */
+  resetTo(time) {
+    return this.jumpTo(time, { allowBackwards: true })
   }
 
   /**
@@ -370,10 +366,10 @@ class TimeController {
   }
 
   /**
-   * 强制清理FakeTimers状态
+   * 强制清理所有FakeTimers状态 - 解决重复安装问题
    * @private
    */
-  _forceCleanup() {
+  _syncCleanup() {
     try {
       // 1. 清理当前实例的clock
       if (this.clock) {
@@ -381,88 +377,87 @@ class TimeController {
         this.clock = null
       }
       
-      // 2. 清理FakeTimers的全局状态
-      if (FakeTimers.clock) {
-        FakeTimers.clock.uninstall()
-      }
-      
-      // 3. 清理全局定时器状态
-      const globalObj = typeof window !== 'undefined' ? window : global
-      if (globalObj.__fakeTimersInstance) {
-        try {
-          globalObj.__fakeTimersInstance.uninstall()
-          delete globalObj.__fakeTimersInstance
-        } catch (e) {
-          // 继续执行
+      // 2. 尝试清理可能存在的其他FakeTimers实例
+      try {
+        // 检查全局是否还有活动的FakeTimers
+        const globalTimers = global.setTimeout._isFake || global.setInterval._isFake
+        if (globalTimers) {
+          // 尝试通过创建临时实例来清理
+          const tempClock = FakeTimers.install({ toFake: [] })
+          tempClock.uninstall()
         }
+      } catch (e) {
+        // 忽略临时清理错误
       }
       
-      // 4. 重置实例状态
+      // 3. 重置实例状态
       this.isActive = false
       this.activeTimers.clear()
       
-      // 5. 添加短暂延迟确保清理完成
-      return new Promise(resolve => setTimeout(resolve, 1))
+      // 4. 强制等待微任务队列清空
+      return new Promise(resolve => {
+        process.nextTick(() => {
+          setTimeout(resolve, 0)
+        })
+      })
+      
     } catch (error) {
       // 继续执行，不要因为清理失败而阻止测试
       this.isActive = false
       this.clock = null
+      this.activeTimers.clear()
+      return Promise.resolve()
     }
   }
 
   /**
-   * 紧急清理 - 处理安装失败的情况
-   * @private
+   * 安全的测试超时处理
+   * @param {Function} testFn - 测试函数
+   * @param {number} timeoutMs - 超时时间（毫秒）
+   * @return {Promise}
    */
-  _emergencyCleanup() {
-    try {
-      // 1. 尝试多种方式清理全局状态
-      const globalObj = typeof window !== 'undefined' ? window : global
+  async withTimeout(testFn, timeoutMs = 30000) {
+    this._ensureActive()
+    
+    return new Promise(async (resolve, reject) => {
+      let timeoutId = null
+      let completed = false
       
-      // 恢复原始的定时器方法（如果被修改了）
-      if (globalObj.originalSetTimeout) {
-        globalObj.setTimeout = globalObj.originalSetTimeout
-      }
-      if (globalObj.originalSetInterval) {
-        globalObj.setInterval = globalObj.originalSetInterval
-      }
-      if (globalObj.originalClearTimeout) {
-        globalObj.clearTimeout = globalObj.originalClearTimeout
-      }
-      if (globalObj.originalClearInterval) {
-        globalObj.clearInterval = globalObj.originalClearInterval
-      }
-      if (globalObj.originalDate) {
-        globalObj.Date = globalObj.originalDate
-      }
+      // 创建超时定时器
+      timeoutId = setTimeout(() => {
+        if (!completed) {
+          completed = true
+          reject(new Error(`Test timeout after ${timeoutMs}ms`))
+        }
+      }, timeoutMs)
       
-      // 2. 强制清理任何剩余的FakeTimers实例
-      if (FakeTimers.clock) {
-        try {
-          FakeTimers.clock.uninstall()
-        } catch (e) {
-          // 最后一招：直接设置为null
-          FakeTimers.clock = null
+      try {
+        const result = await testFn()
+        if (!completed) {
+          completed = true
+          clearTimeout(timeoutId)
+          resolve(result)
+        }
+      } catch (error) {
+        if (!completed) {
+          completed = true
+          clearTimeout(timeoutId)
+          reject(error)
         }
       }
-      
-      // 3. 重置本实例状态
-      this.isActive = false
-      this.clock = null
-      this.activeTimers.clear()
-      
-      // 4. 短暂延迟确保清理完成
-      return new Promise(resolve => {
-        const originalSetTimeout = typeof setTimeout === 'function' ? setTimeout : 
-          (fn, delay) => { setTimeout(fn, delay || 0); }
-        originalSetTimeout(resolve, 1)
-      })
-    } catch (error) {
-      // 即使紧急清理失败也要继续
-      this.isActive = false
-      this.clock = null
+    })
+  }
+
+  /**
+   * 重置时钟状态
+   */
+  reset() {
+    if (this.isActive) {
+      this.clock.reset()
+      this.clock.setSystemTime(this.startTime)
     }
   }
+
 }
 
 /**
@@ -471,47 +466,52 @@ class TimeController {
 const globalTimeController = new TimeController()
 
 /**
+ * 全局单例控制器，避免多个实例冲突
+ */
+let globalControllerInstance = null
+
+/**
  * 便捷的测试辅助函数
  */
 const timeTestUtils = {
   /**
-   * 在时间控制环境中运行测试
+   * 在时间控制环境中运行测试 - 使用单例模式避免冲突
    */
   async withTimeControl(testFn, startTime, options) {
-    const controller = new TimeController()
+    // 使用全局单例，避免重复创建
+    if (!globalControllerInstance) {
+      globalControllerInstance = new TimeController()
+    }
+    const controller = globalControllerInstance
     
     try {
-      // 使用新的强制清理方法
-      await controller._forceCleanup()
-      
       // 启动时间控制器（现在是异步的）
       await controller.start(startTime, options)
-      
-      // 给Promise一个机会初始化
-      await new Promise(resolve => setImmediate(resolve))
       
       // 执行测试函数
       const result = await testFn(controller)
       
-      // 确保所有待处理的Promise都完成
-      await new Promise(resolve => setImmediate(resolve))
-      
       return result
     } finally {
-      // 确保完全清理
+      // 异步清理
       try {
         if (controller.isActive) {
-          controller.stop()
+          await controller.stop()
         }
-        
-        // 再次强制清理确保彻底
-        await controller._forceCleanup()
       } catch (error) {
-        // 使用紧急清理作为最后手段
-        await controller._emergencyCleanup()
         console.warn('TimeController cleanup warning:', error.message)
       }
     }
+  },
+
+  /**
+   * 重置全局控制器实例 - 用于测试间的完全隔离
+   */
+  async resetGlobalController() {
+    if (globalControllerInstance?.isActive) {
+      await globalControllerInstance.stop()
+    }
+    globalControllerInstance = null
   },
 
   /**

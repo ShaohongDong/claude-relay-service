@@ -6,17 +6,16 @@ jest.mock('../../../src/models/redis')
 jest.mock('../../../src/utils/logger')
 
 describe('时间敏感操作测试 - 真实定时器行为验证', () => {
-  let timeController
 
-  beforeEach(() => {
-    timeController = new TimeController()
+  beforeEach(async () => {
     jest.clearAllMocks()
+    // 确保每个测试开始时都有干净的环境
+    await timeTestUtils.resetGlobalController()
   })
 
-  afterEach(() => {
-    if (timeController.isActive) {
-      timeController.stop()
-    }
+  afterEach(async () => {
+    // 清理全局控制器状态
+    await timeTestUtils.resetGlobalController()
   })
 
   describe('🕒 ClaudeAccountService 定时器测试', () => {
@@ -174,16 +173,13 @@ describe('时间敏感操作测试 - 真实定时器行为验证', () => {
           cleanupOldLogs: jest.fn().mockResolvedValue(10)
         }
 
-        // 模拟应用的每小时清理定时器
-        const hourlyCleanupInterval = setInterval(async () => {
-          try {
-            cleanupExecutionCount++
-            await mockCleanupTasks.cleanupExpiredSessions()
-            await mockCleanupTasks.cleanupErrorAccounts()
-            await mockCleanupTasks.cleanupOldLogs()
-          } catch (error) {
-            console.error('Cleanup task error:', error)
-          }
+        // 同步创建清理定时器，避免异步等待问题
+        const hourlyCleanupInterval = setInterval(() => {
+          // 移除async/await，使用同步逻辑
+          cleanupExecutionCount++
+          mockCleanupTasks.cleanupExpiredSessions()
+          mockCleanupTasks.cleanupErrorAccounts()
+          mockCleanupTasks.cleanupOldLogs()
         }, 60 * 60 * 1000) // 1小时
 
         // 推进59分59秒，不应该执行
@@ -192,10 +188,6 @@ describe('时间敏感操作测试 - 真实定时器行为验证', () => {
 
         // 推进到1小时，应该执行第一次清理
         controller.advance(1000)
-        
-        // 等待异步操作完成
-        await new Promise(resolve => setTimeout(resolve, 0))
-        
         expect(cleanupExecutionCount).toBe(1)
         expect(mockCleanupTasks.cleanupExpiredSessions).toHaveBeenCalledTimes(1)
         expect(mockCleanupTasks.cleanupErrorAccounts).toHaveBeenCalledTimes(1)
@@ -203,10 +195,8 @@ describe('时间敏感操作测试 - 真实定时器行为验证', () => {
 
         // 推进到2小时，应该执行第二次清理
         controller.advance(60 * 60 * 1000)
-        
-        await new Promise(resolve => setTimeout(resolve, 0))
-        
         expect(cleanupExecutionCount).toBe(2)
+        expect(mockCleanupTasks.cleanupExpiredSessions).toHaveBeenCalledTimes(2)
 
         clearInterval(hourlyCleanupInterval)
       })
@@ -261,22 +251,29 @@ describe('时间敏感操作测试 - 真实定时器行为验证', () => {
 
         const pollResults = []
         let pollCount = 0
+        let resolvers = []
         
-        const simulatePolling = async () => {
-          for (let i = 0; i < 5; i++) { // 模拟最多5次轮询
-            await new Promise(resolve => setTimeout(resolve, 5000)) // 5秒间隔
-            pollCount++
-            pollResults.push(controller.now())
-            
-            // 模拟第3次轮询成功
-            if (i === 2) {
-              break
+        // 同步创建轮询逻辑，确保所有setTimeout都在时间控制器管理下
+        const createPollingPromise = () => {
+          return new Promise((resolve) => {
+            const scheduleNext = (index = 0) => {
+              if (index >= 3) { // 只需要3次轮询
+                resolve()
+                return
+              }
+              
+              setTimeout(() => {
+                pollCount++
+                pollResults.push(controller.now())
+                scheduleNext(index + 1)
+              }, 5000)
             }
-          }
+            scheduleNext()
+          })
         }
 
-        // 启动轮询
-        const pollingPromise = simulatePolling()
+        // 启动轮询（所有定时器已创建）
+        const pollingPromise = createPollingPromise()
 
         // 验证轮询间隔
         expect(pollCount).toBe(0)
@@ -289,7 +286,7 @@ describe('时间敏感操作测试 - 真实定时器行为验证', () => {
         controller.advance(5000)
         expect(pollCount).toBe(2)
 
-        // 第三次轮询（再5秒后，这次会成功并退出）
+        // 第三次轮询（再5秒后）
         controller.advance(5000)
         expect(pollCount).toBe(3)
 

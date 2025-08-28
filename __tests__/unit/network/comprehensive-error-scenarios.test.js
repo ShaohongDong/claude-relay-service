@@ -274,7 +274,7 @@ class ComprehensiveErrorSimulator extends NetworkSimulator {
               attempts++
               const dropRate = 0.4 // 40% 丢包率
               if (Math.random() < dropRate) {
-                // 模拟丢包超时 - 返回408超时状态而不是抛出异常
+                // 模拟丢包超时 - 使用408状态码，axios会将其视为错误
                 return [408, { error: 'Request timeout', code: 'ETIMEDOUT' }]
               }
               return [200, { received: true, attempt: attempts }]
@@ -806,10 +806,15 @@ describe('🌐 综合网络错误场景测试 (15+ 种故障模拟)', () => {
       const results = []
       for (let i = 0; i < 10; i++) {
         try {
-          const response = await axios.post('https://packet-loss.test/lossy', { packet: i })
+          const response = await axios.post('https://packet-loss.test/lossy', { packet: i }, {
+            validateStatus: function (status) {
+              // 只有2xx状态码被视为成功，其他都会抛出错误
+              return status >= 200 && status < 300
+            }
+          })
           results.push({ success: true, attempt: response.data.attempt })
         } catch (error) {
-          results.push({ success: false, error: error.code })
+          results.push({ success: false, error: error.response?.status || error.code })
         }
       }
 

@@ -133,8 +133,8 @@ class Application {
       // 📝 请求日志（使用自定义logger而不是morgan）
       this.app.use(requestLogger)
 
-      // 🔧 基础中间件
-      this.app.use(
+      // 🔧 基础中间件 - 带JSON错误处理
+      this.app.use((req, res, next) => {
         express.json({
           limit: '10mb',
           verify: (req, res, buf, encoding) => {
@@ -143,8 +143,26 @@ class Application {
               throw new Error('Invalid JSON: empty body')
             }
           }
+        })(req, res, (error) => {
+          if (error) {
+            // 明确标记为JSON解析错误
+            if (error.type === 'entity.parse.failed' || 
+                error instanceof SyntaxError ||
+                (error.message && (
+                  error.message.includes('JSON') ||
+                  error.message.includes('Unexpected token') ||
+                  error.message.includes('in JSON at position') ||
+                  error.message.includes('Unexpected end of JSON input')
+                ))) {
+              const jsonError = new Error('Invalid JSON format in request body')
+              jsonError.status = 400
+              jsonError.type = 'entity.parse.failed'
+              return next(jsonError)
+            }
+          }
+          next(error)
         })
-      )
+      })
       this.app.use(express.urlencoded({ extended: true, limit: '10mb' }))
       this.app.use(securityMiddleware)
 

@@ -664,6 +664,25 @@ const errorHandler = (error, req, res, _next) => {
     statusCode = error.status
   }
 
+  // 优先检查express JSON解析错误
+  if (error.type === 'entity.parse.failed' || 
+      error.status === 400 && error.body && error.message.includes('JSON')) {
+    statusCode = 400
+    errorMessage = 'JSON Parse Error'
+    userMessage = 'Invalid JSON format in request body'
+  }
+  // 检查其他JSON相关错误
+  else if ((error.name === 'SyntaxError' || error.constructor.name === 'SyntaxError') &&
+           (error.message.includes('JSON') || 
+            error.message.includes('Unexpected token') ||
+            error.message.includes('in JSON at position') ||
+            error.message.includes('Unexpected end of JSON input') ||
+            error.message.includes('Invalid JSON'))) {
+    statusCode = 400
+    errorMessage = 'JSON Syntax Error'
+    userMessage = 'Invalid JSON format in request body'
+  }
+
   // 根据错误类型提供友好的错误消息
   switch (error.name) {
     case 'ValidationError':
@@ -675,15 +694,6 @@ const errorHandler = (error, req, res, _next) => {
       statusCode = 400
       errorMessage = 'Cast Error'
       userMessage = 'Invalid data format'
-      break
-    case 'SyntaxError':
-      // JSON解析错误
-      if (error.message.includes('JSON') || error.message.includes('Unexpected token') || 
-          error.body && error.type === 'entity.parse.failed') {
-        statusCode = 400
-        errorMessage = 'JSON Syntax Error'
-        userMessage = 'Invalid JSON format in request body'
-      }
       break
     case 'MongoError':
     case 'RedisError':
