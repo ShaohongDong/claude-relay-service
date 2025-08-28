@@ -1425,20 +1425,37 @@ restart_service() {
 
 # 构建前端项目（通用函数）
 build_frontend() {
-    if [ ! -f "web/admin-spa/package.json" ]; then
+    local original_dir=$(pwd)
+    local frontend_dir="$original_dir/web/admin-spa"
+    
+    if [ ! -f "$frontend_dir/package.json" ]; then
         print_error "无法找到前端项目文件"
         return 1
     fi
     
     print_info "开始本地构建前端..."
-    cd web/admin-spa
     
-    # 确保依赖完全安装
+    # 进入前端目录
+    if ! cd "$frontend_dir"; then
+        print_error "无法进入前端目录"
+        return 1
+    fi
+    
+    # 清理并重新安装依赖
     print_info "清理并重新安装依赖..."
     rm -rf node_modules package-lock.json 2>/dev/null || true
+    
+    export NODE_ENV=development
     if ! npm install; then
         print_error "前端依赖安装失败"
-        cd ../..
+        cd "$original_dir"
+        return 1
+    fi
+    
+    # 验证vite命令
+    if [ ! -f "node_modules/.bin/vite" ]; then
+        print_error "vite 命令未安装"
+        cd "$original_dir"
         return 1
     fi
     
@@ -1446,33 +1463,20 @@ build_frontend() {
     auto_fix_vulnerabilities "前端项目"
     
     print_info "构建前端项目..."
-    # 使用 npx 确保能找到 vite 命令，并检查构建结果
+    
+    # 设置构建环境
+    export NODE_ENV=production
+    export PATH="$(pwd)/node_modules/.bin:$PATH"
+    
+    # 执行构建
     if npm run build; then
         print_success "前端本地构建完成"
-        cd ../..
+        cd "$original_dir"
         return 0
     else
-        print_error "前端构建失败，尝试使用 npx vite build..."
-        if npx vite build; then
-            print_success "前端本地构建完成（使用 npx）"
-            cd ../..
-            return 0
-        else
-            print_error "前端构建完全失败"
-            # 检查是否存在 vite 配置
-            if [ ! -f "vite.config.js" ] && [ ! -f "vite.config.ts" ]; then
-                print_warning "未找到 vite 配置文件，这可能是问题原因"
-            fi
-            # 显示更多调试信息
-            print_info "Node.js 版本: $(node -v 2>/dev/null || echo '未安装')"
-            print_info "npm 版本: $(npm -v 2>/dev/null || echo '未安装')"
-            if [ -f "package.json" ]; then
-                print_info "package.json 中的 scripts:"
-                grep -A 10 '"scripts"' package.json 2>/dev/null || echo "无法读取 scripts"
-            fi
-            cd ../..
-            return 1
-        fi
+        print_error "前端构建失败"
+        cd "$original_dir"
+        return 1
     fi
 }
 
