@@ -66,6 +66,15 @@ class SSEParser extends EventEmitter {
     }
     this.emit('end')
   }
+
+  /**
+   * 清理资源并断开所有引用
+   */
+  cleanup() {
+    this.buffer = ''
+    this.eventBuffer = {}
+    this.removeAllListeners()
+  }
 }
 
 /**
@@ -259,6 +268,12 @@ class AdvancedSSESimulator {
    * 清理流资源
    */
   cleanup() {
+    // 清理所有活动流并断开引用
+    for (const [streamId, stream] of this.activeStreams) {
+      if (stream && stream.events) {
+        stream.events = null
+      }
+    }
     this.activeStreams.clear()
   }
 }
@@ -271,7 +286,16 @@ describe('🌊 SSE流式响应真实模拟测试', () => {
   })
 
   afterEach(() => {
+    // 清理SSE模拟器
     sseSimulator.cleanup()
+    
+    // 清理nock拦截器以防止内存泄漏
+    require('nock').cleanAll()
+    
+    // 强制垃圾回收（如果可用）
+    if (global.gc) {
+      global.gc()
+    }
   })
 
   describe('🎯 基础SSE流解析', () => {
@@ -351,8 +375,12 @@ describe('🌊 SSE流式响应真实模拟测试', () => {
                 )
                 expect(messageStop).toBeDefined()
                 
+                // 清理parser避免循环引用
+                parser.cleanup()
                 resolve()
               } catch (error) {
+                // 即使出错也要清理parser
+                parser.cleanup()
                 reject(error)
               }
             })
@@ -403,6 +431,7 @@ describe('🌊 SSE流式响应真实模拟测试', () => {
             response.data.on('end', () => {
               parser.finish()
               expect(extractedTokenCount).toBe(expectedTokens)
+              parser.cleanup() // 清理parser避免循环引用
               resolve()
             })
             response.data.on('error', reject)
@@ -457,6 +486,7 @@ describe('🌊 SSE流式响应真实模拟测试', () => {
               expect(receivedEvents.length).toBeLessThan(10) // 不应该收到所有事件
               expect(receivedEvents.length).toBeGreaterThan(0) // 但应该收到一些事件
               expect(error.message).toContain('Connection lost')
+              parser.cleanup() // 清理parser避免循环引用
               resolve()
             })
           }).catch(reject)

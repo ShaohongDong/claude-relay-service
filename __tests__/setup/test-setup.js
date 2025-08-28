@@ -35,7 +35,8 @@ jest.mock('../../src/utils/logger', () => ({
   debug: jest.fn(),
   verbose: jest.fn(),
   success: jest.fn(),
-  authDetail: jest.fn()
+  authDetail: jest.fn(),
+  api: jest.fn() // 添加缺失的api方法
 }))
 
 // 🕒 时间控制系统 - 使用真实的fake-timers替代简单mock

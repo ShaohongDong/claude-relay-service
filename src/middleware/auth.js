@@ -676,6 +676,15 @@ const errorHandler = (error, req, res, _next) => {
       errorMessage = 'Cast Error'
       userMessage = 'Invalid data format'
       break
+    case 'SyntaxError':
+      // JSON解析错误
+      if (error.message.includes('JSON') || error.message.includes('Unexpected token') || 
+          error.body && error.type === 'entity.parse.failed') {
+        statusCode = 400
+        errorMessage = 'JSON Syntax Error'
+        userMessage = 'Invalid JSON format in request body'
+      }
+      break
     case 'MongoError':
     case 'RedisError':
       statusCode = 503
@@ -687,8 +696,23 @@ const errorHandler = (error, req, res, _next) => {
       errorMessage = 'Request Timeout'
       userMessage = 'Request took too long to process'
       break
+    case 'SyntaxErrorJSON':
+    case 'JSONError':
+      // 其他类型的JSON解析错误
+      statusCode = 400
+      errorMessage = 'JSON Parse Error'
+      userMessage = 'Invalid JSON format in request body'
+      break
     default:
-      if (error.message && !isDevelopment) {
+      // 额外检查是否为JSON解析错误
+      if ((error.message && (error.message.includes('JSON at position') || 
+          error.message.includes('Unexpected token') ||
+          error.message.includes('Invalid JSON'))) ||
+          error.type === 'entity.parse.failed') {
+        statusCode = 400
+        errorMessage = 'JSON Parse Error'  
+        userMessage = 'Invalid JSON format in request body'
+      } else if (error.message && !isDevelopment) {
         // 在生产环境中，只显示安全的错误消息
         if (error.message.includes('ECONNREFUSED')) {
           userMessage = 'Service temporarily unavailable'

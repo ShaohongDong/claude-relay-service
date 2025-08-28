@@ -681,6 +681,37 @@ class NetworkSimulator {
 }
 
 /**
+ * 清理对象中的循环引用，避免JSON序列化错误
+ */
+function sanitizeForSerialization(obj, seen = new WeakSet()) {
+  if (obj === null || typeof obj !== 'object') {
+    return obj
+  }
+  
+  if (seen.has(obj)) {
+    return '[Circular Reference]'
+  }
+  
+  seen.add(obj)
+  
+  if (Array.isArray(obj)) {
+    return obj.map(item => sanitizeForSerialization(item, seen))
+  }
+  
+  const sanitized = {}
+  for (const [key, value] of Object.entries(obj)) {
+    // 跳过常见的循环引用属性
+    if (key === 'req' || key === 'agent' || key === 'socket' || key === 'client') {
+      sanitized[key] = '[Excluded to prevent circular reference]'
+    } else {
+      sanitized[key] = sanitizeForSerialization(value, seen)
+    }
+  }
+  
+  return sanitized
+}
+
+/**
  * 网络测试工具函数
  */
 const networkTestUtils = {
@@ -727,7 +758,8 @@ const networkTestUtils = {
           results[name] = {
             latency: Date.now() - startTime,
             success: false,
-            error: error.message
+            error: error.message,
+            code: error.code || 'UNKNOWN_ERROR'
           }
         }
       }
@@ -762,5 +794,6 @@ const networkTestUtils = {
 
 module.exports = {
   NetworkSimulator,
-  networkTestUtils
+  networkTestUtils,
+  sanitizeForSerialization
 }

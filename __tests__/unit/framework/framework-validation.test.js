@@ -8,7 +8,7 @@ describe('🧪 测试框架验证', () => {
       const controller = new TimeController()
       
       try {
-        controller.start()
+        await controller.start()
         
         const startTime = controller.now()
         controller.advance(5000) // 推进5秒
@@ -199,17 +199,26 @@ describe('🧪 测试框架验证', () => {
             }
           ]
 
-          // 启动并发任务
+          // 启动并发任务（不等待完成）
           const resultsPromise = simulator.runConcurrent(processes, {
             maxConcurrency: 2,
-            waitForAll: true
+            waitForAll: false
           })
+          
+          // 给异步操作一个机会开始
+          await new Promise(resolve => setImmediate(resolve))
 
           // 推进时间让任务完成
           timeController.advance(1000) // 第一个任务完成
+          
+          // 给定时器回调执行的机会
+          await new Promise(resolve => setImmediate(resolve))
           expect(executionCount).toBe(1)
           
           timeController.advance(1000) // 第二个任务完成
+          
+          // 再次给回调执行机会
+          await new Promise(resolve => setImmediate(resolve))
           expect(executionCount).toBe(2)
 
           const results = await resultsPromise

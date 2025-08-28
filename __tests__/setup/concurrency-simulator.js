@@ -375,6 +375,7 @@ class ConcurrencySimulator extends EventEmitter {
       totalProcesses: this.completedProcesses.length,
       successful: 0,
       failed: 0,
+      timeouts: 0, // 添加超时计数
       totalTime: 0,
       averageTime: 0,
       minTime: Infinity,
@@ -391,6 +392,10 @@ class ConcurrencySimulator extends EventEmitter {
         summary.successful++
       } else if (process.status === 'failed') {
         summary.failed++
+        // 检查是否是超时错误
+        if (process.error && (process.error.message.includes('timeout') || process.error.message.includes('Timeout'))) {
+          summary.timeouts++
+        }
       }
 
       const processTime = process.metrics?.totalTime || 0

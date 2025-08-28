@@ -38,6 +38,27 @@ jest.mock('../../../config/config', () => ({
 describe('ClaudeAccountService - Comprehensive Tests', () => {
   const mockConfig = require('../../../config/config')
   
+  // 保存原始方法引用
+  const originalMethods = {}
+  beforeAll(() => {
+    const methodsToSave = [
+      'updateSessionWindow',
+      'removeAccountRateLimit', 
+      'refreshAccountToken',
+      'getValidAccessToken',
+      'fetchAndUpdateAccountProfile',
+      'isAccountRateLimited',
+      'getAccountRateLimitInfo',
+      'getSessionWindowInfo'
+    ]
+    
+    methodsToSave.forEach(methodName => {
+      if (claudeAccountService[methodName]) {
+        originalMethods[methodName] = claudeAccountService[methodName]
+      }
+    })
+  })
+  
   beforeEach(() => {
     jest.clearAllMocks()
     jest.restoreAllMocks()
@@ -75,6 +96,30 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
     if (redis.client && redis.client.del && redis.client.del.mockReset) {
       redis.client.del.mockReset()
     }
+    
+    // 重置所有服务方法的Mock以防测试间污染
+    const methodsToReset = [
+      'updateSessionWindow',
+      'removeAccountRateLimit', 
+      'refreshAccountToken',
+      'getValidAccessToken',
+      'fetchAndUpdateAccountProfile',
+      'isAccountRateLimited',
+      'getAccountRateLimitInfo',
+      'getSessionWindowInfo'
+    ]
+    
+    methodsToReset.forEach(methodName => {
+      // 恢复原始方法（如果被直接替换了）
+      if (originalMethods[methodName]) {
+        claudeAccountService[methodName] = originalMethods[methodName]
+      }
+      
+      // 如果方法是spy，重置它
+      if (claudeAccountService[methodName] && typeof claudeAccountService[methodName].mockReset === 'function') {
+        claudeAccountService[methodName].mockReset()
+      }
+    })
     
     // Ensure default mock implementations with proper async behavior
     redis.getClaudeAccount.mockResolvedValue(null)
@@ -332,7 +377,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
         isActive: 'true'
       }
 
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(mockAccountData)
+      redis.getClaudeAccount.mockResolvedValue(mockAccountData)
 
       const result = await claudeAccountService.getAccount('test-account-id')
       
@@ -341,7 +386,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
     })
 
     test('应该返回null当账户不存在时', async () => {
-      redis.getClaudeAccount = jest.fn().mockResolvedValue({})
+      redis.getClaudeAccount.mockResolvedValue({})
 
       const result = await claudeAccountService.getAccount('non-existent-id')
       
@@ -349,7 +394,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
     })
 
     test('应该处理获取账户时的错误', async () => {
-      redis.getClaudeAccount = jest.fn().mockRejectedValue(new Error('Redis error'))
+      redis.getClaudeAccount.mockRejectedValue(new Error('Redis error'))
 
       const result = await claudeAccountService.getAccount('error-account-id')
       
@@ -434,7 +479,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
         }
       }
 
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(mockAccountData)
+      redis.getClaudeAccount.mockResolvedValue(mockAccountData)
       redis.setClaudeAccount = jest.fn().mockResolvedValue(true)
       
       // Mock tokenRefreshService
@@ -469,7 +514,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
         refreshToken: claudeAccountService._encryptSensitiveData('refresh-token-456')
       }
 
-      redis.getClaudeAccount = jest.fn()
+      redis.getClaudeAccount.mockReset()
         .mockResolvedValueOnce(mockAccountData) // 第一次调用
         .mockResolvedValueOnce({ // 第二次调用（等待后）
           ...mockAccountData,
@@ -496,7 +541,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
         refreshToken: '' // 空refresh token
       }
 
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(mockAccountData)
+      redis.getClaudeAccount.mockResolvedValue(mockAccountData)
       
       const tokenRefreshService = require('../../../src/services/tokenRefreshService')
       tokenRefreshService.acquireRefreshLock = jest.fn().mockResolvedValue(true)
@@ -514,7 +559,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
         refreshToken: claudeAccountService._encryptSensitiveData('refresh-token-error')
       }
 
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(mockAccountData)
+      redis.getClaudeAccount.mockResolvedValue(mockAccountData)
       redis.setClaudeAccount = jest.fn().mockResolvedValue(true)
       
       const tokenRefreshService = require('../../../src/services/tokenRefreshService')
@@ -546,10 +591,12 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
         expiresAt: (Date.now() + 3600000).toString() // 1小时后过期
       }
 
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(mockAccountData)
+      redis.getClaudeAccount.mockResolvedValue(mockAccountData)
       redis.setClaudeAccount = jest.fn().mockResolvedValue(true)
       
-      claudeAccountService.updateSessionWindow = jest.fn().mockResolvedValue(mockAccountData)
+      // 使用spy而不是完全替换方法
+      const updateSessionWindowSpy = jest.spyOn(claudeAccountService, 'updateSessionWindow')
+        .mockResolvedValue(mockAccountData)
 
       const result = await claudeAccountService.getValidAccessToken(mockAccountId)
 
@@ -568,7 +615,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
         refreshToken: claudeAccountService._encryptSensitiveData('refresh-token-123')
       }
 
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(mockAccountData)
+      redis.getClaudeAccount.mockResolvedValue(mockAccountData)
       
       // Mock refreshAccountToken方法
       claudeAccountService.refreshAccountToken = jest.fn().mockResolvedValue({
@@ -590,7 +637,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
         isActive: 'false' // 账户被禁用
       }
 
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(mockAccountData)
+      redis.getClaudeAccount.mockResolvedValue(mockAccountData)
 
       await expect(claudeAccountService.getValidAccessToken(mockAccountId))
         .rejects.toThrow('Account is disabled')
@@ -606,7 +653,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
         expiresAt: (Date.now() - 1000).toString() // 已过期
       }
 
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(mockAccountData)
+      redis.getClaudeAccount.mockResolvedValue(mockAccountData)
       
       claudeAccountService.refreshAccountToken = jest.fn().mockRejectedValue(new Error('Refresh failed'))
 
@@ -631,7 +678,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
         priority: 20
       }
 
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(mockAccountData)
+      redis.getClaudeAccount.mockResolvedValue(mockAccountData)
       redis.setClaudeAccount = jest.fn().mockResolvedValue(true)
 
       const result = await claudeAccountService.updateAccount(mockAccountId, updates)
@@ -662,7 +709,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
         refreshToken: 'new-refresh-token'
       }
 
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(mockAccountData)
+      redis.getClaudeAccount.mockResolvedValue(mockAccountData)
       redis.setClaudeAccount = jest.fn().mockResolvedValue(true)
 
       await claudeAccountService.updateAccount(mockAccountId, updates)
@@ -695,7 +742,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
         claudeAiOauth: oauthData
       }
 
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(mockAccountData)
+      redis.getClaudeAccount.mockResolvedValue(mockAccountData)
       redis.setClaudeAccount = jest.fn().mockResolvedValue(true)
 
       await claudeAccountService.updateAccount(mockAccountId, updates)
@@ -723,7 +770,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
         refreshToken: 'brand-new-refresh-token'
       }
 
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(mockAccountData)
+      redis.getClaudeAccount.mockResolvedValue(mockAccountData)
       redis.setClaudeAccount = jest.fn().mockResolvedValue(true)
 
       await claudeAccountService.updateAccount(mockAccountId, updates)
@@ -745,7 +792,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
     })
 
     test('应该处理账户不存在的更新请求', async () => {
-      redis.getClaudeAccount = jest.fn().mockResolvedValue({})
+      redis.getClaudeAccount.mockResolvedValue({})
 
       await expect(claudeAccountService.updateAccount('non-existent-id', { name: 'New Name' }))
         .rejects.toThrow('Account not found')
@@ -763,7 +810,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
         isActive: 'false' // 要禁用
       }
 
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(mockAccountData)
+      redis.getClaudeAccount.mockResolvedValue(mockAccountData)
       redis.setClaudeAccount = jest.fn().mockResolvedValue(true)
 
       const webhookNotifier = require('../../../src/utils/webhookNotifier')
@@ -971,7 +1018,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
         status: 'active'
       }
 
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(dedicatedAccount)
+      redis.getClaudeAccount.mockReset().mockResolvedValue(dedicatedAccount)
 
       const result = await claudeAccountService.selectAccountForApiKey(dedicatedApiKeyData)
 
@@ -985,7 +1032,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
         claudeAccountId: 'unavailable-dedicated'
       }
 
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(null) // 专属账户不存在
+      redis.getClaudeAccount.mockResolvedValue(null) // 专属账户不存在
       redis.getAllClaudeAccounts = jest.fn().mockResolvedValue(mockSharedAccounts)
       
       claudeAccountService.isAccountRateLimited = jest.fn().mockResolvedValue(false)
@@ -1061,16 +1108,28 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
     const mockAccountId = 'rate-limit-test-account'
     const mockAccountData = {
       id: mockAccountId,
-      name: 'Rate Limit Test Account'
+      name: 'Rate Limit Test Account',
+      status: 'active',
+      isActive: 'true',
+      createdAt: new Date().toISOString()
     }
+
+    // 在每个测试前重置redis mock函数
+    beforeEach(() => {
+      // 确保Redis mock函数有默认的实现，但不影响具体测试的设置
+      redis.getClaudeAccount.mockReset()
+      redis.setClaudeAccount.mockResolvedValue('OK')
+      redis.getAllClaudeAccounts.mockResolvedValue([])
+      redis.deleteClaudeAccount.mockResolvedValue(1)
+    })
 
     test('应该正确标记账户为限流状态（带准确重置时间戳）', async () => {
       const sessionHash = 'test-session-hash'
       const rateLimitResetTimestamp = Math.floor(Date.now() / 1000) + 3600 // 1小时后
 
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(mockAccountData)
-      redis.setClaudeAccount = jest.fn().mockResolvedValue(true)
-      redis.deleteSessionAccountMapping = jest.fn().mockResolvedValue(true)
+      redis.getClaudeAccount.mockResolvedValue(mockAccountData)
+      redis.setClaudeAccount.mockResolvedValue(true)
+      redis.deleteSessionAccountMapping.mockResolvedValue(true)
 
       const webhookNotifier = require('../../../src/utils/webhookNotifier')
       webhookNotifier.sendAccountAnomalyNotification = jest.fn().mockResolvedValue(true)
@@ -1107,7 +1166,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
     })
 
     test('应该使用预估方式标记限流状态（无准确时间戳）', async () => {
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(mockAccountData)
+      redis.getClaudeAccount.mockResolvedValue(mockAccountData)
       redis.setClaudeAccount = jest.fn().mockResolvedValue(true)
       
       // 直接调用实际的markAccountRateLimited实现
@@ -1124,7 +1183,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
         rateLimitEndAt: new Date(Date.now() + 3600000).toISOString()
       }
 
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(rateLimitedAccountData)
+      redis.getClaudeAccount.mockReset().mockResolvedValue(rateLimitedAccountData)
       redis.setClaudeAccount = jest.fn().mockResolvedValue(true)
 
       const result = await claudeAccountService.removeAccountRateLimit(mockAccountId)
@@ -1164,18 +1223,17 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
       // 使用mockResolvedValue设置特定返回值（支持多次调用）
       redis.getClaudeAccount.mockResolvedValue(expiredRateLimitData)
       
-      // Mock removeAccountRateLimit方法
-      const originalRemove = claudeAccountService.removeAccountRateLimit
-      claudeAccountService.removeAccountRateLimit = jest.fn().mockResolvedValue({ success: true })
+      // 使用spy而不是完全替换方法
+      const removeRateLimitSpy = jest.spyOn(claudeAccountService, 'removeAccountRateLimit')
+        .mockResolvedValue({ success: true })
 
       const result = await claudeAccountService.isAccountRateLimited(mockAccountId)
 
       expect(result).toBe(false)
-      expect(claudeAccountService.removeAccountRateLimit).toHaveBeenCalledWith(mockAccountId)
+      expect(removeRateLimitSpy).toHaveBeenCalledWith(mockAccountId)
       expect(redis.getClaudeAccount).toHaveBeenCalledWith(mockAccountId)
       
-      // 恢复原方法
-      claudeAccountService.removeAccountRateLimit = originalRemove
+      // spy会在beforeEach中自动清理，无需手动恢复
     })
 
     test('应该返回详细的限流信息', async () => {
@@ -1229,8 +1287,20 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
     const mockAccountId = 'session-window-test-account'
     const mockAccountData = {
       id: mockAccountId,
-      name: 'Session Window Test Account'
+      name: 'Session Window Test Account',
+      status: 'active',
+      isActive: 'true',
+      createdAt: new Date().toISOString()
     }
+
+    // 在每个测试前重置redis mock函数
+    beforeEach(() => {
+      // 确保Redis mock函数有默认的实现，但不影响具体测试的设置
+      redis.getClaudeAccount.mockReset()
+      redis.setClaudeAccount.mockResolvedValue('OK')
+      redis.getAllClaudeAccounts.mockResolvedValue([])
+      redis.deleteClaudeAccount.mockResolvedValue(1)
+    })
 
     test('应该创建新的会话窗口', async () => {
       // 使用深拷贝确保数据不被意外修改
@@ -1525,7 +1595,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
         }
       }
 
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(mockAccountData)
+      redis.getClaudeAccount.mockResolvedValue(mockAccountData)
       redis.setClaudeAccount = jest.fn().mockResolvedValue(true)
       axios.get.mockResolvedValue(mockProfileResponse)
 
@@ -1559,14 +1629,14 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
         scopes: 'claude:chat' // 没有user:profile权限
       }
 
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(noProfileScopeAccount)
+      redis.getClaudeAccount.mockReset().mockResolvedValue(noProfileScopeAccount)
 
       await expect(claudeAccountService.fetchAndUpdateAccountProfile(mockAccountId))
         .rejects.toThrow('Account does not have user:profile permission')
     })
 
     test('应该处理Profile API的401错误', async () => {
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(mockAccountData)
+      redis.getClaudeAccount.mockResolvedValue(mockAccountData)
       
       const profileError = new Error('API Error')
       profileError.response = { status: 401 }
@@ -1577,7 +1647,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
     })
 
     test('应该处理Profile API的403错误', async () => {
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(mockAccountData)
+      redis.getClaudeAccount.mockResolvedValue(mockAccountData)
       
       const profileError = new Error('Forbidden')
       profileError.response = { status: 403 }
@@ -1695,7 +1765,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
     test('应该标记账户为未授权状态', async () => {
       const sessionHash = 'test-session-hash'
 
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(mockAccountData)
+      redis.getClaudeAccount.mockResolvedValue(mockAccountData)
       redis.setClaudeAccount = jest.fn().mockResolvedValue(true)
       redis.client = { del: jest.fn().mockResolvedValue(1) }
 
@@ -1741,7 +1811,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
         accessToken: claudeAccountService._encryptSensitiveData('test-token')
       }
 
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(errorAccountData)
+      redis.getClaudeAccount.mockReset().mockResolvedValue(errorAccountData)
       redis.setClaudeAccount = jest.fn().mockResolvedValue(true)
       redis.client = { del: jest.fn().mockResolvedValue(1) }
 
@@ -1778,7 +1848,7 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
         accessToken: '' // 没有access token
       }
 
-      redis.getClaudeAccount = jest.fn().mockResolvedValue(noTokenAccountData)
+      redis.getClaudeAccount.mockReset().mockResolvedValue(noTokenAccountData)
       redis.setClaudeAccount = jest.fn().mockResolvedValue(true)
       redis.client = { del: jest.fn().mockResolvedValue(1) }
 
@@ -1908,8 +1978,17 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
   })
 
   describe('错误处理和边界条件', () => {
+    // 在每个测试前重置redis mock函数
+    beforeEach(() => {
+      // 确保Redis mock函数有默认的实现
+      redis.getClaudeAccount.mockResolvedValue(null)
+      redis.setClaudeAccount.mockResolvedValue('OK')
+      redis.getAllClaudeAccounts.mockResolvedValue([])
+      redis.deleteClaudeAccount.mockResolvedValue(1)
+    })
+
     test('应该处理Redis连接错误', async () => {
-      redis.getClaudeAccount = jest.fn().mockRejectedValue(new Error('Redis connection failed'))
+      redis.getClaudeAccount.mockReset().mockRejectedValue(new Error('Redis connection failed'))
 
       const result = await claudeAccountService.getAccount('test-id')
       expect(result).toBeNull()

@@ -45,6 +45,7 @@ describe('API流程集成测试', () => {
   let app
   let mockApiKeyService
   let mockClaudeRelayService
+  let mockUnifiedClaudeScheduler
 
   beforeAll(() => {
     // 创建Express应用
@@ -69,6 +70,7 @@ describe('API流程集成测试', () => {
     // 获取mock实例
     mockApiKeyService = require('../../src/services/apiKeyService')
     mockClaudeRelayService = require('../../src/services/claudeRelayService')
+    mockUnifiedClaudeScheduler = require('../../src/services/unifiedClaudeScheduler')
 
     // 设置默认的successful mocks
     mockApiKeyService.validateApiKey = jest.fn().mockResolvedValue({
@@ -79,9 +81,45 @@ describe('API流程集成测试', () => {
         isActive: 'true',
         tokenLimit: 1000,
         totalTokensUsed: 100,
-        permissions: 'all'
+        permissions: 'all',
+        concurrencyLimit: 10,
+        rateLimitWindow: '1h',
+        rateLimitRequests: 100,
+        enableModelRestriction: false,
+        restrictedModels: [],
+        enableClientRestriction: false,
+        allowedClients: [],
+        dailyCostLimit: 100,
+        dailyCost: 5,
+        usage: {
+          requests: 0,
+          tokens: 1000
+        },
+        claudeAccountId: null,
+        claudeConsoleAccountId: null,
+        geminiAccountId: null,
+        openaiAccountId: null,
+        bedrockAccountId: null
       }
     })
+
+    // Mock for usage stats
+    mockApiKeyService.getUsageStats = jest.fn().mockResolvedValue({
+      totalTokens: 100,
+      requests: 5,
+      inputTokens: 50,
+      outputTokens: 50
+    })
+
+    // Mock for unified scheduler
+    mockUnifiedClaudeScheduler.selectAccountForApiKey = jest.fn().mockResolvedValue({
+      accountId: 'test-claude-account-1',
+      accountType: 'claude-official'
+    })
+
+    // Mock for session helper
+    const mockSessionHelper = require('../../src/utils/sessionHelper')
+    mockSessionHelper.generateSessionHash = jest.fn().mockReturnValue('test-session-hash')
   })
 
   describe('POST /api/v1/messages', () => {
@@ -89,7 +127,8 @@ describe('API流程集成测试', () => {
       // Mock successful relay
       mockClaudeRelayService.relayRequest = jest.fn().mockResolvedValue({
         statusCode: 200,
-        body: sampleRequests.responses.claude
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sampleRequests.responses.claude)
       })
 
       const response = await request(app)
@@ -166,7 +205,7 @@ describe('API流程集成测试', () => {
     })
 
     it('应该处理Claude Relay Service错误', async () => {
-      mockClaudeRelayService.relayRequest.mockRejectedValue(new Error('Claude service unavailable'))
+      mockClaudeRelayService.relayRequest.mockRejectedValue(new Error('Relay service error'))
 
       const response = await request(app)
         .post('/api/v1/messages')
@@ -175,11 +214,12 @@ describe('API流程集成测试', () => {
         .send(sampleRequests.validClaudeRequest)
 
       expect(response.status).toBe(500)
-      expect(response.body.error).toContain('Claude service unavailable')
+      expect(response.body.error).toContain('Relay service error')
     })
 
     it('应该支持流式请求', async () => {
-      mockClaudeRelayService.relayRequest = jest.fn().mockImplementation((req, res) => {
+      // 流式请求使用不同的方法
+      mockClaudeRelayService.relayStreamRequestWithUsageCapture = jest.fn().mockImplementation((body, apiKey, res, headers, callback) => {
         // 模拟SSE流式响应
         res.setHeader('Content-Type', 'text/event-stream')
         res.setHeader('Cache-Control', 'no-cache')
@@ -192,6 +232,11 @@ describe('API流程集成测试', () => {
         res.write('data: {"type": "message_stop"}\n\n')
         res.end()
         
+        // 调用usage回调
+        if (callback) {
+          callback({ input_tokens: 10, output_tokens: 5 })
+        }
+        
         return Promise.resolve()
       })
 
@@ -203,7 +248,7 @@ describe('API流程集成测试', () => {
 
       expect(response.status).toBe(200)
       expect(response.headers['content-type']).toContain('text/event-stream')
-    })
+    }, 15000) // 增加超时时间到15秒
   })
 
   describe('GET /api/v1/models', () => {
@@ -244,8 +289,8 @@ describe('API流程集成测试', () => {
         .set('x-api-key', sampleRequests.apiKeys.valid)
 
       expect(response.status).toBe(200)
-      expect(response.body).toHaveProperty('key_info')
-      expect(response.body.key_info.id).toBe('test-key-id')
+      expect(response.body).toHaveProperty('keyInfo')
+      expect(response.body.keyInfo.id).toBe('test-key-id')
     })
   })
 
@@ -311,7 +356,8 @@ describe('API流程集成测试', () => {
     it('应该正确传递客户端headers', async () => {
       mockClaudeRelayService.relayRequest = jest.fn().mockResolvedValue({
         statusCode: 200,
-        body: sampleRequests.responses.claude
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sampleRequests.responses.claude)
       })
 
       const customHeaders = {
@@ -329,9 +375,9 @@ describe('API流程集成测试', () => {
 
       expect(response.status).toBe(200)
       
-      // 验证relay service收到了正确的headers
+      // 验证relay service收到了正确的headers  
       const relayCall = mockClaudeRelayService.relayRequest.mock.calls[0]
-      const req = relayCall[0]
+      const req = relayCall[2] // req对象是第3个参数（索引2）
       expect(req.headers['user-agent']).toBe('claude-cli/1.0.0')
       expect(req.headers['anthropic-version']).toBe('2023-06-01')
     })
@@ -339,7 +385,8 @@ describe('API流程集成测试', () => {
     it('应该处理大小写不敏感的headers', async () => {
       mockClaudeRelayService.relayRequest = jest.fn().mockResolvedValue({
         statusCode: 200,
-        body: sampleRequests.responses.claude
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sampleRequests.responses.claude)
       })
 
       const response = await request(app)

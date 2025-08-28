@@ -23,7 +23,6 @@ describe('时间敏感操作测试 - 真实定时器行为验证', () => {
     it('应该每2分钟执行缓存清理和安全清理', async () => {
       // 这个测试验证 src/services/claudeAccountService.js:37 的定时器
       await timeTestUtils.withTimeControl(async (controller) => {
-        controller.start()
         
         // 模拟 ClaudeAccountService 的构造函数中的定时器
         let cacheCleanupCount = 0
@@ -76,7 +75,6 @@ describe('时间敏感操作测试 - 真实定时器行为验证', () => {
       const redis = require('../../../src/models/redis')
 
       await timeTestUtils.withTimeControl(async (controller) => {
-        controller.start()
 
         // 模拟错误状态的账户
         const errorAccount = {
@@ -115,7 +113,6 @@ describe('时间敏感操作测试 - 真实定时器行为验证', () => {
     it('应该每5分钟生成简单统计，每30分钟生成详细报告', async () => {
       // 这个测试验证 src/utils/cacheMonitor.js:187 和 :198 的定时器
       await timeTestUtils.withTimeControl(async (controller) => {
-        controller.start()
 
         let quickStatsCount = 0
         let detailedReportCount = 0
@@ -169,7 +166,6 @@ describe('时间敏感操作测试 - 真实定时器行为验证', () => {
     it('应该每小时执行系统清理任务', async () => {
       // 这个测试验证 src/app.js:501 的每小时清理任务
       await timeTestUtils.withTimeControl(async (controller) => {
-        controller.start()
 
         let cleanupExecutionCount = 0
         const mockCleanupTasks = {
@@ -220,7 +216,6 @@ describe('时间敏感操作测试 - 真实定时器行为验证', () => {
   describe('⏱️ 短期延迟操作测试', () => {
     it('应该正确处理各种延迟场景', async () => {
       await timeTestUtils.withTimeControl(async (controller) => {
-        controller.start()
 
         // 测试5秒初始化延迟 (src/app.js:487)
         let initDelayExecuted = false
@@ -263,7 +258,6 @@ describe('时间敏感操作测试 - 真实定时器行为验证', () => {
     it('应该正确处理Gemini轮询间隔', async () => {
       // 测试 src/services/geminiAccountService.js:231 的轮询逻辑
       await timeTestUtils.withTimeControl(async (controller) => {
-        controller.start()
 
         const pollResults = []
         let pollCount = 0
@@ -313,7 +307,6 @@ describe('时间敏感操作测试 - 真实定时器行为验证', () => {
       const claudeAccountService = require('../../../src/services/claudeAccountService')
       
       await timeTestUtils.withTimeControl(async (controller) => {
-        controller.start()
 
         // 模拟限流账户数据
         const rateLimitedAccount = {
@@ -353,7 +346,6 @@ describe('时间敏感操作测试 - 真实定时器行为验证', () => {
       const claudeAccountService = require('../../../src/services/claudeAccountService')
       
       await timeTestUtils.withTimeControl(async (controller) => {
-        controller.start()
 
         // 设置限流结束时间为90分钟后
         const rateLimitEndTime = new Date(controller.now() + 90 * 60 * 1000)
@@ -394,7 +386,6 @@ describe('时间敏感操作测试 - 真实定时器行为验证', () => {
   describe('🛡️ 性能和边界条件测试', () => {
     it('应该正确处理时间跳跃和边界情况', async () => {
       await timeTestUtils.withTimeControl(async (controller) => {
-        controller.start()
 
         let executionTimes = []
         
@@ -423,7 +414,6 @@ describe('时间敏感操作测试 - 真实定时器行为验证', () => {
 
     it('应该处理多个定时器的复杂交互', async () => {
       await timeTestUtils.withTimeControl(async (controller) => {
-        controller.start()
 
         const executionLog = []
 

@@ -138,7 +138,6 @@ describe('TokenRefreshService 分布式锁竞争测试', () => {
   describe('⏱️ 锁超时和TTL测试', () => {
     it('应该正确处理锁的TTL过期', async () => {
       await timeTestUtils.withTimeControl(async (controller) => {
-        controller.start()
         
         // 使用外部作用域的tokenRefreshService实例
         const lockKey = 'test-lock-ttl'
@@ -161,7 +160,6 @@ describe('TokenRefreshService 分布式锁竞争测试', () => {
 
     it('应该处理锁TTL过期后的重新获取', async () => {
       await timeTestUtils.withTimeControl(async (controller) => {
-        controller.start()
         
         const lockKey = 'test-lock-reacquisition'
         

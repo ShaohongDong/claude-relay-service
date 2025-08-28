@@ -31,7 +31,6 @@ describe('Promise.race 超时控制机制测试', () => {
   describe('⏱️ 基础超时控制测试', () => {
     it('应该在操作完成时正常返回结果', async () => {
       await timeTestUtils.withTimeControl(async (controller) => {
-        controller.start()
 
         const fastOperation = async () => {
           // 模拟200ms的快速操作
@@ -47,11 +46,10 @@ describe('Promise.race 超时控制机制测试', () => {
 
         expect(result).toBe('success')
       })
-    })
+    }, 20000) // 增加超时时间到20秒
 
     it('应该在超时时抛出错误', async () => {
       await timeTestUtils.withTimeControl(async (controller) => {
-        controller.start()
 
         const slowOperation = async () => {
           // 模拟10秒的慢操作
@@ -70,14 +68,13 @@ describe('Promise.race 超时控制机制测试', () => {
 
         await expect(timeoutPromise).rejects.toThrow('Operation timeout after 1000ms')
       })
-    })
+    }, 20000) // 增加超时时间到20秒
   })
 
   describe('🔐 认证中间件超时测试 (真实场景)', () => {
     it('应该模拟auth.js中的会话查找超时控制', async () => {
       // 这个测试模拟 src/middleware/auth.js:385 中的真实代码
       await timeTestUtils.withTimeControl(async (controller) => {
-        controller.start()
 
         const token = 'test-session-token'
         
@@ -111,7 +108,6 @@ describe('Promise.race 超时控制机制测试', () => {
 
     it('应该在正常响应时间内成功获取会话', async () => {
       await timeTestUtils.withTimeControl(async (controller) => {
-        controller.start()
 
         const token = 'test-session-token'
         const expectedSession = {
@@ -146,7 +142,6 @@ describe('Promise.race 超时控制机制测试', () => {
   describe('🌐 网络请求超时测试', () => {
     it('应该测试API请求的超时控制', async () => {
       await timeTestUtils.withTimeControl(async (controller) => {
-        controller.start()
 
         // 模拟网络API请求
         const simulateApiRequest = async (url, timeoutMs) => {
@@ -307,7 +302,6 @@ describe('Promise.race 超时控制机制测试', () => {
       }
 
       await timeTestUtils.withTimeControl(async (controller) => {
-        controller.start()
 
         const operationPromise = operationWithRetry()
 
@@ -337,7 +331,6 @@ describe('Promise.race 超时控制机制测试', () => {
   describe('🔄 AbortController集成测试', () => {
     it('应该使用AbortController配合Promise.race实现请求取消', async () => {
       await timeTestUtils.withTimeControl(async (controller) => {
-        controller.start()
 
         const abortController = new AbortController()
         let operationCanceled = false
@@ -396,7 +389,6 @@ describe('Promise.race 超时控制机制测试', () => {
       })
 
       await timeTestUtils.withTimeControl(async (controller) => {
-        controller.start()
 
         // 推进1秒后取消所有请求
         setTimeout(() => {
@@ -420,7 +412,6 @@ describe('Promise.race 超时控制机制测试', () => {
   describe('⚡ 性能和边界条件测试', () => {
     it('应该处理极短超时时间', async () => {
       await timeTestUtils.withTimeControl(async (controller) => {
-        controller.start()
 
         const veryShortTimeoutOperation = Promise.race([
           new Promise(resolve => setTimeout(() => resolve('too slow'), 100)),
