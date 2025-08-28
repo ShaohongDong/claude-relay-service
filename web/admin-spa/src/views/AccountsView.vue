@@ -536,7 +536,7 @@
                     @click="resetAccountStatus(account)"
                   >
                     <i :class="['fas fa-redo', account.isResetting ? 'animate-spin' : '']" />
-                    <span class="ml-1">重置状态</span>
+                    <span class="ml-1">重置</span>
                   </button>
                   <button
                     :class="[
