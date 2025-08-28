@@ -523,6 +523,9 @@ install_service() {
     print_info "安装项目依赖..."
     npm install
     
+    # 自动修复安全漏洞
+    auto_fix_vulnerabilities "后端项目"
+    
     # 确保脚本有执行权限（仅在权限不正确时设置）
     if [ -f "$APP_DIR/scripts/manage.sh" ] && [ ! -x "$APP_DIR/scripts/manage.sh" ]; then
         chmod +x "$APP_DIR/scripts/manage.sh"
@@ -792,6 +795,9 @@ EOF
                 print_info "安装依赖..."
                 npm install
                 
+                # 自动修复前端项目安全漏洞
+                auto_fix_vulnerabilities "前端项目"
+                
                 print_info "构建前端项目..."
                 npm run build
                 
@@ -989,6 +995,9 @@ update_service() {
     print_info "更新依赖..."
     npm install
     
+    # 自动修复安全漏洞
+    auto_fix_vulnerabilities "后端项目"
+    
     # 确保脚本有执行权限（仅在权限不正确时设置）
     if [ -f "$APP_DIR/scripts/manage.sh" ] && [ ! -x "$APP_DIR/scripts/manage.sh" ]; then
         chmod +x "$APP_DIR/scripts/manage.sh"
@@ -1077,6 +1086,9 @@ update_service() {
                 
                 print_info "安装依赖..."
                 npm install
+                
+                # 自动修复前端项目安全漏洞
+                auto_fix_vulnerabilities "前端项目"
                 
                 print_info "构建前端项目..."
                 npm run build
@@ -1439,6 +1451,66 @@ restart_service() {
     start_service
 }
 
+# 自动修复npm安全漏洞
+auto_fix_vulnerabilities() {
+    local current_dir="$(pwd)"
+    local project_name="${1:-项目}"
+    
+    print_info "检查 $project_name 安全漏洞..."
+    
+    # 运行 npm audit 检查漏洞
+    local audit_output=$(npm audit --audit-level=moderate 2>/dev/null)
+    local vulnerability_count=$(echo "$audit_output" | grep -o '[0-9]\+ vulnerabilities' | head -1 | grep -o '[0-9]\+')
+    
+    if [ -n "$vulnerability_count" ] && [ "$vulnerability_count" -gt 0 ]; then
+        print_warning "发现 $vulnerability_count 个安全漏洞"
+        
+        # 显示漏洞摘要
+        if echo "$audit_output" | grep -q "found.*vulnerabilities"; then
+            echo "$audit_output" | grep -E "(found.*vulnerabilities|run.*npm audit fix)"
+        fi
+        
+        print_info "自动修复安全漏洞..."
+        
+        # 尝试自动修复
+        if npm audit fix 2>/dev/null; then
+            print_success "安全漏洞修复完成"
+            
+            # 检查是否还有剩余漏洞
+            local remaining_audit=$(npm audit --audit-level=moderate 2>/dev/null)
+            local remaining_count=$(echo "$remaining_audit" | grep -o '[0-9]\+ vulnerabilities' | head -1 | grep -o '[0-9]\+')
+            
+            if [ -n "$remaining_count" ] && [ "$remaining_count" -gt 0 ]; then
+                print_warning "仍有 $remaining_count 个漏洞需要手动处理"
+                
+                # 检查是否有高危漏洞需要强制修复
+                if echo "$remaining_audit" | grep -q -E "(high|critical)"; then
+                    print_warning "检测到高危/严重漏洞，尝试强制修复..."
+                    echo -n "是否要强制修复（可能更新主要版本）？(y/N): "
+                    read -t 10 -n 1 force_fix 2>/dev/null
+                    echo
+                    
+                    if [[ "$force_fix" =~ ^[Yy]$ ]]; then
+                        npm audit fix --force 2>/dev/null && {
+                            print_success "强制修复完成"
+                        } || {
+                            print_warning "强制修复失败，建议手动处理"
+                        }
+                    else
+                        print_info "跳过强制修复，建议稍后手动处理高危漏洞"
+                    fi
+                fi
+            else
+                print_success "所有安全漏洞已修复"
+            fi
+        else
+            print_warning "自动修复失败，建议手动运行: npm audit fix"
+        fi
+    else
+        print_success "$project_name 未发现安全漏洞"
+    fi
+}
+
 # 更新模型价格
 update_model_pricing() {
     if ! check_installation; then
@@ -1625,6 +1697,9 @@ switch_branch() {
     if git diff "$current_branch..$target_branch" --name-only | grep -q "package.json"; then
         print_info "检测到 package.json 变化，更新依赖..."
         npm install
+        
+        # 自动修复安全漏洞
+        auto_fix_vulnerabilities "后端项目"
     fi
     
     # 更新前端文件（如果切换到不同版本）
