@@ -516,31 +516,34 @@ class Application {
 
   startCleanupTasks() {
     // 🧹 每小时清理一次过期数据
-    setInterval(async () => {
-      try {
-        logger.info('🧹 Starting scheduled cleanup...')
+    // 在测试环境下不启动定时器，避免内存泄漏
+    if (process.env.NODE_ENV !== 'test') {
+      this._cleanupInterval = setInterval(async () => {
+        try {
+          logger.info('🧹 Starting scheduled cleanup...')
 
-        const apiKeyService = require('./services/apiKeyService')
-        const claudeAccountService = require('./services/claudeAccountService')
+          const apiKeyService = require('./services/apiKeyService')
+          const claudeAccountService = require('./services/claudeAccountService')
 
-        const [expiredKeys, errorAccounts] = await Promise.all([
-          apiKeyService.cleanupExpiredKeys(),
-          claudeAccountService.cleanupErrorAccounts()
-        ])
+          const [expiredKeys, errorAccounts] = await Promise.all([
+            apiKeyService.cleanupExpiredKeys(),
+            claudeAccountService.cleanupErrorAccounts()
+          ])
 
-        await redis.cleanup()
+          await redis.cleanup()
 
-        logger.success(
-          `🧹 Cleanup completed: ${expiredKeys} expired keys, ${errorAccounts} error accounts reset`
-        )
-      } catch (error) {
-        logger.error('❌ Cleanup task failed:', error)
-      }
-    }, config.system.cleanupInterval)
+          logger.success(
+            `🧹 Cleanup completed: ${expiredKeys} expired keys, ${errorAccounts} error accounts reset`
+          )
+        } catch (error) {
+          logger.error('❌ Cleanup task failed:', error)
+        }
+      }, config.system.cleanupInterval)
 
-    logger.info(
-      `🔄 Cleanup tasks scheduled every ${config.system.cleanupInterval / 1000 / 60} minutes`
-    )
+      logger.info(
+        `🔄 Cleanup tasks scheduled every ${config.system.cleanupInterval / 1000 / 60} minutes`
+      )
+    }
   }
 
   setupGracefulShutdown() {

@@ -128,13 +128,16 @@ function decrypt(text) {
 }
 
 // 🧹 定期清理缓存（每10分钟）
-setInterval(
-  () => {
-    decryptCache.cleanup()
-    logger.info('🧹 Gemini decrypt cache cleanup completed', decryptCache.getStats())
-  },
-  10 * 60 * 1000
-)
+// 在测试环境下不启动定时器，避免内存泄漏
+if (process.env.NODE_ENV !== 'test') {
+  setInterval(
+    () => {
+      decryptCache.cleanup()
+      logger.info('🧹 Gemini decrypt cache cleanup completed', decryptCache.getStats())
+    },
+    10 * 60 * 1000
+  )
+}
 
 // 创建 OAuth2 客户端（支持代理配置）
 function createOAuth2Client(redirectUri = null, proxyConfig = null) {

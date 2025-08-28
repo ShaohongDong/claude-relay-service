@@ -161,46 +161,52 @@ class CacheMonitor {
    * 🧹 设置定期安全清理
    */
   setupSecurityCleanup() {
-    // 每 10 分钟执行一次安全清理
-    setInterval(
-      () => {
-        this.performSecurityCleanup()
-      },
-      10 * 60 * 1000
-    )
+    // 在测试环境下不启动定时器，避免内存泄漏
+    if (process.env.NODE_ENV !== 'test') {
+      // 每 10 分钟执行一次安全清理
+      this._securityCleanupInterval = setInterval(
+        () => {
+          this.performSecurityCleanup()
+        },
+        10 * 60 * 1000
+      )
 
-    // 每 30 分钟强制完整清理
-    setInterval(() => {
-      logger.warn('⚠️ Performing forced complete cleanup for security')
-      for (const [name, monitor] of this.monitors) {
-        monitor.cache.clear()
-        logger.info(`🗑️ Force cleared cache: ${name}`)
-      }
-    }, this.securityConfig.forceCleanupInterval)
+      // 每 30 分钟强制完整清理
+      this._forceCleanupInterval = setInterval(() => {
+        logger.warn('⚠️ Performing forced complete cleanup for security')
+        for (const [name, monitor] of this.monitors) {
+          monitor.cache.clear()
+          logger.info(`🗑️ Force cleared cache: ${name}`)
+        }
+      }, this.securityConfig.forceCleanupInterval)
+    }
   }
 
   /**
    * 📊 设置定期报告
    */
   setupPeriodicReporting() {
-    // 每 5 分钟生成一次简单统计
-    setInterval(
-      () => {
-        const stats = this.getGlobalStats()
-        logger.info(
-          `📊 Quick Stats - Caches: ${stats.cacheCount}, Size: ${stats.totalSize}, Hit Rate: ${stats.averageHitRate}`
-        )
-      },
-      5 * 60 * 1000
-    )
+    // 在测试环境下不启动定时器，避免内存泄漏
+    if (process.env.NODE_ENV !== 'test') {
+      // 每 5 分钟生成一次简单统计
+      this._quickStatsInterval = setInterval(
+        () => {
+          const stats = this.getGlobalStats()
+          logger.info(
+            `📊 Quick Stats - Caches: ${stats.cacheCount}, Size: ${stats.totalSize}, Hit Rate: ${stats.averageHitRate}`
+          )
+        },
+        5 * 60 * 1000
+      )
 
-    // 每 30 分钟生成一次详细报告
-    setInterval(
-      () => {
-        this.generateReport()
-      },
-      30 * 60 * 1000
-    )
+      // 每 30 分钟生成一次详细报告
+      this._detailedReportInterval = setInterval(
+        () => {
+          this.generateReport()
+        },
+        30 * 60 * 1000
+      )
+    }
   }
 
   /**

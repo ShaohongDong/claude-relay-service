@@ -123,13 +123,16 @@ function decrypt(text) {
 }
 
 // 🧹 定期清理缓存（每10分钟）
-setInterval(
-  () => {
-    decryptCache.cleanup()
-    logger.info('🧹 OpenAI decrypt cache cleanup completed', decryptCache.getStats())
-  },
-  10 * 60 * 1000
-)
+// 在测试环境下不启动定时器，避免内存泄漏
+if (process.env.NODE_ENV !== 'test') {
+  setInterval(
+    () => {
+      decryptCache.cleanup()
+      logger.info('🧹 OpenAI decrypt cache cleanup completed', decryptCache.getStats())
+    },
+    10 * 60 * 1000
+  )
+}
 
 // 刷新访问令牌
 async function refreshAccessToken(refreshToken, proxy = null) {

@@ -49,12 +49,15 @@ class EncryptionKeyManager {
 const encryptionKeyManager = new EncryptionKeyManager()
 
 // 定期清理过期密钥
-setInterval(
-  () => {
-    encryptionKeyManager.cleanup()
-  },
-  60 * 60 * 1000
-) // 每小时清理一次
+// 在测试环境下不启动定时器，避免内存泄漏
+if (process.env.NODE_ENV !== 'test') {
+  setInterval(
+    () => {
+      encryptionKeyManager.cleanup()
+    },
+    60 * 60 * 1000
+  ) // 每小时清理一次
+}
 
 // 生成加密密钥 - 使用安全的密钥管理器
 function generateEncryptionKey() {

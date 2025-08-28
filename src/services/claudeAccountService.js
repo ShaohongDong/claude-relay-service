@@ -35,16 +35,19 @@ class ClaudeAccountService {
     this._decryptCache = new LRUCache(500)
 
     // 🧹 定期清理缓存（每2分钟，减少敏感数据在内存中的驻留时间）
-    setInterval(
-      () => {
-        this._decryptCache.cleanup()
-        logger.info('🧹 Claude decrypt cache cleanup completed', this._decryptCache.getStats())
-        
-        // 🔐 定期强制清理敏感缓存以提高安全性
-        this._performSecurityCleanup()
-      },
-      2 * 60 * 1000
-    )
+    // 在测试环境下不启动定时器，避免内存泄漏
+    if (process.env.NODE_ENV !== 'test') {
+      this._cleanupInterval = setInterval(
+        () => {
+          this._decryptCache.cleanup()
+          logger.info('🧹 Claude decrypt cache cleanup completed', this._decryptCache.getStats())
+          
+          // 🔐 定期强制清理敏感缓存以提高安全性
+          this._performSecurityCleanup()
+        },
+        2 * 60 * 1000
+      )
+    }
   }
 
   // 🏢 创建Claude账户

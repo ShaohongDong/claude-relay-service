@@ -70,9 +70,12 @@ class PricingService {
       await this.checkAndUpdatePricing()
 
       // 设置定时更新
-      setInterval(() => {
-        this.checkAndUpdatePricing()
-      }, this.updateInterval)
+      // 在测试环境下不启动定时器，避免内存泄漏
+      if (process.env.NODE_ENV !== 'test') {
+        this._updateInterval = setInterval(() => {
+          this.checkAndUpdatePricing()
+        }, this.updateInterval)
+      }
 
       // 设置文件监听器
       this.setupFileWatcher()

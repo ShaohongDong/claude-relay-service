@@ -27,16 +27,19 @@ class ClaudeConsoleAccountService {
     this._decryptCache = new LRUCache(500)
 
     // 🧹 定期清理缓存（每10分钟）
-    setInterval(
-      () => {
-        this._decryptCache.cleanup()
-        logger.info(
-          '🧹 Claude Console decrypt cache cleanup completed',
-          this._decryptCache.getStats()
-        )
-      },
-      10 * 60 * 1000
-    )
+    // 在测试环境下不启动定时器，避免内存泄漏
+    if (process.env.NODE_ENV !== 'test') {
+      this._cleanupInterval = setInterval(
+        () => {
+          this._decryptCache.cleanup()
+          logger.info(
+            '🧹 Claude Console decrypt cache cleanup completed',
+            this._decryptCache.getStats()
+          )
+        },
+        10 * 60 * 1000
+      )
+    }
   }
 
   // 🏢 创建Claude Console账户
