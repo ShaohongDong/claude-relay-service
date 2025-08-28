@@ -893,18 +893,25 @@ update_service() {
         fi
     fi
     
-    # 获取最新代码（强制使用远程版本）
+    # 获取最新代码（使用当前分支）
     print_info "获取最新代码..."
     
+    # 获取当前分支名
+    local current_branch=$(git branch --show-current 2>/dev/null)
+    if [ -z "$current_branch" ]; then
+        print_error "无法获取当前分支信息"
+        return 1
+    fi
+    
     # 先获取远程更新
-    if ! git fetch origin main; then
+    if ! git fetch origin "$current_branch"; then
         print_error "获取远程代码失败，请检查网络连接"
         return 1
     fi
     
     # 强制重置到远程版本
     print_info "应用远程更新..."
-    if ! git reset --hard origin/main; then
+    if ! git reset --hard "origin/$current_branch"; then
         print_error "重置到远程版本失败"
         # 尝试恢复
         print_info "尝试恢复..."
