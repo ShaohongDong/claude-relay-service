@@ -1278,14 +1278,14 @@ class ClaudeRelayService {
         res.on('end', async () => {
           try {
             // 处理缓冲区中剩余的数据
-            if (buffer.trim() && !responseStream.destroyed) {
+            if (requestContext.buffer.trim() && !responseStream.destroyed) {
               if (streamTransformer) {
-                const transformed = streamTransformer(buffer)
+                const transformed = streamTransformer(requestContext.buffer)
                 if (transformed) {
                   responseStream.write(transformed)
                 }
               } else {
-                responseStream.write(buffer)
+                responseStream.write(requestContext.buffer)
               }
             }
 

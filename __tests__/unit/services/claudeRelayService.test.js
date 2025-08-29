@@ -1348,4 +1348,165 @@ describe('ClaudeRelayService', () => {
       expect(filtered['Custom-Header']).toBe('custom-value')
     })
   })
+
+  // 新增测试：修复的BUG - requestContext.buffer变量引用
+  describe('流式响应 requestContext.buffer 变量引用修复', () => {
+    it('应该在 res.on("end") 事件中正确使用 requestContext.buffer', async () => {
+      // Mock dependencies - 关键：需要mock这些服务避免accountSelection undefined
+      const sessionHelper = require('../../../src/utils/sessionHelper')
+      const unifiedClaudeScheduler = require('../../../src/services/unifiedClaudeScheduler')
+      const claudeAccountService = require('../../../src/services/claudeAccountService')
+      
+      sessionHelper.generateSessionHash = jest.fn().mockReturnValue('session123')
+      unifiedClaudeScheduler.selectAccountForApiKey = jest.fn().mockResolvedValue({
+        accountId: 'account1',
+        accountType: 'claude-official'
+      })
+      claudeAccountService.getValidAccessToken = jest.fn().mockResolvedValue('token123')
+      claudeAccountService.isAccountRateLimited = jest.fn().mockResolvedValue(false)
+      
+      // Mock requestContext with buffer data
+      const testBufferData = 'some remaining stream data'
+      
+      // Mock https.request to simulate stream end with buffered data
+      const mockIncomingMessage = {
+        on: jest.fn().mockImplementation((event, callback) => {
+          if (event === 'data') {
+            // Simulate some data being buffered
+            setTimeout(() => callback(Buffer.from(testBufferData)), 10)
+          } else if (event === 'end') {
+            // 触发 end 事件，这里之前会出现 "buffer is not defined" 错误
+            setTimeout(() => callback(), 20)
+          }
+          return mockIncomingMessage
+        }),
+        statusCode: 200,
+        headers: { 'content-type': 'text/event-stream' }
+      }
+
+      const mockRequest = {
+        write: jest.fn(),
+        end: jest.fn(),
+        on: jest.fn(),
+        setTimeout: jest.fn()
+      }
+
+      https.request = jest.fn((options, callback) => {
+        // 同步执行回调
+        callback(mockIncomingMessage)
+        return mockRequest
+      })
+
+      const mockResponseStream = {
+        headersSent: false,
+        destroyed: false,
+        writeHead: jest.fn(),
+        write: jest.fn(),
+        end: jest.fn(),
+        on: jest.fn() // 添加 on 方法来监听 'close' 等事件
+      }
+
+      const requestBody = {
+        model: 'claude-3-5-sonnet-20241022',
+        messages: [{ role: 'user', content: 'Test' }],
+        stream: true
+      }
+
+      const apiKeyData = {
+        id: 'test-key-id',
+        keyHash: 'test-hash'
+      }
+
+      const mockUsageCallback = jest.fn()
+
+      // 这个测试应该不会抛出 "buffer is not defined" 错误
+      await expect(
+        claudeRelayService.relayStreamRequestWithUsageCapture(
+          requestBody,
+          apiKeyData,
+          mockResponseStream,
+          mockUsageCallback
+        )
+      ).resolves.not.toThrow()
+
+      // 验证 HTTPS 请求被调用
+      expect(https.request).toHaveBeenCalled()
+    })
+
+    it('应该处理缓冲区中有剩余数据时的流结束', async () => {
+      // Mock dependencies - 关键：需要mock这些服务避免accountSelection undefined
+      const sessionHelper = require('../../../src/utils/sessionHelper')
+      const unifiedClaudeScheduler = require('../../../src/services/unifiedClaudeScheduler')
+      const claudeAccountService = require('../../../src/services/claudeAccountService')
+      
+      sessionHelper.generateSessionHash = jest.fn().mockReturnValue('session456')
+      unifiedClaudeScheduler.selectAccountForApiKey = jest.fn().mockResolvedValue({
+        accountId: 'account2',
+        accountType: 'claude-official'
+      })
+      claudeAccountService.getValidAccessToken = jest.fn().mockResolvedValue('token456')
+      claudeAccountService.isAccountRateLimited = jest.fn().mockResolvedValue(false)
+      
+      const remainingData = 'data: {"type":"content_block_delta","delta":{"text":"remaining"}}'
+      
+      // 模拟一个具有剩余缓冲数据的情况
+      const mockIncomingMessage = {
+        on: jest.fn().mockImplementation((event, callback) => {
+          if (event === 'data') {
+            // 模拟数据流，但最后一块数据不以换行结束，留在buffer中
+            setTimeout(() => callback(Buffer.from(remainingData)), 10)
+          } else if (event === 'end') {
+            // 这里会处理 requestContext.buffer 中的剩余数据
+            setTimeout(() => callback(), 20)
+          }
+          return mockIncomingMessage
+        }),
+        statusCode: 200,
+        headers: { 'content-type': 'text/event-stream' }
+      }
+
+      const mockRequest = {
+        write: jest.fn(),
+        end: jest.fn(),
+        on: jest.fn(),
+        setTimeout: jest.fn()
+      }
+
+      https.request = jest.fn((options, callback) => {
+        callback(mockIncomingMessage)
+        return mockRequest
+      })
+
+      const mockResponseStream = {
+        headersSent: false,
+        destroyed: false,
+        writeHead: jest.fn(),
+        write: jest.fn(),
+        end: jest.fn(),
+        on: jest.fn() // 添加 on 方法来监听 'close' 等事件
+      }
+
+      const requestBody = {
+        model: 'claude-3-5-sonnet-20241022',
+        messages: [{ role: 'user', content: 'Test buffer handling' }],
+        stream: true
+      }
+
+      const apiKeyData = {
+        id: 'test-key-buffer',
+        keyHash: 'test-hash-buffer'
+      }
+
+      // 执行请求 - 修复后应该正确处理 requestContext.buffer
+      await claudeRelayService.relayStreamRequestWithUsageCapture(
+        requestBody,
+        apiKeyData,
+        mockResponseStream,
+        jest.fn()
+      )
+
+      // 验证流正确结束，没有因为变量引用错误而崩溃
+      expect(mockResponseStream.end).toHaveBeenCalled()
+    })
+  })
 })
