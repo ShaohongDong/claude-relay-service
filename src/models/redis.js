@@ -1,6 +1,7 @@
 const Redis = require('ioredis')
 const config = require('../../config/config')
 const logger = require('../utils/logger')
+const OptimizedRedisPipeline = require('../utils/optimizedRedisPipeline')
 
 // 时区辅助函数
 // 注意：这个函数的目的是获取某个时间点在目标时区的"本地"表示
@@ -33,6 +34,7 @@ class RedisClient {
   constructor() {
     this.client = null
     this.isConnected = false
+    this.pipelineOptimizer = null
   }
 
   async connect() {
@@ -64,6 +66,23 @@ class RedisClient {
       })
 
       await this.client.connect()
+      
+      // 初始化 Pipeline 优化器
+      this.pipelineOptimizer = new OptimizedRedisPipeline(this.client)
+      
+      // 配置优化器
+      this.pipelineOptimizer.configure({
+        enableBatching: true,
+        maxPipelineSize: 500,
+        batchConfig: {
+          maxBatchSize: 50,
+          batchDelayMs: 30,
+          maxRetries: 2
+        }
+      })
+      
+      logger.info('🚀 Redis Pipeline optimizer initialized')
+      
       return this.client
     } catch (error) {
       logger.error('💥 Failed to connect to Redis:', error)
@@ -235,137 +254,124 @@ class RedisClient {
     // 核心token（不包括缓存）- 用于与历史数据兼容
     const coreTokens = finalInputTokens + finalOutputTokens
 
-    // 使用Pipeline优化性能
-    const pipeline = this.client.pipeline()
+    // 使用优化的批处理操作
+    const batchOperations = []
 
     // 现有的统计保持不变
     // 核心token统计（保持向后兼容）
-    pipeline.hincrby(key, 'totalTokens', coreTokens)
-    pipeline.hincrby(key, 'totalInputTokens', finalInputTokens)
-    pipeline.hincrby(key, 'totalOutputTokens', finalOutputTokens)
+    batchOperations.push({ key, command: 'hincrby', field: 'totalTokens', value: coreTokens })
+    batchOperations.push({ key, command: 'hincrby', field: 'totalInputTokens', value: finalInputTokens })
+    batchOperations.push({ key, command: 'hincrby', field: 'totalOutputTokens', value: finalOutputTokens })
     // 缓存token统计（新增）
-    pipeline.hincrby(key, 'totalCacheCreateTokens', finalCacheCreateTokens)
-    pipeline.hincrby(key, 'totalCacheReadTokens', finalCacheReadTokens)
-    pipeline.hincrby(key, 'totalAllTokens', totalTokens) // 包含所有类型的总token
+    batchOperations.push({ key, command: 'hincrby', field: 'totalCacheCreateTokens', value: finalCacheCreateTokens })
+    batchOperations.push({ key, command: 'hincrby', field: 'totalCacheReadTokens', value: finalCacheReadTokens })
+    batchOperations.push({ key, command: 'hincrby', field: 'totalAllTokens', value: totalTokens }) // 包含所有类型的总token
     // 详细缓存类型统计（新增）
-    pipeline.hincrby(key, 'totalEphemeral5mTokens', ephemeral5mTokens)
-    pipeline.hincrby(key, 'totalEphemeral1hTokens', ephemeral1hTokens)
+    batchOperations.push({ key, command: 'hincrby', field: 'totalEphemeral5mTokens', value: ephemeral5mTokens })
+    batchOperations.push({ key, command: 'hincrby', field: 'totalEphemeral1hTokens', value: ephemeral1hTokens })
     // 请求计数
-    pipeline.hincrby(key, 'totalRequests', 1)
+    batchOperations.push({ key, command: 'hincrby', field: 'totalRequests', value: 1 })
 
+
+    // 添加所有其他统计操作到批处理队列（简化版本，保持功能一致）
     // 每日统计
-    pipeline.hincrby(daily, 'tokens', coreTokens)
-    pipeline.hincrby(daily, 'inputTokens', finalInputTokens)
-    pipeline.hincrby(daily, 'outputTokens', finalOutputTokens)
-    pipeline.hincrby(daily, 'cacheCreateTokens', finalCacheCreateTokens)
-    pipeline.hincrby(daily, 'cacheReadTokens', finalCacheReadTokens)
-    pipeline.hincrby(daily, 'allTokens', totalTokens)
-    pipeline.hincrby(daily, 'requests', 1)
-    // 详细缓存类型统计
-    pipeline.hincrby(daily, 'ephemeral5mTokens', ephemeral5mTokens)
-    pipeline.hincrby(daily, 'ephemeral1hTokens', ephemeral1hTokens)
+    this._addStatsBatch(batchOperations, daily, {
+      tokens: coreTokens, inputTokens: finalInputTokens, outputTokens: finalOutputTokens,
+      cacheCreateTokens: finalCacheCreateTokens, cacheReadTokens: finalCacheReadTokens,
+      allTokens: totalTokens, requests: 1,
+      ephemeral5mTokens, ephemeral1hTokens
+    })
+    
+    // 每月统计  
+    this._addStatsBatch(batchOperations, monthly, {
+      tokens: coreTokens, inputTokens: finalInputTokens, outputTokens: finalOutputTokens,
+      cacheCreateTokens: finalCacheCreateTokens, cacheReadTokens: finalCacheReadTokens,
+      allTokens: totalTokens, requests: 1,
+      ephemeral5mTokens, ephemeral1hTokens
+    })
 
-    // 每月统计
-    pipeline.hincrby(monthly, 'tokens', coreTokens)
-    pipeline.hincrby(monthly, 'inputTokens', finalInputTokens)
-    pipeline.hincrby(monthly, 'outputTokens', finalOutputTokens)
-    pipeline.hincrby(monthly, 'cacheCreateTokens', finalCacheCreateTokens)
-    pipeline.hincrby(monthly, 'cacheReadTokens', finalCacheReadTokens)
-    pipeline.hincrby(monthly, 'allTokens', totalTokens)
-    pipeline.hincrby(monthly, 'requests', 1)
-    // 详细缓存类型统计
-    pipeline.hincrby(monthly, 'ephemeral5mTokens', ephemeral5mTokens)
-    pipeline.hincrby(monthly, 'ephemeral1hTokens', ephemeral1hTokens)
+    // 按模型统计
+    this._addStatsBatch(batchOperations, modelDaily, {
+      inputTokens: finalInputTokens, outputTokens: finalOutputTokens,
+      cacheCreateTokens: finalCacheCreateTokens, cacheReadTokens: finalCacheReadTokens,
+      allTokens: totalTokens, requests: 1
+    })
 
-    // 按模型统计 - 每日
-    pipeline.hincrby(modelDaily, 'inputTokens', finalInputTokens)
-    pipeline.hincrby(modelDaily, 'outputTokens', finalOutputTokens)
-    pipeline.hincrby(modelDaily, 'cacheCreateTokens', finalCacheCreateTokens)
-    pipeline.hincrby(modelDaily, 'cacheReadTokens', finalCacheReadTokens)
-    pipeline.hincrby(modelDaily, 'allTokens', totalTokens)
-    pipeline.hincrby(modelDaily, 'requests', 1)
+    this._addStatsBatch(batchOperations, modelMonthly, {
+      inputTokens: finalInputTokens, outputTokens: finalOutputTokens,
+      cacheCreateTokens: finalCacheCreateTokens, cacheReadTokens: finalCacheReadTokens,
+      allTokens: totalTokens, requests: 1
+    })
 
-    // 按模型统计 - 每月
-    pipeline.hincrby(modelMonthly, 'inputTokens', finalInputTokens)
-    pipeline.hincrby(modelMonthly, 'outputTokens', finalOutputTokens)
-    pipeline.hincrby(modelMonthly, 'cacheCreateTokens', finalCacheCreateTokens)
-    pipeline.hincrby(modelMonthly, 'cacheReadTokens', finalCacheReadTokens)
-    pipeline.hincrby(modelMonthly, 'allTokens', totalTokens)
-    pipeline.hincrby(modelMonthly, 'requests', 1)
+    // API Key级别的模型统计
+    this._addStatsBatch(batchOperations, keyModelDaily, {
+      inputTokens: finalInputTokens, outputTokens: finalOutputTokens,
+      cacheCreateTokens: finalCacheCreateTokens, cacheReadTokens: finalCacheReadTokens,
+      allTokens: totalTokens, requests: 1,
+      ephemeral5mTokens, ephemeral1hTokens
+    })
 
-    // API Key级别的模型统计 - 每日
-    pipeline.hincrby(keyModelDaily, 'inputTokens', finalInputTokens)
-    pipeline.hincrby(keyModelDaily, 'outputTokens', finalOutputTokens)
-    pipeline.hincrby(keyModelDaily, 'cacheCreateTokens', finalCacheCreateTokens)
-    pipeline.hincrby(keyModelDaily, 'cacheReadTokens', finalCacheReadTokens)
-    pipeline.hincrby(keyModelDaily, 'allTokens', totalTokens)
-    pipeline.hincrby(keyModelDaily, 'requests', 1)
-    // 详细缓存类型统计
-    pipeline.hincrby(keyModelDaily, 'ephemeral5mTokens', ephemeral5mTokens)
-    pipeline.hincrby(keyModelDaily, 'ephemeral1hTokens', ephemeral1hTokens)
-
-    // API Key级别的模型统计 - 每月
-    pipeline.hincrby(keyModelMonthly, 'inputTokens', finalInputTokens)
-    pipeline.hincrby(keyModelMonthly, 'outputTokens', finalOutputTokens)
-    pipeline.hincrby(keyModelMonthly, 'cacheCreateTokens', finalCacheCreateTokens)
-    pipeline.hincrby(keyModelMonthly, 'cacheReadTokens', finalCacheReadTokens)
-    pipeline.hincrby(keyModelMonthly, 'allTokens', totalTokens)
-    pipeline.hincrby(keyModelMonthly, 'requests', 1)
-    // 详细缓存类型统计
-    pipeline.hincrby(keyModelMonthly, 'ephemeral5mTokens', ephemeral5mTokens)
-    pipeline.hincrby(keyModelMonthly, 'ephemeral1hTokens', ephemeral1hTokens)
+    this._addStatsBatch(batchOperations, keyModelMonthly, {
+      inputTokens: finalInputTokens, outputTokens: finalOutputTokens,
+      cacheCreateTokens: finalCacheCreateTokens, cacheReadTokens: finalCacheReadTokens,
+      allTokens: totalTokens, requests: 1,
+      ephemeral5mTokens, ephemeral1hTokens
+    })
 
     // 小时级别统计
-    pipeline.hincrby(hourly, 'tokens', coreTokens)
-    pipeline.hincrby(hourly, 'inputTokens', finalInputTokens)
-    pipeline.hincrby(hourly, 'outputTokens', finalOutputTokens)
-    pipeline.hincrby(hourly, 'cacheCreateTokens', finalCacheCreateTokens)
-    pipeline.hincrby(hourly, 'cacheReadTokens', finalCacheReadTokens)
-    pipeline.hincrby(hourly, 'allTokens', totalTokens)
-    pipeline.hincrby(hourly, 'requests', 1)
+    this._addStatsBatch(batchOperations, hourly, {
+      tokens: coreTokens, inputTokens: finalInputTokens, outputTokens: finalOutputTokens,
+      cacheCreateTokens: finalCacheCreateTokens, cacheReadTokens: finalCacheReadTokens,
+      allTokens: totalTokens, requests: 1
+    })
 
-    // 按模型统计 - 每小时
-    pipeline.hincrby(modelHourly, 'inputTokens', finalInputTokens)
-    pipeline.hincrby(modelHourly, 'outputTokens', finalOutputTokens)
-    pipeline.hincrby(modelHourly, 'cacheCreateTokens', finalCacheCreateTokens)
-    pipeline.hincrby(modelHourly, 'cacheReadTokens', finalCacheReadTokens)
-    pipeline.hincrby(modelHourly, 'allTokens', totalTokens)
-    pipeline.hincrby(modelHourly, 'requests', 1)
+    this._addStatsBatch(batchOperations, modelHourly, {
+      inputTokens: finalInputTokens, outputTokens: finalOutputTokens,
+      cacheCreateTokens: finalCacheCreateTokens, cacheReadTokens: finalCacheReadTokens,
+      allTokens: totalTokens, requests: 1
+    })
 
-    // API Key级别的模型统计 - 每小时
-    pipeline.hincrby(keyModelHourly, 'inputTokens', finalInputTokens)
-    pipeline.hincrby(keyModelHourly, 'outputTokens', finalOutputTokens)
-    pipeline.hincrby(keyModelHourly, 'cacheCreateTokens', finalCacheCreateTokens)
-    pipeline.hincrby(keyModelHourly, 'cacheReadTokens', finalCacheReadTokens)
-    pipeline.hincrby(keyModelHourly, 'allTokens', totalTokens)
-    pipeline.hincrby(keyModelHourly, 'requests', 1)
+    this._addStatsBatch(batchOperations, keyModelHourly, {
+      inputTokens: finalInputTokens, outputTokens: finalOutputTokens,
+      cacheCreateTokens: finalCacheCreateTokens, cacheReadTokens: finalCacheReadTokens,
+      allTokens: totalTokens, requests: 1
+    })
 
-    // 新增：系统级分钟统计
-    pipeline.hincrby(systemMinuteKey, 'requests', 1)
-    pipeline.hincrby(systemMinuteKey, 'totalTokens', totalTokens)
-    pipeline.hincrby(systemMinuteKey, 'inputTokens', finalInputTokens)
-    pipeline.hincrby(systemMinuteKey, 'outputTokens', finalOutputTokens)
-    pipeline.hincrby(systemMinuteKey, 'cacheCreateTokens', finalCacheCreateTokens)
-    pipeline.hincrby(systemMinuteKey, 'cacheReadTokens', finalCacheReadTokens)
+    // 系统级分钟统计
+    this._addStatsBatch(batchOperations, systemMinuteKey, {
+      requests: 1, totalTokens: totalTokens, inputTokens: finalInputTokens,
+      outputTokens: finalOutputTokens, cacheCreateTokens: finalCacheCreateTokens,
+      cacheReadTokens: finalCacheReadTokens
+    })
 
-    // 设置过期时间
-    pipeline.expire(daily, 86400 * 32) // 32天过期
-    pipeline.expire(monthly, 86400 * 365) // 1年过期
-    pipeline.expire(hourly, 86400 * 7) // 小时统计7天过期
-    pipeline.expire(modelDaily, 86400 * 32) // 模型每日统计32天过期
-    pipeline.expire(modelMonthly, 86400 * 365) // 模型每月统计1年过期
-    pipeline.expire(modelHourly, 86400 * 7) // 模型小时统计7天过期
-    pipeline.expire(keyModelDaily, 86400 * 32) // API Key模型每日统计32天过期
-    pipeline.expire(keyModelMonthly, 86400 * 365) // API Key模型每月统计1年过期
-    pipeline.expire(keyModelHourly, 86400 * 7) // API Key模型小时统计7天过期
+    // 添加过期时间操作
+    batchOperations.push({ command: 'expire', args: [daily, 86400 * 32] })
+    batchOperations.push({ command: 'expire', args: [monthly, 86400 * 365] })
+    batchOperations.push({ command: 'expire', args: [hourly, 86400 * 7] })
+    batchOperations.push({ command: 'expire', args: [modelDaily, 86400 * 32] })
+    batchOperations.push({ command: 'expire', args: [modelMonthly, 86400 * 365] })
+    batchOperations.push({ command: 'expire', args: [modelHourly, 86400 * 7] })
+    batchOperations.push({ command: 'expire', args: [keyModelDaily, 86400 * 32] })
+    batchOperations.push({ command: 'expire', args: [keyModelMonthly, 86400 * 365] })
+    batchOperations.push({ command: 'expire', args: [keyModelHourly, 86400 * 7] })
 
-    // 系统级分钟统计的过期时间（窗口时间的2倍）
     const configLocal = require('../../config/config')
     const { metricsWindow } = configLocal.system
-    pipeline.expire(systemMinuteKey, metricsWindow * 60 * 2)
+    batchOperations.push({ command: 'expire', args: [systemMinuteKey, metricsWindow * 60 * 2] })
 
-    // 执行Pipeline
-    await pipeline.exec()
+    // 使用优化的批处理执行所有操作
+    await this.pipelineOptimizer.batchUsageStats(batchOperations)
+  }
+
+  /**
+   * 添加统计数据到批处理操作列表的辅助方法
+   */
+  _addStatsBatch(batchOperations, key, stats) {
+    for (const [field, value] of Object.entries(stats)) {
+      if (value !== undefined && value !== null && value !== 0) {
+        batchOperations.push({ key, command: 'hincrby', field, value })
+      }
+    }
   }
 
   // 📊 记录账户级别的使用统计

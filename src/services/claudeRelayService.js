@@ -9,6 +9,8 @@ const sessionHelper = require('../utils/sessionHelper')
 const logger = require('../utils/logger')
 const config = require('../../config/config')
 const claudeCodeHeadersService = require('./claudeCodeHeadersService')
+const memoryOptimizer = require('../utils/memoryOptimizer')
+const asyncMonitor = require('../utils/asyncMonitor')
 
 class ClaudeRelayService {
   constructor() {
@@ -17,6 +19,124 @@ class ClaudeRelayService {
     this.betaHeader = config.claude.betaHeader
     this.systemPrompt = config.claude.systemPrompt
     this.claudeCodeSystemPrompt = "You are Claude Code, Anthropic's official CLI for Claude."
+    
+    // 初始化内存优化器对象池
+    this.initializeObjectPools()
+  }
+
+  /**
+   * 初始化对象池以优化内存使用
+   */
+  initializeObjectPools() {
+    // 为请求上下文创建对象池
+    this.requestContextPool = memoryOptimizer.registerObjectPool(
+      'requestContext',
+      () => ({
+        buffer: '',
+        allUsageData: [],
+        currentUsageData: {},
+        rateLimitDetected: false
+      }),
+      (ctx) => {
+        // 重置对象状态
+        ctx.buffer = ''
+        ctx.allUsageData.length = 0
+        ctx.currentUsageData = {}
+        ctx.rateLimitDetected = false
+      },
+      20 // 最多缓存20个请求上下文
+    )
+
+    // 为响应处理创建对象池
+    this.responsePool = memoryOptimizer.registerObjectPool(
+      'responseData',
+      () => ({
+        statusCode: 0,
+        headers: {},
+        body: null,
+        accountId: null
+      }),
+      (resp) => {
+        resp.statusCode = 0
+        resp.headers = {}
+        resp.body = null
+        resp.accountId = null
+      },
+      10
+    )
+
+    // 如果内存优化器被禁用（如测试环境），创建fallback对象池
+    if (!this.requestContextPool) {
+      this.requestContextPool = {
+        acquire: () => ({
+          buffer: '',
+          allUsageData: [],
+          currentUsageData: {},
+          rateLimitDetected: false,
+          _poolRelease: () => {} // no-op
+        }),
+        getStats: () => ({ poolSize: 0, created: 0, reused: 0 })
+      }
+    }
+
+    if (!this.responsePool) {
+      this.responsePool = {
+        acquire: () => ({
+          statusCode: 0,
+          headers: {},
+          body: null,
+          accountId: null,
+          _poolRelease: () => {} // no-op
+        }),
+        getStats: () => ({ poolSize: 0, created: 0, reused: 0 })
+      }
+    }
+
+    logger.info('🏗️ ClaudeRelayService object pools initialized')
+  }
+
+  /**
+   * 优化的请求体复制方法，避免深拷贝大对象
+   * 仅复制需要修改的字段，其他字段使用引用
+   */
+  _optimizedCloneRequestBody(body) {
+    // 如果body很小（小于1KB），使用标准深拷贝
+    const bodyString = JSON.stringify(body)
+    if (bodyString.length < 1024) {
+      return JSON.parse(bodyString)
+    }
+
+    // 对于大对象，使用浅拷贝 + 选择性深拷贝
+    const cloned = {}
+    
+    // 这些字段通常需要修改，进行深拷贝
+    const fieldsToDeepClone = ['system', 'messages', 'metadata']
+    // 这些字段通常不需要修改，使用引用
+    const fieldsToReference = ['model', 'max_tokens', 'temperature', 'top_p', 'top_k', 'stop_sequences', 'stream', 'tools', 'tool_choice']
+    
+    for (const [key, value] of Object.entries(body)) {
+      if (fieldsToDeepClone.includes(key)) {
+        // 深拷贝需要修改的字段
+        if (Array.isArray(value)) {
+          cloned[key] = value.map(item => 
+            typeof item === 'object' && item !== null 
+              ? JSON.parse(JSON.stringify(item))
+              : item
+          )
+        } else if (typeof value === 'object' && value !== null) {
+          cloned[key] = JSON.parse(JSON.stringify(value))
+        } else {
+          cloned[key] = value
+        }
+      } else {
+        // 其他字段使用引用
+        cloned[key] = value
+      }
+    }
+    
+    logger.debug(`📦 Optimized clone: ${bodyString.length} bytes, deep-cloned fields: ${fieldsToDeepClone.filter(f => body[f]).join(', ')}`)
+    
+    return cloned
   }
 
   // 🔍 判断是否是真实的 Claude Code 请求
@@ -376,14 +496,14 @@ class ClaudeRelayService {
     }
   }
 
-  // 🔄 处理请求体
+  // 🔄 处理请求体（优化内存使用）
   _processRequestBody(body, clientHeaders = {}) {
     if (!body) {
       return body
     }
 
-    // 深拷贝请求体
-    const processedBody = JSON.parse(JSON.stringify(body))
+    // 使用更高效的对象复制方法，避免深拷贝大对象
+    const processedBody = this._optimizedCloneRequestBody(body)
 
     // 验证并限制max_tokens参数
     this._validateAndLimitMaxTokens(processedBody)
@@ -1109,12 +1229,40 @@ class ClaudeRelayService {
           return
         }
 
-        // 为每个请求创建独立的上下文，避免并发竞态条件
-        const requestContext = {
-          buffer: '',
-          allUsageData: [], // 收集所有的usage事件
-          currentUsageData: {}, // 当前正在收集的usage数据
-          rateLimitDetected: false // 限流检测标志
+        // 为每个请求创建独立的上下文，使用对象池避免内存分配开销
+        const requestContext = this.requestContextPool.acquire()
+
+        // 添加 Promise 跟踪以监控流式响应处理
+        let streamResolve, streamReject
+        const streamPromise = new Promise((resolve, reject) => {
+          streamResolve = resolve
+          streamReject = reject
+        })
+        
+        const trackingId = asyncMonitor.trackPromise(streamPromise, {
+          type: 'stream_processing',
+          timeout: 300000, // 5分钟超时
+          accountId,
+          source: 'claude_relay_stream'
+        })
+
+        // 注册资源清理器，确保请求上下文被正确释放
+        const cleanupId = asyncMonitor.registerResource(
+          requestContext,
+          () => {
+            if (requestContext._poolRelease) {
+              requestContext._poolRelease()
+            }
+          },
+          { type: 'request_context', trackingId }
+        )
+
+        // 清理函数
+        const performCleanup = () => {
+          asyncMonitor.cleanupResource(cleanupId)
+          if (requestContext._poolRelease) {
+            requestContext._poolRelease()
+          }
         }
 
         // 监听数据块，解析SSE并寻找usage信息
@@ -1414,6 +1562,10 @@ class ClaudeRelayService {
           }
 
           logger.debug('🌊 Claude stream response with usage capture completed')
+          
+          // 清理资源并解决 Promise
+          performCleanup()
+          streamResolve()
           resolve()
         })
       })
@@ -1478,6 +1630,10 @@ class ClaudeRelayService {
           )
           responseStream.end()
         }
+        
+        // 清理资源并拒绝 Promise
+        performCleanup()
+        streamReject(error)
         reject(error)
       })
 
@@ -1638,6 +1794,10 @@ class ClaudeRelayService {
           )
           responseStream.end()
         }
+        
+        // 清理资源并拒绝 Promise
+        performCleanup()
+        streamReject(error)
         reject(error)
       })
 

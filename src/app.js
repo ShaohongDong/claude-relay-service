@@ -11,6 +11,8 @@ const logger = require('./utils/logger')
 const redis = require('./models/redis')
 const pricingService = require('./services/pricingService')
 const cacheMonitor = require('./utils/cacheMonitor')
+const memoryOptimizer = require('./utils/memoryOptimizer')
+const asyncMonitor = require('./utils/asyncMonitor')
 
 // Import routes
 const apiRoutes = require('./routes/api')
@@ -53,6 +55,12 @@ class Application {
 
       // 📊 初始化缓存监控
       await this.initializeCacheMonitoring()
+
+      // 🧠 初始化内存优化器
+      await this.initializeMemoryOptimization()
+
+      // 📈 初始化异步操作监控
+      await this.initializeAsyncMonitoring()
 
       // 🔧 初始化管理员凭据
       logger.info('🔄 Initializing admin credentials...')
@@ -510,6 +518,61 @@ class Application {
       logger.success('✅ Cache monitoring initialized')
     } catch (error) {
       logger.error('❌ Failed to initialize cache monitoring:', error)
+      // 不阻止应用启动
+    }
+  }
+
+  // 🧠 初始化内存优化器
+  async initializeMemoryOptimization() {
+    try {
+      logger.info('🔄 Initializing memory optimization...')
+
+      // 配置内存监控参数
+      memoryOptimizer.configure({
+        alertThreshold: 0.85,  // 85% 内存使用率告警
+        forceGcThreshold: 0.95, // 95% 内存使用率强制 GC
+        monitorInterval: 30000, // 30 秒监控间隔
+        gcCooldown: 15000 // 15 秒 GC 冷却时间
+      })
+
+      // 如果运行时支持手动 GC，启用它
+      if (global.gc) {
+        logger.info('🗑️ Manual garbage collection available')
+      } else {
+        logger.warn('⚠️ Manual garbage collection not available (use --expose-gc flag)')
+      }
+
+      const stats = memoryOptimizer.getStats()
+      logger.info(`🧠 Memory optimizer initialized - Enabled: ${stats.enabled}`)
+
+      logger.success('✅ Memory optimization initialized')
+    } catch (error) {
+      logger.error('❌ Failed to initialize memory optimization:', error)
+      // 不阻止应用启动
+    }
+  }
+
+  // 📈 初始化异步操作监控
+  async initializeAsyncMonitoring() {
+    try {
+      logger.info('🔄 Initializing async monitoring...')
+
+      // 配置异步监控参数
+      asyncMonitor.configure({
+        leakDetectionInterval: 60000,   // 1分钟检查泄漏
+        maxPromiseAge: 600000,          // 10分钟最大Promise存活时间
+        statsReportInterval: 300000,    // 5分钟统计报告间隔
+        autoCleanupEnabled: true,       // 启用自动清理
+        resourceMaxAge: 1800000,        // 30分钟资源最大存活时间
+        resourceCleanupInterval: 300000 // 5分钟资源清理间隔
+      })
+
+      const stats = asyncMonitor.getStats()
+      logger.info(`📈 Async monitor initialized - Enabled: ${stats.enabled}`)
+
+      logger.success('✅ Async monitoring initialized')
+    } catch (error) {
+      logger.error('❌ Failed to initialize async monitoring:', error)
       // 不阻止应用启动
     }
   }
