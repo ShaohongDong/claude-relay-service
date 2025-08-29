@@ -1189,7 +1189,7 @@ start_service() {
     if command_exists pm2 && [ "$1" != "--no-pm2" ]; then
         print_info "使用 pm2 启动服务..."
         # 直接使用pm2启动，避免循环调用
-        pm2 start "$APP_DIR/src/app.js" --name "claude-relay" --log "$APP_DIR/logs/pm2.log" 2>/dev/null
+        pm2 start "$APP_DIR/src/app.js" --name "claude-relay" --node-args="--expose-gc" --log "$APP_DIR/logs/pm2.log" 2>/dev/null
         sleep 2
         
         # 检查是否启动成功
@@ -1226,7 +1226,7 @@ start_service_direct() {
     # 使用setsid创建新会话，确保进程完全脱离终端
     if command_exists setsid; then
         # setsid方式（推荐）
-        setsid nohup node "$APP_DIR/src/app.js" > "$APP_DIR/logs/service.log" 2>&1 < /dev/null &
+        setsid nohup node --expose-gc "$APP_DIR/src/app.js" > "$APP_DIR/logs/service.log" 2>&1 < /dev/null &
         local pid=$!
         sleep 1
         
@@ -1241,7 +1241,7 @@ start_service_direct() {
         fi
     else
         # 备用方式：使用nohup和disown
-        nohup node "$APP_DIR/src/app.js" > "$APP_DIR/logs/service.log" 2>&1 < /dev/null &
+        nohup node --expose-gc "$APP_DIR/src/app.js" > "$APP_DIR/logs/service.log" 2>&1 < /dev/null &
         local pid=$!
         disown $pid 2>/dev/null || true
         echo $pid > "$APP_DIR/.pid"
