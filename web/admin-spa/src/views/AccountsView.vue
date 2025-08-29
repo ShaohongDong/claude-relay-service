@@ -1428,14 +1428,20 @@ const getClaudeAccountType = (account) => {
       console.log('Account subscription info:', {
         accountName: account.name,
         subscriptionInfo: info,
-        hasClaudeMax: info.hasClaudeMax,
-        hasClaudePro: info.hasClaudePro
+        hasClaudeMax_camel: info.hasClaudeMax,
+        hasClaudePro_camel: info.hasClaudePro,
+        has_claude_max_snake: info.has_claude_max,
+        has_claude_pro_snake: info.has_claude_pro
       })
 
       // 根据 has_claude_max 和 has_claude_pro 判断
-      if (info.hasClaudeMax === true) {
+      // 同时支持 camelCase 和 snake_case 字段名
+      const hasClaudeMax = info.hasClaudeMax === true || info.has_claude_max === true
+      const hasClaudePro = info.hasClaudePro === true || info.has_claude_pro === true
+      
+      if (hasClaudeMax) {
         return 'Claude Max'
-      } else if (info.hasClaudePro === true) {
+      } else if (hasClaudePro) {
         return 'Claude Pro'
       } else {
         return 'Claude Free'
