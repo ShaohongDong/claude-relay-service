@@ -911,13 +911,15 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
       redis.getAllClaudeAccounts = jest.fn().mockResolvedValue(mockAccounts)
       redis.getSessionAccountMapping = jest.fn().mockResolvedValue(mappedAccountId) // 返回不可用的账户
       redis.deleteSessionAccountMapping = jest.fn().mockResolvedValue(true)
-      redis.setSessionAccountMapping = jest.fn().mockResolvedValue(true)
+      // 使用新的原子性映射方法
+      redis.setSessionAccountMappingAtomic = jest.fn().mockResolvedValue({ success: true, accountId: 'account-2' })
 
       const result = await claudeAccountService.selectAvailableAccount(sessionHash)
 
       expect(result).toBe('account-2') // 应该选择新的可用账户
       expect(redis.deleteSessionAccountMapping).toHaveBeenCalledWith(sessionHash)
-      expect(redis.setSessionAccountMapping).toHaveBeenCalledWith(sessionHash, 'account-2', 3600)
+      // 验证使用了新的原子性方法
+      expect(redis.setSessionAccountMappingAtomic).toHaveBeenCalledWith(sessionHash, 'account-2', 3600)
     })
 
     test('应该过滤掉不支持Opus模型的Pro和Free账号', async () => {
@@ -1080,20 +1082,23 @@ describe('ClaudeAccountService - Comprehensive Tests', () => {
       const mappedAccountId = 'shared-1'
 
       redis.getAllClaudeAccounts = jest.fn().mockResolvedValue(mockSharedAccounts)
-      redis.getSessionAccountMapping = jest.fn().mockResolvedValue(mappedAccountId)
+      // 使用新的原子性验证方法，返回null表示映射账户无效（被限流）
+      redis.getAndValidateSessionMapping = jest.fn().mockResolvedValue(null)
       redis.deleteSessionAccountMapping = jest.fn().mockResolvedValue(true)
-      redis.setSessionAccountMapping = jest.fn().mockResolvedValue(true)
+      // 使用新的原子性映射方法
+      redis.setSessionAccountMappingAtomic = jest.fn().mockResolvedValue({ success: true, accountId: 'shared-2' })
       
       // 映射的账户被限流了
       claudeAccountService.isAccountRateLimited = jest.fn()
-        .mockResolvedValueOnce(true)  // 映射的账户被限流
         .mockResolvedValueOnce(false) // 新选择的账户正常
 
       const result = await claudeAccountService.selectAccountForApiKey(mockApiKeyData, sessionHash)
 
       expect(result).toBe('shared-2') // 应该重新选择账户
-      expect(redis.deleteSessionAccountMapping).toHaveBeenCalledWith(sessionHash) // 删除旧映射
-      expect(redis.setSessionAccountMapping).toHaveBeenCalledWith(sessionHash, 'shared-2', 3600) // 创建新映射
+      // 验证使用了新的原子性验证方法
+      expect(redis.getAndValidateSessionMapping).toHaveBeenCalledWith(sessionHash, ['shared-1', 'shared-2'])
+      // 验证使用了新的原子性映射方法
+      expect(redis.setSessionAccountMappingAtomic).toHaveBeenCalledWith(sessionHash, 'shared-2', 3600)
     })
 
     test('应该在没有可用共享账户时抛出错误', async () => {

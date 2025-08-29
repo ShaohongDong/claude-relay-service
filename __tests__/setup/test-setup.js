@@ -98,9 +98,57 @@ jest.mock('../../src/models/redis', () => {
     // Session mapping methods
     getSessionAccountMapping: jest.fn(),
     setSessionAccountMapping: jest.fn(),
-    deleteSessionAccountMapping: jest.fn()
+    deleteSessionAccountMapping: jest.fn(),
+    
+    // 🔒 新增的并发安全方法
+    // Redis 原子操作
+    checkAndIncrRateLimit: jest.fn(),
+    
+    // 分布式锁方法
+    acquireLock: jest.fn(),
+    releaseLock: jest.fn(),
+    withLock: jest.fn(),
+    
+    // 原子性会话映射方法
+    setSessionAccountMappingAtomic: jest.fn().mockResolvedValue({ success: true, accountId: 'default-account' }),
+    getAndValidateSessionMapping: jest.fn().mockResolvedValue(null)
   }
 })
+
+// 设置一些复杂方法的默认行为
+const setupDefaultMockBehaviors = () => {
+  const redis = require('../../src/models/redis')
+  
+  // 🔒 withLock 方法的默认实现
+  if (redis.withLock && typeof redis.withLock.mockImplementation === 'function') {
+    redis.withLock.mockImplementation(async (lockKey, operation, timeout = 30000) => {
+      // 模拟成功获取锁并执行操作
+      return await operation()
+    })
+  }
+  
+  // 🔒 分布式锁的默认实现
+  if (redis.acquireLock && typeof redis.acquireLock.mockResolvedValue === 'function') {
+    redis.acquireLock.mockResolvedValue({ 
+      acquired: true, 
+      lockValue: 'mock-lock-value',
+      lockKey: 'mock-lock-key'
+    })
+  }
+  
+  if (redis.releaseLock && typeof redis.releaseLock.mockResolvedValue === 'function') {
+    redis.releaseLock.mockResolvedValue(true)
+  }
+  
+  // 🚦 速率限制的默认实现
+  if (redis.checkAndIncrRateLimit && typeof redis.checkAndIncrRateLimit.mockResolvedValue === 'function') {
+    redis.checkAndIncrRateLimit.mockResolvedValue({
+      currentCount: 1,
+      allowed: true,
+      limitRequests: 100
+    })
+  }
+}
 
 // 全局测试超时
 jest.setTimeout(10000)
@@ -109,6 +157,9 @@ jest.setTimeout(10000)
 beforeAll(async () => {
   // 测试开始前的全局设置
   console.log('🧪 Starting test suite...')
+  
+  // 设置并发安全方法的默认mock行为
+  setupDefaultMockBehaviors()
 })
 
 afterAll(async () => {

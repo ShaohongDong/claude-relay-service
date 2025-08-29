@@ -1248,21 +1248,195 @@ class RedisClient {
     }
   }
 
-  // 增加并发计数
+  // 增加并发计数 - 使用Lua脚本保证原子性
   async incrConcurrency(apiKeyId) {
     try {
       const key = `concurrency:${apiKeyId}`
-      const count = await this.client.incr(key)
+      
+      // Lua脚本实现原子性的incr + expire操作
+      const luaScript = `
+        local key = KEYS[1]
+        local expire_time = tonumber(ARGV[1])
+        
+        local count = redis.call('incr', key)
+        redis.call('expire', key, expire_time)
+        
+        return count
+      `
 
-      // 设置过期时间为180秒（3分钟），防止计数器永远不清零
-      // 正常情况下请求会在完成时主动减少计数，这只是一个安全保障
-      // 180秒足够支持较长的流式请求
-      await this.client.expire(key, 180)
-
+      const count = await this.client.eval(luaScript, 1, key, 180)
       logger.database(`🔢 Incremented concurrency for key ${apiKeyId}: ${count}`)
       return count
     } catch (error) {
       logger.error('❌ Failed to increment concurrency:', error)
+      throw error
+    }
+  }
+
+  // 原子性的速率限制检查和计数更新
+  async checkAndIncrRateLimit(apiKeyId, limitRequests, windowSeconds) {
+    try {
+      const windowKey = `rate_limit:${apiKeyId}:${Math.floor(Date.now() / (windowSeconds * 1000))}`
+      
+      // Lua脚本实现原子性的限流检查和计数器更新
+      const luaScript = `
+        local key = KEYS[1]
+        local limit = tonumber(ARGV[1])
+        local expire_time = tonumber(ARGV[2])
+        
+        local current = tonumber(redis.call('get', key) or "0")
+        
+        if current >= limit then
+          return {current, false}  -- 已达到限制，返回当前值和false
+        else
+          local new_count = redis.call('incr', key)
+          redis.call('expire', key, expire_time)
+          return {new_count, true}  -- 返回新计数和true表示允许
+        end
+      `
+
+      const result = await this.client.eval(luaScript, 1, windowKey, limitRequests, windowSeconds)
+      const [currentCount, allowed] = result
+      
+      logger.database(`🚦 Rate limit check for key ${apiKeyId}: ${currentCount}/${limitRequests}, allowed: ${allowed}`)
+      
+      return {
+        currentCount: currentCount,
+        allowed: allowed,
+        limitRequests: limitRequests
+      }
+    } catch (error) {
+      logger.error('❌ Failed to check rate limit:', error)
+      throw error
+    }
+  }
+
+  // 分布式锁相关方法
+  async acquireLock(lockKey, timeout = 30000, retryDelay = 100) {
+    const lockValue = `${Date.now()}-${Math.random()}`
+    const expireTime = Math.ceil(timeout / 1000)
+    
+    try {
+      // 使用SET命令的NX和EX参数实现分布式锁
+      const result = await this.client.set(lockKey, lockValue, 'NX', 'EX', expireTime)
+      
+      if (result === 'OK') {
+        logger.database(`🔒 Acquired distributed lock: ${lockKey}`)
+        return { acquired: true, lockValue, lockKey }
+      }
+      
+      logger.debug(`🔒 Failed to acquire lock (already exists): ${lockKey}`)
+      return { acquired: false, lockValue: null, lockKey }
+    } catch (error) {
+      logger.error('❌ Failed to acquire distributed lock:', error)
+      throw error
+    }
+  }
+
+  async releaseLock(lockKey, lockValue) {
+    try {
+      // 使用Lua脚本确保只有锁的持有者才能释放锁
+      const luaScript = `
+        local key = KEYS[1]
+        local value = ARGV[1]
+        
+        if redis.call('get', key) == value then
+          redis.call('del', key)
+          return 1
+        else
+          return 0
+        end
+      `
+      
+      const result = await this.client.eval(luaScript, 1, lockKey, lockValue)
+      
+      if (result === 1) {
+        logger.database(`🔓 Released distributed lock: ${lockKey}`)
+        return true
+      } else {
+        logger.warn(`🔓 Failed to release lock (not owner or expired): ${lockKey}`)
+        return false
+      }
+    } catch (error) {
+      logger.error('❌ Failed to release distributed lock:', error)
+      throw error
+    }
+  }
+
+  async withLock(lockKey, operation, timeout = 30000) {
+    const lock = await this.acquireLock(lockKey, timeout)
+    
+    if (!lock.acquired) {
+      throw new Error(`Failed to acquire lock: ${lockKey}`)
+    }
+    
+    try {
+      return await operation()
+    } finally {
+      await this.releaseLock(lock.lockKey, lock.lockValue)
+    }
+  }
+
+  // 原子性的会话账户映射设置（防止多请求选择同一账户）
+  async setSessionAccountMappingAtomic(sessionHash, accountId, timeout = 3600) {
+    try {
+      const key = `session_mapping:${sessionHash}`
+      
+      // 使用SET命令的NX参数确保原子性设置
+      const result = await this.client.set(key, accountId, 'NX', 'EX', timeout)
+      
+      if (result === 'OK') {
+        logger.database(`🎯 Atomically set session mapping: ${sessionHash} -> ${accountId}`)
+        return { success: true, accountId }
+      } else {
+        // 映射已存在，获取现有值
+        const existingAccountId = await this.client.get(key)
+        logger.debug(`🎯 Session mapping already exists: ${sessionHash} -> ${existingAccountId}`)
+        return { success: false, existingAccountId }
+      }
+    } catch (error) {
+      logger.error('❌ Failed to set session account mapping atomically:', error)
+      throw error
+    }
+  }
+
+  // 原子性的会话映射获取和清理（如果账户不可用）
+  async getAndValidateSessionMapping(sessionHash, validAccountIds) {
+    try {
+      const luaScript = `
+        local session_key = KEYS[1]
+        local valid_accounts = cjson.decode(ARGV[1])
+        
+        local mapped_account = redis.call('get', session_key)
+        
+        if not mapped_account then
+          return nil
+        end
+        
+        -- 检查账户是否在有效列表中
+        for _, valid_id in ipairs(valid_accounts) do
+          if valid_id == mapped_account then
+            return mapped_account
+          end
+        end
+        
+        -- 账户无效，清理映射
+        redis.call('del', session_key)
+        return nil
+      `
+      
+      const key = `session_mapping:${sessionHash}`
+      const result = await this.client.eval(luaScript, 1, key, JSON.stringify(validAccountIds))
+      
+      if (result) {
+        logger.debug(`🎯 Valid session mapping found: ${sessionHash} -> ${result}`)
+      } else {
+        logger.debug(`🎯 No valid session mapping for: ${sessionHash}`)
+      }
+      
+      return result
+    } catch (error) {
+      logger.error('❌ Failed to get and validate session mapping:', error)
       throw error
     }
   }

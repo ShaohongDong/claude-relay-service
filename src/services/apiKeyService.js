@@ -147,20 +147,20 @@ class ApiKeyService {
           }
         }
 
-        // 检查速率限制
+        // 检查速率限制 - 使用原子性操作
         const rateLimitRequests = parseInt(keyData.limit || keyData.rateLimitRequests || 0)
         if (rateLimitRequests > 0) {
           const limitType = keyData.limitType || 'hour'
           const windowSeconds = limitType === 'minute' ? 60 : 3600
-          const windowKey = `rate_limit:${keyData.id}:${Math.floor(Date.now() / (windowSeconds * 1000))}`
 
           try {
-            const currentRequests = parseInt((await redis.get(windowKey)) || '0')
-            if (currentRequests >= rateLimitRequests) {
-              return { valid: false, error: 'Rate limit exceeded' }
+            const rateLimitResult = await redis.checkAndIncrRateLimit(keyData.id, rateLimitRequests, windowSeconds)
+            if (!rateLimitResult.allowed) {
+              return { 
+                valid: false, 
+                error: `Rate limit exceeded: ${rateLimitResult.currentCount}/${rateLimitResult.limitRequests} requests`
+              }
             }
-            // 增加请求计数
-            await redis.set(windowKey, currentRequests + 1, 'EX', windowSeconds)
           } catch (rateLimitError) {
             logger.error('Rate limit check failed:', rateLimitError)
             return { valid: false, error: 'Internal validation error' }

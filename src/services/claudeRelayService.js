@@ -67,8 +67,6 @@ class ClaudeRelayService {
     clientHeaders,
     options = {}
   ) {
-    let upstreamRequest = null
-
     try {
       // 调试日志：查看API Key数据
       logger.info('🔍 API Key data received:', {
@@ -131,11 +129,22 @@ class ClaudeRelayService {
       // 获取代理配置
       const proxyAgent = await this._getProxyAgent(accountId)
 
+      // 使用状态管理避免竞态条件
+      const requestState = {
+        upstreamRequest: null,
+        clientDisconnected: false,
+        cleanup: false
+      }
+
       // 设置客户端断开监听器
       const handleClientDisconnect = () => {
-        logger.info('🔌 Client disconnected, aborting upstream request')
-        if (upstreamRequest && !upstreamRequest.destroyed) {
-          upstreamRequest.destroy()
+        logger.info('🔌 Client disconnected, marking for cleanup')
+        requestState.clientDisconnected = true
+        
+        // 如果上游请求已存在，立即销毁
+        if (requestState.upstreamRequest && !requestState.upstreamRequest.destroyed) {
+          logger.info('🔌 Destroying existing upstream request due to client disconnect')
+          requestState.upstreamRequest.destroy()
         }
       }
 
@@ -155,7 +164,13 @@ class ClaudeRelayService {
         clientHeaders,
         accountId,
         (req) => {
-          upstreamRequest = req
+          requestState.upstreamRequest = req
+          
+          // 如果客户端已经断开，立即销毁请求
+          if (requestState.clientDisconnected && req && !req.destroyed) {
+            logger.info('🔌 Client already disconnected, destroying upstream request immediately')
+            req.destroy()
+          }
         },
         options
       )
@@ -1094,21 +1109,24 @@ class ClaudeRelayService {
           return
         }
 
-        let buffer = ''
-        const allUsageData = [] // 收集所有的usage事件
-        let currentUsageData = {} // 当前正在收集的usage数据
-        let rateLimitDetected = false // 限流检测标志
+        // 为每个请求创建独立的上下文，避免并发竞态条件
+        const requestContext = {
+          buffer: '',
+          allUsageData: [], // 收集所有的usage事件
+          currentUsageData: {}, // 当前正在收集的usage数据
+          rateLimitDetected: false // 限流检测标志
+        }
 
         // 监听数据块，解析SSE并寻找usage信息
         res.on('data', (chunk) => {
           try {
             const chunkStr = chunk.toString()
 
-            buffer += chunkStr
+            requestContext.buffer += chunkStr
 
             // 处理完整的SSE行
-            const lines = buffer.split('\n')
-            buffer = lines.pop() || '' // 保留最后的不完整行
+            const lines = requestContext.buffer.split('\n')
+            requestContext.buffer = lines.pop() || '' // 保留最后的不完整行
 
             // 转发已处理的完整行到客户端
             if (lines.length > 0 && !responseStream.destroyed) {
@@ -1135,27 +1153,27 @@ class ClaudeRelayService {
                   if (data.type === 'message_start' && data.message && data.message.usage) {
                     // 新的消息开始，如果之前有数据，先保存
                     if (
-                      currentUsageData.input_tokens !== undefined &&
-                      currentUsageData.output_tokens !== undefined
+                      requestContext.currentUsageData.input_tokens !== undefined &&
+                      requestContext.currentUsageData.output_tokens !== undefined
                     ) {
-                      allUsageData.push({ ...currentUsageData })
-                      currentUsageData = {}
+                      requestContext.allUsageData.push({ ...requestContext.currentUsageData })
+                      requestContext.currentUsageData = {}
                     }
 
                     // message_start包含input tokens、cache tokens和模型信息
-                    currentUsageData.input_tokens = data.message.usage.input_tokens || 0
-                    currentUsageData.cache_creation_input_tokens =
+                    requestContext.currentUsageData.input_tokens = data.message.usage.input_tokens || 0
+                    requestContext.currentUsageData.cache_creation_input_tokens =
                       data.message.usage.cache_creation_input_tokens || 0
-                    currentUsageData.cache_read_input_tokens =
+                    requestContext.currentUsageData.cache_read_input_tokens =
                       data.message.usage.cache_read_input_tokens || 0
-                    currentUsageData.model = data.message.model
+                    requestContext.currentUsageData.model = data.message.model
 
                     // 检查是否有详细的 cache_creation 对象
                     if (
                       data.message.usage.cache_creation &&
                       typeof data.message.usage.cache_creation === 'object'
                     ) {
-                      currentUsageData.cache_creation = {
+                      requestContext.currentUsageData.cache_creation = {
                         ephemeral_5m_input_tokens:
                           data.message.usage.cache_creation.ephemeral_5m_input_tokens || 0,
                         ephemeral_1h_input_tokens:
@@ -1163,13 +1181,13 @@ class ClaudeRelayService {
                       }
                       logger.debug(
                         '📊 Collected detailed cache creation data:',
-                        JSON.stringify(currentUsageData.cache_creation)
+                        JSON.stringify(requestContext.currentUsageData.cache_creation)
                       )
                     }
 
                     logger.debug(
                       '📊 Collected input/cache data from message_start:',
-                      JSON.stringify(currentUsageData)
+                      JSON.stringify(requestContext.currentUsageData)
                     )
                   }
 
@@ -1179,27 +1197,27 @@ class ClaudeRelayService {
                     data.usage &&
                     data.usage.output_tokens !== undefined
                   ) {
-                    currentUsageData.output_tokens = data.usage.output_tokens || 0
+                    requestContext.currentUsageData.output_tokens = data.usage.output_tokens || 0
 
                     logger.debug(
                       '📊 Collected output data from message_delta:',
-                      JSON.stringify(currentUsageData)
+                      JSON.stringify(requestContext.currentUsageData)
                     )
 
                     // 如果已经收集到了input数据和output数据，这是一个完整的usage
-                    if (currentUsageData.input_tokens !== undefined) {
+                    if (requestContext.currentUsageData.input_tokens !== undefined) {
                       logger.debug(
                         '🎯 Complete usage data collected for model:',
-                        currentUsageData.model,
+                        requestContext.currentUsageData.model,
                         '- Input:',
-                        currentUsageData.input_tokens,
+                        requestContext.currentUsageData.input_tokens,
                         'Output:',
-                        currentUsageData.output_tokens
+                        requestContext.currentUsageData.output_tokens
                       )
                       // 保存到列表中，但不立即触发回调
-                      allUsageData.push({ ...currentUsageData })
+                      requestContext.allUsageData.push({ ...requestContext.currentUsageData })
                       // 重置当前数据，准备接收下一个
-                      currentUsageData = {}
+                      requestContext.currentUsageData = {}
                     }
                   }
 
@@ -1210,7 +1228,7 @@ class ClaudeRelayService {
                     data.error.message &&
                     data.error.message.toLowerCase().includes("exceed your account's rate limit")
                   ) {
-                    rateLimitDetected = true
+                    requestContext.rateLimitDetected = true
                     logger.warn(
                       `🚫 Rate limit detected in SSE stream for account ${accountId}, marking account and rejecting to enable retry`
                     )
@@ -1280,21 +1298,21 @@ class ClaudeRelayService {
           }
 
           // 如果还有未完成的usage数据，尝试保存
-          if (currentUsageData.input_tokens !== undefined) {
-            if (currentUsageData.output_tokens === undefined) {
-              currentUsageData.output_tokens = 0 // 如果没有output，设为0
+          if (requestContext.currentUsageData.input_tokens !== undefined) {
+            if (requestContext.currentUsageData.output_tokens === undefined) {
+              requestContext.currentUsageData.output_tokens = 0 // 如果没有output，设为0
             }
-            allUsageData.push(currentUsageData)
+            requestContext.allUsageData.push(requestContext.currentUsageData)
           }
 
           // 检查是否捕获到usage数据
-          if (allUsageData.length === 0) {
+          if (requestContext.allUsageData.length === 0) {
             logger.warn(
               '⚠️ Stream completed but no usage data was captured! This indicates a problem with SSE parsing or Claude API response format.'
             )
           } else {
             // 打印此次请求的所有usage数据汇总
-            const totalUsage = allUsageData.reduce(
+            const totalUsage = requestContext.allUsageData.reduce(
               (acc, usage) => ({
                 input_tokens: (acc.input_tokens || 0) + (usage.input_tokens || 0),
                 output_tokens: (acc.output_tokens || 0) + (usage.output_tokens || 0),
@@ -1309,7 +1327,7 @@ class ClaudeRelayService {
 
             // 打印原始的usage数据为JSON字符串，避免嵌套问题
             logger.info(
-              `📊 === Stream Request Usage Summary === Model: ${body.model}, Total Events: ${allUsageData.length}, Usage Data: ${JSON.stringify(allUsageData)}`
+              `📊 === Stream Request Usage Summary === Model: ${body.model}, Total Events: ${requestContext.allUsageData.length}, Usage Data: ${JSON.stringify(requestContext.allUsageData)}`
             )
 
             // 一般一个请求只会使用一个模型，即使有多个usage事件也应该合并
@@ -1319,13 +1337,13 @@ class ClaudeRelayService {
               output_tokens: totalUsage.output_tokens,
               cache_creation_input_tokens: totalUsage.cache_creation_input_tokens,
               cache_read_input_tokens: totalUsage.cache_read_input_tokens,
-              model: allUsageData[allUsageData.length - 1].model || body.model // 使用最后一个模型或请求模型
+              model: requestContext.allUsageData[requestContext.allUsageData.length - 1].model || body.model // 使用最后一个模型或请求模型
             }
 
             // 如果有详细的cache_creation数据，合并它们
             let totalEphemeral5m = 0
             let totalEphemeral1h = 0
-            allUsageData.forEach((usage) => {
+            requestContext.allUsageData.forEach((usage) => {
               if (usage.cache_creation && typeof usage.cache_creation === 'object') {
                 totalEphemeral5m += usage.cache_creation.ephemeral_5m_input_tokens || 0
                 totalEphemeral1h += usage.cache_creation.ephemeral_1h_input_tokens || 0
@@ -1349,7 +1367,7 @@ class ClaudeRelayService {
           }
 
           // 处理限流状态
-          if (rateLimitDetected || res.statusCode === 429) {
+          if (requestContext.rateLimitDetected || res.statusCode === 429) {
             logger.warn(
               `🚫 Stream rate limit detected for account ${accountId}, attempting account switch retry`
             )
@@ -1731,13 +1749,20 @@ class ClaudeRelayService {
         // 获取代理配置
         const proxyAgent = await this._getProxyAgent(accountId)
 
-        let upstreamRequest = null
+        // 使用状态管理避免重试中的竞态条件
+        const retryRequestState = {
+          upstreamRequest: null,
+          clientDisconnected: false
+        }
 
         // 设置客户端断开监听器
         const handleClientDisconnect = () => {
-          logger.info('🔌 Client disconnected during retry, aborting upstream request')
-          if (upstreamRequest && !upstreamRequest.destroyed) {
-            upstreamRequest.destroy()
+          logger.info('🔌 Client disconnected during retry, marking for cleanup')
+          retryRequestState.clientDisconnected = true
+          
+          if (retryRequestState.upstreamRequest && !retryRequestState.upstreamRequest.destroyed) {
+            logger.info('🔌 Destroying retry upstream request due to client disconnect')
+            retryRequestState.upstreamRequest.destroy()
           }
         }
 
@@ -1757,7 +1782,13 @@ class ClaudeRelayService {
           clientHeaders,
           accountId,
           (req) => {
-            upstreamRequest = req
+            retryRequestState.upstreamRequest = req
+            
+            // 如果客户端已经断开，立即销毁请求
+            if (retryRequestState.clientDisconnected && req && !req.destroyed) {
+              logger.info('🔌 Client already disconnected during retry, destroying upstream request immediately')
+              req.destroy()
+            }
           },
           options
         )

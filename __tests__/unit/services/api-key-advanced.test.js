@@ -57,6 +57,14 @@ describe('API Key Service - 高级场景测试', () => {
     mockRedis.incrementDailyCost.mockResolvedValue('OK') // 添加缺失的mock方法
     mockRedis.getUsageStats.mockResolvedValue({ totalRequests: 0, totalTokensUsed: 0 })
     mockRedis.getDailyCost.mockResolvedValue({ cost: 0, requests: 0 })
+    
+    // 添加并发安全修复后的原子性方法mock
+    mockRedis.checkAndIncrRateLimit = mockRedis.checkAndIncrRateLimit || jest.fn()
+    mockRedis.checkAndIncrRateLimit.mockResolvedValue({
+      currentCount: 1,
+      allowed: true,
+      limitRequests: 100
+    })
 
     jest.clearAllMocks()
   })
@@ -125,23 +133,41 @@ describe('API Key Service - 高级场景测试', () => {
           })
         })
         
-        // Mock rate limiting with proper time window support
+        // Mock rate limiting with proper time window support using the new atomic method
         const rateLimitStorage = new Map()
-        mockRedis.get.mockImplementation(async (key) => {
-          if (key.includes('rate_limit:')) {
-            const count = rateLimitStorage.get(key) || 0
-            return String(count) // Redis总是返回字符串
+        const rateLimitTimestamps = new Map()
+        mockRedis.checkAndIncrRateLimit.mockImplementation(async (keyId, limit, windowSeconds) => {
+          const rateLimitKey = `rate_limit:${keyId}`
+          const currentTime = Date.now() // TimeController会修改Date.now()
+          const limitValue = parseInt(limit)
+          const windowMs = parseInt(windowSeconds) * 1000
+          
+          // 获取窗口开始时间
+          const lastTimestamp = rateLimitTimestamps.get(rateLimitKey)
+          
+          // 第一次访问或需要重置窗口
+          if (!lastTimestamp || currentTime - lastTimestamp >= windowMs) {
+            // 重置计数器
+            rateLimitStorage.set(rateLimitKey, 1)
+            rateLimitTimestamps.set(rateLimitKey, currentTime)
+            return {
+              currentCount: 1,
+              allowed: true,
+              limitRequests: limitValue
+            }
           }
-          return null
-        })
-        
-        mockRedis.set.mockImplementation(async (key, value, exFlag, ttlValue) => {
-          if (key.includes('rate_limit:')) {
-            rateLimitStorage.set(key, parseInt(value))
-            // 正确处理 'EX' flag 和 TTL 参数
-            return 'OK'
+          
+          // 在同一窗口内递增计数
+          const currentCount = rateLimitStorage.get(rateLimitKey) || 0
+          const newCount = currentCount + 1
+          
+          rateLimitStorage.set(rateLimitKey, newCount)
+          
+          return {
+            currentCount: newCount,
+            allowed: newCount <= limitValue,
+            limitRequests: limitValue
           }
-          return 'OK'
         })
 
         // 设置并发限制的mock - 使用testApiKeyId
@@ -151,13 +177,11 @@ describe('API Key Service - 高级场景测试', () => {
         })
         mockRedis.decrConcurrency.mockResolvedValue(0)
         
-        // 添加缺少的usage和cost统计mock，带调试信息
+        // 添加缺少的usage和cost统计mock
         mockRedis.getUsageStats.mockImplementation(async (keyId) => {
-          console.log('getUsageStats called with:', keyId)
           return { totalRequests: 0, totalTokensUsed: 0 }
         })
         mockRedis.getDailyCost.mockImplementation(async (keyId) => {
-          console.log('getDailyCost called with:', keyId) 
           return { cost: 0, requests: 0 }
         })
 
@@ -176,38 +200,6 @@ describe('API Key Service - 高级场景测试', () => {
             throw error
           }
           
-          if (!result.valid) {
-            console.log('Validation failed:', result)
-            console.log('Mock calls:')
-            console.log('findApiKeyByHash calls:', mockRedis.findApiKeyByHash.mock.calls)
-            console.log('getUsageStats calls:', mockRedis.getUsageStats.mock.calls)
-            console.log('getDailyCost calls:', mockRedis.getDailyCost.mock.calls)
-            
-            // Debug the returned key data to check JSON fields
-            const returnedKeyDataPromise = mockRedis.findApiKeyByHash.mock.results[0]?.value
-            if (returnedKeyDataPromise) {
-              const returnedKeyData = await returnedKeyDataPromise
-              console.log('Returned key data (resolved):', returnedKeyData)
-              console.log('restrictedModels field:', JSON.stringify(returnedKeyData.restrictedModels))
-              console.log('allowedClients field:', JSON.stringify(returnedKeyData.allowedClients))
-              console.log('tags field:', JSON.stringify(returnedKeyData.tags))
-              
-              // Test JSON parsing to see if that's where it fails
-              try {
-                const parsedModels = JSON.parse(returnedKeyData.restrictedModels || '[]')
-                console.log('JSON.parse restrictedModels success:', parsedModels)
-              } catch (e) {
-                console.log('JSON.parse restrictedModels failed:', e.message)
-              }
-              
-              try {
-                const parsedClients = JSON.parse(returnedKeyData.allowedClients || '[]')
-                console.log('JSON.parse allowedClients success:', parsedClients)
-              } catch (e) {
-                console.log('JSON.parse allowedClients failed:', e.message)
-              }
-            }
-          }
           expect(result.valid).toBe(true)
           
           // 前进10秒
@@ -225,7 +217,7 @@ describe('API Key Service - 高级场景测试', () => {
         expect(result.error).toContain('Rate limit exceeded')
 
         // 前进到下一分钟 - 限流应该重置
-        controller.advance(20 * 1000) // 总共60秒
+        controller.advance(60 * 1000) // 前进60秒（完整的一分钟）
         
         const newResult = await apiKeyService.validateApiKey(testApiKey, mockReq)
         expect(newResult.valid).toBe(true) // 新分钟，限流重置
