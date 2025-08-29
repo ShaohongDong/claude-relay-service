@@ -214,6 +214,12 @@ class RedisClient {
     ephemeral5mTokens = 0, // 新增：5分钟缓存 tokens
     ephemeral1hTokens = 0 // 新增：1小时缓存 tokens
   ) {
+    // 参数验证：确保keyId不为空
+    if (!keyId || keyId.trim() === '') {
+      logger.error('❌ incrementTokenUsage: keyId is empty or invalid', { keyId, tokens, model })
+      throw new Error('KeyId is required for token usage tracking')
+    }
+    
     const key = `usage:${keyId}`
     const now = new Date()
     const today = getDateStringInTimezone(now)
@@ -1321,22 +1327,30 @@ class RedisClient {
   async acquireLock(lockKey, timeout = 30000, retryDelay = 100) {
     const lockValue = `${Date.now()}-${Math.random()}`
     const expireTime = Math.ceil(timeout / 1000)
+    const startTime = Date.now()
+    const maxRetryTime = Math.min(timeout, 5000) // 最多重试5秒
     
-    try {
-      // 使用SET命令的NX和EX参数实现分布式锁
-      const result = await this.client.set(lockKey, lockValue, 'NX', 'EX', expireTime)
-      
-      if (result === 'OK') {
-        logger.database(`🔒 Acquired distributed lock: ${lockKey}`)
-        return { acquired: true, lockValue, lockKey }
+    while (Date.now() - startTime < maxRetryTime) {
+      try {
+        // 使用SET命令的NX和EX参数实现分布式锁
+        const result = await this.client.set(lockKey, lockValue, 'NX', 'EX', expireTime)
+        
+        if (result === 'OK') {
+          logger.database(`🔒 Acquired distributed lock: ${lockKey} (after ${Date.now() - startTime}ms)`)
+          return { acquired: true, lockValue, lockKey }
+        }
+        
+        // 如果锁被占用，等待一段时间后重试
+        await new Promise(resolve => setTimeout(resolve, retryDelay))
+        
+      } catch (error) {
+        logger.error('❌ Failed to acquire distributed lock:', error)
+        throw error
       }
-      
-      logger.debug(`🔒 Failed to acquire lock (already exists): ${lockKey}`)
-      return { acquired: false, lockValue: null, lockKey }
-    } catch (error) {
-      logger.error('❌ Failed to acquire distributed lock:', error)
-      throw error
     }
+    
+    logger.debug(`🔒 Failed to acquire lock after ${maxRetryTime}ms: ${lockKey}`)
+    return { acquired: false, lockValue: null, lockKey }
   }
 
   async releaseLock(lockKey, lockValue) {
@@ -1369,7 +1383,7 @@ class RedisClient {
     }
   }
 
-  async withLock(lockKey, operation, timeout = 30000) {
+  async withLock(lockKey, operation, timeout = 10000) {
     const lock = await this.acquireLock(lockKey, timeout)
     
     if (!lock.acquired) {

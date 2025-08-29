@@ -342,21 +342,46 @@ class OptimizedRedisPipeline {
    * 专门优化使用统计相关的 Redis 操作
    */
   async batchUsageStats(operations) {
-    // 按键分组操作，减少命令数量
-    const groupedOps = this.groupOperationsByKey(operations)
+    // 分离不同类型的操作
+    const keyValueOps = []
+    const directOps = []
     
-    // 使用批处理管理器执行分组操作
+    operations.forEach(op => {
+      if (op.command === 'expire' && op.args && op.args.length === 2) {
+        // expire 命令直接使用 args 参数
+        directOps.push(op)
+      } else if (op.key) {
+        // 有 key 字段的操作
+        keyValueOps.push(op)
+      } else {
+        // 其他操作也直接处理
+        directOps.push(op)
+      }
+    })
+    
     const promises = []
     
-    for (const [key, ops] of groupedOps) {
-      // 合并同类操作
-      const mergedOps = this.mergeOperations(ops)
+    // 处理需要按键分组的操作
+    if (keyValueOps.length > 0) {
+      const groupedOps = this.groupOperationsByKey(keyValueOps)
       
-      for (const op of mergedOps) {
-        promises.push(
-          this.batchManager.addOperation(op.command, [key, ...op.args])
-        )
+      for (const [key, ops] of groupedOps) {
+        // 合并同类操作
+        const mergedOps = this.mergeOperations(ops)
+        
+        for (const op of mergedOps) {
+          promises.push(
+            this.batchManager.addOperation(op.command, [key, ...op.args])
+          )
+        }
       }
+    }
+    
+    // 处理直接操作（如 expire 命令）
+    for (const op of directOps) {
+      promises.push(
+        this.batchManager.addOperation(op.command, op.args || [])
+      )
     }
     
     return Promise.all(promises)

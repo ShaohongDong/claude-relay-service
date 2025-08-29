@@ -1223,7 +1223,7 @@ class ClaudeAccountService {
         logger.error(`❌ Failed to mark account as rate limited: ${accountId}`, error)
         throw error
       }
-    }, 30000) // 30秒锁超时
+    }, 10000) // 优化：减少锁超时时间到10秒，提高响应速度
   }
 
   // ✅ 移除账号的限流状态 - 使用分布式锁防止并发冲突
@@ -1249,7 +1249,7 @@ class ClaudeAccountService {
         logger.error(`❌ Failed to remove rate limit for account: ${accountId}`, error)
         throw error
       }
-    }, 30000) // 30秒锁超时
+    }, 10000) // 优化：减少锁超时时间到10秒，提高响应速度
   }
 
   // 🔍 检查账号是否处于限流状态
