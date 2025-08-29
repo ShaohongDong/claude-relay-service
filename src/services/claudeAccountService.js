@@ -28,7 +28,7 @@ class ClaudeAccountService {
     // 🚀 性能优化：缓存派生的加密密钥，避免每次重复计算
     // scryptSync 是 CPU 密集型操作，缓存可以减少 95%+ 的 CPU 占用
     this._encryptionKeyCache = null
-    this._cachedEncryptionKey = null  // 用于检测密钥变更
+    this._cachedEncryptionKey = null // 用于检测密钥变更
     this._cachedEncryptionSalt = null // 用于检测盐值变更
 
     // 🔄 解密结果缓存，提高解密性能
@@ -41,7 +41,7 @@ class ClaudeAccountService {
         () => {
           this._decryptCache.cleanup()
           logger.info('🧹 Claude decrypt cache cleanup completed', this._decryptCache.getStats())
-          
+
           // 🔐 定期强制清理敏感缓存以提高安全性
           this._performSecurityCleanup()
         },
@@ -585,7 +585,6 @@ class ClaudeAccountService {
       // 检查是否手动禁用了账号，如果是则发送webhook通知
       if (updates.isActive === 'false' && accountData.isActive === 'true') {
         try {
-          const webhookNotifier = require('../utils/webhookNotifier')
           await webhookNotifier.sendAccountAnomalyNotification({
             accountId,
             accountName: updatedData.name || 'Unknown Account',
@@ -916,7 +915,7 @@ class ClaudeAccountService {
     const isSensitiveData = this._isSensitiveData(encryptedData)
     let cacheKey = null
     let cached = null
-    
+
     if (!isSensitiveData) {
       cacheKey = crypto.createHash('sha256').update(encryptedData).digest('hex')
       cached = this._decryptCache.get(cacheKey)
@@ -959,23 +958,29 @@ class ClaudeAccountService {
       // 对于旧格式数据，我们需要提示用户进行数据迁移
       if (encryptedData.match(/^[0-9a-f]+$/i)) {
         // 这可能是旧格式的十六进制数据
-        logger.warn('⚠️ Detected legacy encrypted data format that is no longer supported in current Node.js version')
-        logger.warn('⚠️ Data migration required. Please run data migration tool or re-add this account')
-        
+        logger.warn(
+          '⚠️ Detected legacy encrypted data format that is no longer supported in current Node.js version'
+        )
+        logger.warn(
+          '⚠️ Data migration required. Please run data migration tool or re-add this account'
+        )
+
         // 标记需要迁移
         this._markForMigration(encryptedData)
-        
+
         // 返回一个特殊标记，让调用方知道需要重新输入数据
         return '[LEGACY_DATA_MIGRATION_REQUIRED]'
       }
-      
+
       // 🚨 安全修复：不应该直接返回可能的敏感数据
-      logger.warn('⚠️ Could not decrypt data, this may indicate data corruption or configuration issues')
+      logger.warn(
+        '⚠️ Could not decrypt data, this may indicate data corruption or configuration issues'
+      )
       logger.warn('⚠️ Refusing to return potentially sensitive unencrypted data')
-      
+
       // 标记需要迁移
       this._markForMigration(encryptedData)
-      
+
       // 返回安全的占位符
       return '[DECRYPTION_FAILED_MANUAL_INTERVENTION_REQUIRED]'
     } catch (error) {
@@ -990,12 +995,16 @@ class ClaudeAccountService {
     // 获取当前配置值
     const currentEncryptionKey = config.security.encryptionKey
     const currentEncryptionSalt = config.security.encryptionSalt
-    
+
     // 🔐 安全修复：检测密钥或盐值变更，自动失效缓存
     // 只有在缓存存在且配置实际发生变化时才失效缓存
-    if (this._encryptionKeyCache && this._cachedEncryptionKey !== null && this._cachedEncryptionSalt !== null &&
-        (this._cachedEncryptionKey !== currentEncryptionKey || 
-         this._cachedEncryptionSalt !== currentEncryptionSalt)) {
+    if (
+      this._encryptionKeyCache &&
+      this._cachedEncryptionKey !== null &&
+      this._cachedEncryptionSalt !== null &&
+      (this._cachedEncryptionKey !== currentEncryptionKey ||
+        this._cachedEncryptionSalt !== currentEncryptionSalt)
+    ) {
       logger.warn('🔑 Encryption key or salt changed, invalidating cache')
       this._encryptionKeyCache = null
       this._decryptCache.clear() // 清理解密缓存，因为密钥变更后无法正确解密
@@ -1009,19 +1018,15 @@ class ClaudeAccountService {
       if (!currentEncryptionSalt || currentEncryptionSalt === 'CHANGE-THIS-ENCRYPTION-SALT-NOW') {
         throw new Error('Encryption salt must be configured with a secure random value')
       }
-      
+
       // 只在第一次调用时计算，后续使用缓存
       // 由于输入参数固定，派生结果永远相同，不影响数据兼容性
-      this._encryptionKeyCache = crypto.scryptSync(
-        currentEncryptionKey,
-        currentEncryptionSalt,
-        32
-      )
-      
+      this._encryptionKeyCache = crypto.scryptSync(currentEncryptionKey, currentEncryptionSalt, 32)
+
       // 缓存当前配置值用于变更检测
       this._cachedEncryptionKey = currentEncryptionKey
       this._cachedEncryptionSalt = currentEncryptionSalt
-      
+
       logger.info('🔑 Encryption key derived and cached for performance optimization')
     }
     return this._encryptionKeyCache
@@ -1030,14 +1035,20 @@ class ClaudeAccountService {
   // 🔍 敏感数据识别（更精确的判断逻辑）
   _isSensitiveData(encryptedData) {
     // 基于多个特征判断是否为敏感数据（OAuth token、refreshToken等）
-    if (!encryptedData) return false
-    
+    if (!encryptedData) {
+      return false
+    }
+
     // 1. 长度检查：OAuth token通常很长
-    if (encryptedData.length > 150) return true
-    
+    if (encryptedData.length > 150) {
+      return true
+    }
+
     // 2. 格式检查：包含冒号的加密格式且长度较长（可能是token）
-    if (encryptedData.includes(':') && encryptedData.length > 100) return true
-    
+    if (encryptedData.includes(':') && encryptedData.length > 100) {
+      return true
+    }
+
     // 3. 特征字符串检查：明显的token特征
     const sensitivePatterns = [
       /^[a-f0-9]{32}:/i, // 32字符hex IV + 冒号开头
@@ -1045,8 +1056,8 @@ class ClaudeAccountService {
       /oauth/i,
       /bearer/i
     ]
-    
-    return sensitivePatterns.some(pattern => pattern.test(encryptedData))
+
+    return sensitivePatterns.some((pattern) => pattern.test(encryptedData))
   }
 
   // 🔐 安全清理敏感缓存数据
@@ -1058,7 +1069,7 @@ class ClaudeAccountService {
         this._decryptCache.clear()
         logger.info(`🧹 Security cleanup: cleared ${cacheSize} cached decryption results`)
       }
-      
+
       // Node.js的垃圾回收器建议
       if (global.gc && typeof global.gc === 'function') {
         global.gc()
@@ -1179,7 +1190,6 @@ class ClaudeAccountService {
 
       // 发送Webhook通知
       try {
-        const webhookNotifier = require('../utils/webhookNotifier')
         await webhookNotifier.sendAccountAnomalyNotification({
           accountId,
           accountName: accountData.name || 'Claude Account',
@@ -1759,7 +1769,6 @@ class ClaudeAccountService {
 
       // 发送Webhook通知
       try {
-        const webhookNotifier = require('../utils/webhookNotifier')
         await webhookNotifier.sendAccountAnomalyNotification({
           accountId,
           accountName: accountData.name,
@@ -1842,12 +1851,16 @@ class ClaudeAccountService {
     try {
       const migrationKey = `migration_needed:${crypto.createHash('md5').update(encryptedData).digest('hex')}`
       // 使用Redis存储迁移标记，过期时间30天
-      redis.setex(migrationKey, 30 * 24 * 60 * 60, JSON.stringify({
-        timestamp: new Date().toISOString(),
-        dataHash: crypto.createHash('sha256').update(encryptedData).digest('hex'),
-        reason: 'LEGACY_CRYPTO_API_REMOVED'
-      }))
-      
+      redis.setex(
+        migrationKey,
+        30 * 24 * 60 * 60,
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          dataHash: crypto.createHash('sha256').update(encryptedData).digest('hex'),
+          reason: 'LEGACY_CRYPTO_API_REMOVED'
+        })
+      )
+
       logger.info('🏷️ Marked legacy data for migration:', { migrationKey })
     } catch (error) {
       logger.error('❌ Failed to mark data for migration:', error)

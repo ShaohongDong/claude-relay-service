@@ -20,7 +20,7 @@ class ClaudeConsoleAccountService {
     // 🚀 性能优化：缓存派生的加密密钥，避免每次重复计算
     // scryptSync 是 CPU 密集型操作，缓存可以减少 95%+ 的 CPU 密集型操作
     this._encryptionKeyCache = null
-    this._cachedEncryptionKey = null  // 用于检测密钥变更
+    this._cachedEncryptionKey = null // 用于检测密钥变更
     this._cachedEncryptionSalt = null // 用于检测盐值变更
 
     // 🔄 解密结果缓存，提高解密性能
@@ -575,9 +575,11 @@ class ClaudeConsoleAccountService {
       }
 
       // 🚨 安全修复：不应该直接返回可能的敏感数据
-      logger.warn('⚠️ Could not decrypt data, this may indicate data corruption or configuration issues')
+      logger.warn(
+        '⚠️ Could not decrypt data, this may indicate data corruption or configuration issues'
+      )
       logger.warn('⚠️ Refusing to return potentially sensitive unencrypted data')
-      
+
       // 返回安全的占位符
       return '[DECRYPTION_FAILED_MANUAL_INTERVENTION_REQUIRED]'
     } catch (error) {
@@ -592,11 +594,15 @@ class ClaudeConsoleAccountService {
     // 获取当前配置值
     const currentEncryptionKey = config.security.encryptionKey
     const currentEncryptionSalt = config.security.encryptionSalt
-    
+
     // 🔐 安全修复：检测密钥或盐值变更，自动失效缓存
-    if (this._encryptionKeyCache && this._cachedEncryptionKey !== null && this._cachedEncryptionSalt !== null &&
-        (this._cachedEncryptionKey !== currentEncryptionKey || 
-         this._cachedEncryptionSalt !== currentEncryptionSalt)) {
+    if (
+      this._encryptionKeyCache &&
+      this._cachedEncryptionKey !== null &&
+      this._cachedEncryptionSalt !== null &&
+      (this._cachedEncryptionKey !== currentEncryptionKey ||
+        this._cachedEncryptionSalt !== currentEncryptionSalt)
+    ) {
       logger.warn('🔑 Console encryption key or salt changed, invalidating cache')
       this._encryptionKeyCache = null
       this._decryptCache.clear() // 清理解密缓存
@@ -608,18 +614,14 @@ class ClaudeConsoleAccountService {
       if (!currentEncryptionSalt || currentEncryptionSalt === 'CHANGE-THIS-ENCRYPTION-SALT-NOW') {
         throw new Error('Encryption salt must be configured with a secure random value')
       }
-      
+
       // 使用与 claudeAccountService 相同的密钥派生方式
-      this._encryptionKeyCache = crypto.scryptSync(
-        currentEncryptionKey,
-        currentEncryptionSalt,
-        32
-      )
-      
+      this._encryptionKeyCache = crypto.scryptSync(currentEncryptionKey, currentEncryptionSalt, 32)
+
       // 缓存当前配置值用于变更检测
       this._cachedEncryptionKey = currentEncryptionKey
       this._cachedEncryptionSalt = currentEncryptionSalt
-      
+
       logger.info('🔑 Console encryption key derived and cached for performance optimization')
     }
     return this._encryptionKeyCache

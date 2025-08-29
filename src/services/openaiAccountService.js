@@ -25,7 +25,7 @@ const IV_LENGTH = 16
 // 🚀 性能优化：缓存派生的加密密钥，避免每次重复计算
 // scryptSync 是 CPU 密集型操作，缓存可以减少 95%+ 的 CPU 占用
 let _encryptionKeyCache = null
-let _cachedEncryptionKey = null  // 用于检测密钥变更
+let _cachedEncryptionKey = null // 用于检测密钥变更
 let _cachedEncryptionSalt = null // 用于检测盐值变更
 
 // 🔄 解密结果缓存，提高解密性能
@@ -36,11 +36,15 @@ function generateEncryptionKey() {
   // 获取当前配置值
   const currentEncryptionKey = config.security.encryptionKey
   const currentEncryptionSalt = config.security.encryptionSalt
-  
+
   // 🔐 安全修复：检测密钥或盐值变更，自动失效缓存
-  if (_encryptionKeyCache && _cachedEncryptionKey !== null && _cachedEncryptionSalt !== null &&
-      (_cachedEncryptionKey !== currentEncryptionKey || 
-       _cachedEncryptionSalt !== currentEncryptionSalt)) {
+  if (
+    _encryptionKeyCache &&
+    _cachedEncryptionKey !== null &&
+    _cachedEncryptionSalt !== null &&
+    (_cachedEncryptionKey !== currentEncryptionKey ||
+      _cachedEncryptionSalt !== currentEncryptionSalt)
+  ) {
     logger.warn('🔑 OpenAI encryption key or salt changed, invalidating cache')
     _encryptionKeyCache = null
     decryptCache.clear() // 清理解密缓存
@@ -51,13 +55,13 @@ function generateEncryptionKey() {
     if (!currentEncryptionSalt || currentEncryptionSalt === 'CHANGE-THIS-ENCRYPTION-SALT-NOW') {
       throw new Error('Encryption salt must be configured with a secure random value')
     }
-    
+
     _encryptionKeyCache = crypto.scryptSync(currentEncryptionKey, currentEncryptionSalt, 32)
-    
+
     // 缓存当前配置值用于变更检测
     _cachedEncryptionKey = currentEncryptionKey
     _cachedEncryptionSalt = currentEncryptionSalt
-    
+
     logger.info('🔑 OpenAI encryption key derived and cached for performance optimization')
   }
   return _encryptionKeyCache

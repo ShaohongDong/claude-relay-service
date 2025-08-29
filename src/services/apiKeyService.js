@@ -146,16 +146,16 @@ class ApiKeyService {
             return { valid: false, error: 'Internal validation error' }
           }
         }
-        
+
         // 检查速率限制
         const rateLimitRequests = parseInt(keyData.limit || keyData.rateLimitRequests || 0)
         if (rateLimitRequests > 0) {
           const limitType = keyData.limitType || 'hour'
           const windowSeconds = limitType === 'minute' ? 60 : 3600
           const windowKey = `rate_limit:${keyData.id}:${Math.floor(Date.now() / (windowSeconds * 1000))}`
-          
+
           try {
-            const currentRequests = parseInt(await redis.get(windowKey) || '0')
+            const currentRequests = parseInt((await redis.get(windowKey)) || '0')
             if (currentRequests >= rateLimitRequests) {
               return { valid: false, error: 'Rate limit exceeded' }
             }
@@ -654,11 +654,13 @@ class ApiKeyService {
   _hashApiKey(apiKey) {
     // 🚨 安全修复：强制使用专用的API Key盐值，完全与数据加密解耦
     const salt = config.security.apiKeySalt
-    
+
     if (!salt || salt === 'CHANGE-THIS-API-KEY-SALT-32CHAR_') {
-      throw new Error('API_KEY_SALT must be configured with a secure random value independent of encryption key')
+      throw new Error(
+        'API_KEY_SALT must be configured with a secure random value independent of encryption key'
+      )
     }
-    
+
     return crypto
       .createHash('sha256')
       .update(apiKey + salt)

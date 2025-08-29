@@ -188,13 +188,40 @@ class ClaudeRelayService {
 
           if (errorCount >= 3) {
             logger.error(
-              `❌ Account ${accountId} exceeded 401 error threshold (${errorCount} errors), marking as unauthorized`
+              `❌ Account ${accountId} exceeded 401 error threshold (${errorCount} errors), marking as unauthorized and attempting account switch`
             )
             await unifiedClaudeScheduler.markAccountUnauthorized(
               accountId,
               accountType,
               sessionHash
             )
+          }
+
+          // 对于401错误，也尝试账户切换重试
+          try {
+            logger.info(
+              `🔄 Initiating account switch retry for 401 error - API Key: ${apiKeyData.name}`
+            )
+            const retryResponse = await this._retryWithAccountSwitch(
+              requestBody,
+              apiKeyData,
+              clientRequest,
+              clientResponse,
+              clientHeaders,
+              options
+            )
+
+            // 如果重试成功，返回新的响应
+            logger.info(
+              `✅ Account switch retry successful for 401 error - API Key: ${apiKeyData.name}`
+            )
+            return retryResponse
+          } catch (retryError) {
+            logger.error(
+              `❌ Account switch retry failed for 401 error - API Key: ${apiKeyData.name}:`,
+              retryError.message
+            )
+            // 重试失败，继续使用原始的401响应
           }
         }
         // 检查是否为429状态码
@@ -236,15 +263,41 @@ class ClaudeRelayService {
 
         if (isRateLimited) {
           logger.warn(
-            `🚫 Rate limit detected for account ${accountId}, status: ${response.statusCode}`
+            `🚫 Rate limit detected for account ${accountId}, status: ${response.statusCode}, attempting account switch retry`
           )
-          // 标记账号为限流状态并删除粘性会话映射，传递准确的重置时间戳
+
+          // 先标记当前账户为限流状态
           await unifiedClaudeScheduler.markAccountRateLimited(
             accountId,
             accountType,
             sessionHash,
             rateLimitResetTimestamp
           )
+
+          // 尝试账户切换重试
+          try {
+            logger.info(
+              `🔄 Initiating account switch retry for 429 error - API Key: ${apiKeyData.name}`
+            )
+            const retryResponse = await this._retryWithAccountSwitch(
+              requestBody,
+              apiKeyData,
+              clientRequest,
+              clientResponse,
+              clientHeaders,
+              options
+            )
+
+            // 如果重试成功，返回新的响应
+            logger.info(`✅ Account switch retry successful for API Key: ${apiKeyData.name}`)
+            return retryResponse
+          } catch (retryError) {
+            logger.error(
+              `❌ Account switch retry failed for API Key: ${apiKeyData.name}:`,
+              retryError.message
+            )
+            // 重试失败，继续使用原始的限流响应
+          }
         }
       } else if (response.statusCode === 200 || response.statusCode === 201) {
         // 请求成功，清除401错误计数
@@ -574,7 +627,7 @@ class ClaudeRelayService {
           diagnosis.stage = 'proxy_connection'
           diagnosis.description = `Failed to connect to proxy server ${proxy.type}://${proxy.host}:${proxy.port}`
           diagnosis.isProxyIssue = true
-        } 
+        }
         // 如果是api.anthropic.com或其他地址，说明是API连接失败
         else if (error.address === 'api.anthropic.com' || error.address === 'api.claude.ai') {
           diagnosis.stage = 'api_connection'
@@ -626,7 +679,6 @@ class ClaudeRelayService {
             break
         }
       }
-
     } catch (diagnosisError) {
       logger.warn('⚠️ Failed to diagnose connection error:', diagnosisError)
       diagnosis.description = 'Failed to diagnose connection error'
@@ -796,10 +848,10 @@ class ClaudeRelayService {
 
       req.on('error', async (error) => {
         console.error(': ❌ ', error)
-        
+
         // 使用新的连接诊断功能
         const diagnosis = await this._diagnoseConnectionError(error, proxyAgent, accountId)
-        
+
         logger.error('❌ Claude API request error:', error.message, {
           code: error.code,
           errno: error.errno,
@@ -815,8 +867,8 @@ class ClaudeRelayService {
         })
 
         // 使用诊断结果提供更精确的错误信息
-        let errorMessage = diagnosis.description || 'Upstream request failed'
-        
+        const errorMessage = diagnosis.description || 'Upstream request failed'
+
         // 根据诊断结果提供针对性建议
         if (diagnosis.isProxyIssue) {
           logger.error(`🔍 Connection diagnosis: PROXY ISSUE - ${diagnosis.description}`)
@@ -896,45 +948,13 @@ class ClaudeRelayService {
         }
       }
 
-      // 生成会话哈希用于sticky会话
-      const sessionHash = sessionHelper.generateSessionHash(requestBody)
-
-      // 选择可用的Claude账户（支持专属绑定和sticky会话）
-      const accountSelection = await unifiedClaudeScheduler.selectAccountForApiKey(
+      // 实现流式请求的账户切换重试逻辑
+      await this._executeStreamRequestWithRetry(
+        requestBody,
         apiKeyData,
-        sessionHash,
-        requestBody.model
-      )
-      const { accountId } = accountSelection
-      const { accountType } = accountSelection
-
-      logger.info(
-        `📡 Processing streaming API request with usage capture for key: ${apiKeyData.name || apiKeyData.id}, account: ${accountId} (${accountType})${sessionHash ? `, session: ${sessionHash}` : ''}`
-      )
-
-      // 获取有效的访问token
-      const accessToken = await claudeAccountService.getValidAccessToken(accountId)
-
-      // 处理请求体（传递 clientHeaders 以判断是否需要设置 Claude Code 系统提示词）
-      const processedBody = this._processRequestBody(requestBody, clientHeaders)
-
-      // 获取代理配置
-      const proxyAgent = await this._getProxyAgent(accountId)
-
-      // 发送流式请求并捕获usage数据
-      await this._makeClaudeStreamRequestWithUsageCapture(
-        processedBody,
-        accessToken,
-        proxyAgent,
-        clientHeaders,
         responseStream,
-        (usageData) => {
-          // 在usageCallback中添加accountId
-          usageCallback({ ...usageData, accountId })
-        },
-        accountId,
-        accountType,
-        sessionHash,
+        clientHeaders,
+        usageCallback,
         streamTransformer,
         options
       )
@@ -1016,6 +1036,37 @@ class ClaudeRelayService {
         // 错误响应处理
         if (res.statusCode !== 200) {
           logger.error(`❌ Claude API returned error status: ${res.statusCode}`)
+
+          // 对于429错误，立即标记账户并reject以触发重试机制
+          if (res.statusCode === 429) {
+            logger.warn(`🚫 Stream HTTP 429 error detected, marking account and rejecting to enable retry`)
+            
+            // 提取限流重置时间戳
+            let rateLimitResetTimestamp = null
+            if (res.headers && res.headers['anthropic-ratelimit-unified-reset']) {
+              rateLimitResetTimestamp = parseInt(res.headers['anthropic-ratelimit-unified-reset'])
+              logger.info(
+                `🕐 Extracted rate limit reset timestamp from stream: ${rateLimitResetTimestamp} (${new Date(rateLimitResetTimestamp * 1000).toISOString()})`
+              )
+            }
+            
+            // 立即标记账户为限流状态
+            unifiedClaudeScheduler.markAccountRateLimited(
+              accountId,
+              accountType,
+              sessionHash,
+              rateLimitResetTimestamp
+            ).then(() => {
+              logger.info(`✅ Account ${accountId} marked as rate limited before stream retry`)
+            }).catch((markError) => {
+              logger.error(`❌ Failed to mark account ${accountId} as rate limited:`, markError)
+            })
+            
+            reject(new Error(`Claude API rate limit (HTTP 429) for account ${accountId}`))
+            return
+          }
+
+          // 对于其他错误，收集错误数据
           let errorData = ''
 
           res.on('data', (chunk) => {
@@ -1160,7 +1211,29 @@ class ClaudeRelayService {
                     data.error.message.toLowerCase().includes("exceed your account's rate limit")
                   ) {
                     rateLimitDetected = true
-                    logger.warn(`🚫 Rate limit detected in stream for account ${accountId}`)
+                    logger.warn(
+                      `🚫 Rate limit detected in SSE stream for account ${accountId}, marking account and rejecting to enable retry`
+                    )
+
+                    // 立即标记账户为限流状态
+                    unifiedClaudeScheduler.markAccountRateLimited(
+                      accountId,
+                      accountType,
+                      sessionHash,
+                      null // SSE错误通常不包含重置时间戳
+                    ).then(() => {
+                      logger.info(`✅ Account ${accountId} marked as rate limited from SSE stream before retry`)
+                    }).catch((markError) => {
+                      logger.error(`❌ Failed to mark account ${accountId} as rate limited from SSE:`, markError)
+                    })
+
+                    // 立即抛出错误以触发重试机制
+                    reject(
+                      new Error(
+                        `Claude API rate limit exceeded for account ${accountId}: ${data.error.message}`
+                      )
+                    )
+                    return
                   }
                 } catch (parseError) {
                   // 忽略JSON解析错误，继续处理
@@ -1277,6 +1350,10 @@ class ClaudeRelayService {
 
           // 处理限流状态
           if (rateLimitDetected || res.statusCode === 429) {
+            logger.warn(
+              `🚫 Stream rate limit detected for account ${accountId}, attempting account switch retry`
+            )
+
             // 提取限流重置时间戳
             let rateLimitResetTimestamp = null
             if (res.headers && res.headers['anthropic-ratelimit-unified-reset']) {
@@ -1286,12 +1363,17 @@ class ClaudeRelayService {
               )
             }
 
-            // 标记账号为限流状态并删除粘性会话映射
+            // 先标记当前账户为限流状态
             await unifiedClaudeScheduler.markAccountRateLimited(
               accountId,
               accountType,
               sessionHash,
               rateLimitResetTimestamp
+            )
+
+            // 对于流式请求，如果在早期检测到限流，尝试重新开始流（这里只是记录，实际重试需要在更早的阶段进行）
+            logger.info(
+              `🌊 Stream 429 error detected for account ${accountId}. Note: Stream retry would require early detection before data transmission.`
             )
           } else if (res.statusCode === 200) {
             // 如果请求成功，检查并移除限流状态
@@ -1321,7 +1403,7 @@ class ClaudeRelayService {
       req.on('error', async (error) => {
         // 使用新的连接诊断功能
         const diagnosis = await this._diagnoseConnectionError(error, proxyAgent, accountId)
-        
+
         logger.error('❌ Claude stream request error:', error.message, {
           code: error.code,
           errno: error.errno,
@@ -1337,9 +1419,9 @@ class ClaudeRelayService {
         })
 
         // 使用诊断结果提供更精确的错误信息
-        let errorMessage = diagnosis.description || 'Upstream request failed'
+        const errorMessage = diagnosis.description || 'Upstream request failed'
         let statusCode = 500
-        
+
         // 根据诊断结果设置状态码和错误消息
         if (diagnosis.isProxyIssue) {
           statusCode = 502
@@ -1481,7 +1563,7 @@ class ClaudeRelayService {
       req.on('error', async (error) => {
         // 使用新的连接诊断功能（传递null作为accountId，因为此方法没有accountId参数）
         const diagnosis = await this._diagnoseConnectionError(error, proxyAgent, null)
-        
+
         logger.error('❌ Claude stream request error:', error.message, {
           code: error.code,
           errno: error.errno,
@@ -1497,9 +1579,9 @@ class ClaudeRelayService {
         })
 
         // 使用诊断结果提供更精确的错误信息
-        let errorMessage = diagnosis.description || 'Upstream request failed'
+        const errorMessage = diagnosis.description || 'Upstream request failed'
         let statusCode = 500
-        
+
         // 根据诊断结果设置状态码和错误消息
         if (diagnosis.isProxyIssue) {
           statusCode = 502
@@ -1599,6 +1681,634 @@ class ClaudeRelayService {
     }
 
     throw lastError
+  }
+
+  // 🔄 账户切换重试逻辑（专用于429限流错误）
+  async _retryWithAccountSwitch(
+    originalRequestBody,
+    apiKeyData,
+    clientRequest,
+    clientResponse,
+    clientHeaders,
+    options = {},
+    maxRetries = 2
+  ) {
+    let lastResponse = null
+    let lastError = null
+    let originalSessionHash = null
+
+    // 生成会话哈希用于sticky会话
+    const sessionHash = sessionHelper.generateSessionHash(originalRequestBody)
+    originalSessionHash = sessionHash
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        logger.info(
+          `🔄 Account switch retry attempt ${attempt + 1}/${maxRetries + 1} for API key: ${apiKeyData.name}`
+        )
+
+        // 在重试时，需要重新选择账户（因为之前的账户已被标记为限流）
+        const currentSessionHash = attempt === 0 ? originalSessionHash : null // 首次尝试使用原session，重试时不使用
+
+        const accountSelection = await unifiedClaudeScheduler.selectAccountForApiKey(
+          apiKeyData,
+          currentSessionHash,
+          originalRequestBody.model
+        )
+        const { accountId } = accountSelection
+        const { accountType } = accountSelection
+
+        logger.info(
+          `🎯 Retry attempt ${attempt + 1}: Using account ${accountId} (${accountType}) for API key ${apiKeyData.name}`
+        )
+
+        // 获取有效的访问token
+        const accessToken = await claudeAccountService.getValidAccessToken(accountId)
+
+        // 处理请求体
+        const processedBody = this._processRequestBody(originalRequestBody, clientHeaders)
+
+        // 获取代理配置
+        const proxyAgent = await this._getProxyAgent(accountId)
+
+        let upstreamRequest = null
+
+        // 设置客户端断开监听器
+        const handleClientDisconnect = () => {
+          logger.info('🔌 Client disconnected during retry, aborting upstream request')
+          if (upstreamRequest && !upstreamRequest.destroyed) {
+            upstreamRequest.destroy()
+          }
+        }
+
+        // 监听客户端断开事件
+        if (clientRequest) {
+          clientRequest.once('close', handleClientDisconnect)
+        }
+        if (clientResponse) {
+          clientResponse.once('close', handleClientDisconnect)
+        }
+
+        // 发送请求到Claude API
+        const response = await this._makeClaudeRequest(
+          processedBody,
+          accessToken,
+          proxyAgent,
+          clientHeaders,
+          accountId,
+          (req) => {
+            upstreamRequest = req
+          },
+          options
+        )
+
+        // 移除监听器
+        if (clientRequest) {
+          clientRequest.removeListener('close', handleClientDisconnect)
+        }
+        if (clientResponse) {
+          clientResponse.removeListener('close', handleClientDisconnect)
+        }
+
+        // 检查是否仍然是429错误
+        if (response.statusCode === 429) {
+          let isRateLimited = false
+          let rateLimitResetTimestamp = null
+
+          // 提取限流重置时间戳
+          if (response.headers && response.headers['anthropic-ratelimit-unified-reset']) {
+            rateLimitResetTimestamp = parseInt(
+              response.headers['anthropic-ratelimit-unified-reset']
+            )
+          }
+
+          // 检查响应体中的限流错误
+          try {
+            const responseBody =
+              typeof response.body === 'string' ? JSON.parse(response.body) : response.body
+            if (
+              responseBody &&
+              responseBody.error &&
+              responseBody.error.message &&
+              responseBody.error.message.toLowerCase().includes("exceed your account's rate limit")
+            ) {
+              isRateLimited = true
+            }
+          } catch (e) {
+            if (
+              response.body &&
+              response.body.toLowerCase().includes("exceed your account's rate limit")
+            ) {
+              isRateLimited = true
+            }
+          }
+
+          if (response.statusCode === 429 || isRateLimited) {
+            logger.warn(
+              `🚫 Retry attempt ${attempt + 1}: Account ${accountId} also rate limited (429), marking and trying next account`
+            )
+
+            // 标记当前账户为限流状态
+            await unifiedClaudeScheduler.markAccountRateLimited(
+              accountId,
+              accountType,
+              currentSessionHash,
+              rateLimitResetTimestamp
+            )
+
+            // 如果还有重试机会，继续下一次重试
+            if (attempt < maxRetries) {
+              lastResponse = response
+
+              // 短暂延迟后重试，避免过快重试
+              await new Promise((resolve) => setTimeout(resolve, 500))
+              continue
+            }
+          }
+        } else if (response.statusCode === 401) {
+          // 处理401错误
+          logger.warn(
+            `🔐 Retry attempt ${attempt + 1}: Unauthorized error (401) for account ${accountId}`
+          )
+
+          await this.recordUnauthorizedError(accountId)
+          const errorCount = await this.getUnauthorizedErrorCount(accountId)
+
+          if (errorCount >= 3) {
+            logger.error(
+              `❌ Account ${accountId} exceeded 401 error threshold, marking as unauthorized`
+            )
+            await unifiedClaudeScheduler.markAccountUnauthorized(
+              accountId,
+              accountType,
+              currentSessionHash
+            )
+          }
+
+          // 如果还有重试机会，尝试下一个账户
+          if (attempt < maxRetries) {
+            lastResponse = response
+            await new Promise((resolve) => setTimeout(resolve, 500))
+            continue
+          }
+        }
+
+        // 请求成功的情况
+        if (response.statusCode === 200 || response.statusCode === 201) {
+          // 清除401错误计数
+          await this.clearUnauthorizedErrors(accountId)
+
+          // 如果请求成功，检查并移除限流状态
+          const isRateLimited = await unifiedClaudeScheduler.isAccountRateLimited(
+            accountId,
+            accountType
+          )
+          if (isRateLimited) {
+            await unifiedClaudeScheduler.removeAccountRateLimit(accountId, accountType)
+          }
+
+          // 只有真实的 Claude Code 请求才更新 headers
+          if (
+            clientHeaders &&
+            Object.keys(clientHeaders).length > 0 &&
+            this.isRealClaudeCodeRequest(originalRequestBody, clientHeaders)
+          ) {
+            await claudeCodeHeadersService.storeAccountHeaders(accountId, clientHeaders)
+          }
+
+          // 在响应中添加accountId，以便调用方记录账户级别统计
+          response.accountId = accountId
+
+          if (attempt > 0) {
+            logger.info(
+              `✅ Account switch retry successful after ${attempt + 1} attempts - Key: ${apiKeyData.name}, Final Account: ${accountId}, Model: ${originalRequestBody.model}`
+            )
+          }
+
+          return response
+        }
+
+        // 其他错误情况，记录并准备重试或返回
+        lastResponse = response
+        if (attempt < maxRetries) {
+          logger.warn(
+            `⚠️ Retry attempt ${attempt + 1}: Request failed with status ${response.statusCode}, trying next account`
+          )
+          await new Promise((resolve) => setTimeout(resolve, 500))
+        }
+      } catch (error) {
+        logger.error(`❌ Retry attempt ${attempt + 1} failed with error:`, error.message)
+        lastError = error
+
+        if (attempt < maxRetries) {
+          await new Promise((resolve) => setTimeout(resolve, 500))
+        }
+      }
+    }
+
+    // 所有重试都失败了，返回最后的响应或抛出错误
+    if (lastResponse) {
+      logger.error(
+        `❌ All account switch retries failed after ${maxRetries + 1} attempts for API key: ${apiKeyData.name}. Final status: ${lastResponse.statusCode}`
+      )
+      return lastResponse
+    }
+
+    if (lastError) {
+      logger.error(
+        `❌ All account switch retries failed after ${maxRetries + 1} attempts for API key: ${apiKeyData.name} with error: ${lastError.message}`
+      )
+      throw lastError
+    }
+
+    // 理论上不应该到达这里
+    throw new Error(`All account switch retries failed for API key: ${apiKeyData.name}`)
+  }
+
+  // 🌊 执行带重试的流式请求
+  async _executeStreamRequestWithRetry(
+    requestBody,
+    apiKeyData,
+    responseStream,
+    clientHeaders,
+    usageCallback,
+    streamTransformer = null,
+    options = {},
+    maxRetries = 2
+  ) {
+    let lastError = null
+    let originalSessionHash = null
+
+    // 生成会话哈希用于sticky会话
+    const sessionHash = sessionHelper.generateSessionHash(requestBody)
+    originalSessionHash = sessionHash
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        logger.info(
+          `🌊 Stream request attempt ${attempt + 1}/${maxRetries + 1} for API key: ${apiKeyData.name}`
+        )
+
+        // 在重试时，需要重新选择账户（因为之前的账户已被标记为限流）
+        const currentSessionHash = attempt === 0 ? originalSessionHash : null // 首次尝试使用原session，重试时不使用
+
+        // 选择可用的Claude账户（支持专属绑定和sticky会话）
+        const accountSelection = await unifiedClaudeScheduler.selectAccountForApiKey(
+          apiKeyData,
+          currentSessionHash,
+          requestBody.model
+        )
+        const { accountId } = accountSelection
+        const { accountType } = accountSelection
+
+        logger.info(
+          `📡 Stream attempt ${attempt + 1}: Processing streaming API request for key: ${apiKeyData.name || apiKeyData.id}, account: ${accountId} (${accountType})${currentSessionHash ? `, session: ${currentSessionHash}` : ''}`
+        )
+
+        // 获取有效的访问token
+        const accessToken = await claudeAccountService.getValidAccessToken(accountId)
+
+        // 处理请求体（传递 clientHeaders 以判断是否需要设置 Claude Code 系统提示词）
+        const processedBody = this._processRequestBody(requestBody, clientHeaders)
+
+        // 获取代理配置
+        const proxyAgent = await this._getProxyAgent(accountId)
+
+        // 发送流式请求并捕获usage数据
+        await this._makeClaudeStreamRequestWithUsageCapture(
+          processedBody,
+          accessToken,
+          proxyAgent,
+          clientHeaders,
+          responseStream,
+          (usageData) => {
+            // 在usageCallback中添加accountId
+            usageCallback({ ...usageData, accountId })
+          },
+          accountId,
+          accountType,
+          currentSessionHash,
+          streamTransformer,
+          options
+        )
+
+        // 如果执行到这里，说明流式请求成功完成
+        if (attempt > 0) {
+          logger.info(
+            `✅ Stream account switch retry successful after ${attempt + 1} attempts - Key: ${apiKeyData.name}, Final Account: ${accountId}, Model: ${requestBody.model}`
+          )
+        }
+        return // 成功完成，退出重试循环
+      } catch (error) {
+        logger.error(`❌ Stream attempt ${attempt + 1} failed:`, error.message)
+
+        // 检查是否是可重试的错误（429限流或401未授权）
+        const isRetryableError =
+          error.message.includes('429') ||
+          error.message.includes('Rate limit') ||
+          error.message.includes('401') ||
+          error.message.includes('Unauthorized') ||
+          error.response?.statusCode === 429 ||
+          error.response?.statusCode === 401
+
+        if (isRetryableError && attempt < maxRetries) {
+          logger.warn(
+            `🔄 Stream retryable error detected, attempting account switch for attempt ${attempt + 2}`
+          )
+
+          // 短暂延迟后重试，避免过快重试
+          await new Promise((resolve) => setTimeout(resolve, 1000))
+          lastError = error
+          continue
+        } else {
+          // 不可重试的错误，或者已达到最大重试次数
+          if (attempt >= maxRetries) {
+            logger.error(
+              `❌ All stream attempts failed after ${maxRetries + 1} attempts for API key: ${apiKeyData.name}`
+            )
+          }
+          throw error
+        }
+      }
+    }
+
+    // 如果所有重试都失败了（理论上不应该到达这里，因为上面会抛出错误）
+    if (lastError) {
+      throw lastError
+    }
+
+    throw new Error(`All stream attempts failed for API key: ${apiKeyData.name}`)
+  }
+
+  // 🌊 流式请求账户切换重试逻辑（专用于429限流错误）
+  async _retryStreamWithAccountSwitch(
+    originalRequestBody,
+    apiKeyData,
+    responseStream,
+    clientHeaders,
+    usageCallback,
+    streamTransformer = null,
+    options = {},
+    maxRetries = 2
+  ) {
+    let lastError = null
+    let originalSessionHash = null
+
+    // 生成会话哈希用于sticky会话
+    const sessionHash = sessionHelper.generateSessionHash(originalRequestBody)
+    originalSessionHash = sessionHash
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      // 在重试时，需要重新选择账户（因为之前的账户已被标记为限流）
+      const currentSessionHash = attempt === 0 ? originalSessionHash : null // 首次尝试使用原session，重试时不使用
+
+      try {
+        logger.info(
+          `🌊 Stream account switch retry attempt ${attempt + 1}/${maxRetries + 1} for API key: ${apiKeyData.name}`
+        )
+
+        const accountSelection = await unifiedClaudeScheduler.selectAccountForApiKey(
+          apiKeyData,
+          currentSessionHash,
+          originalRequestBody.model
+        )
+        const { accountId } = accountSelection
+        const { accountType } = accountSelection
+
+        logger.info(
+          `🎯 Stream retry attempt ${attempt + 1}: Using account ${accountId} (${accountType}) for API key ${apiKeyData.name}`
+        )
+
+        // 获取有效的访问token
+        const accessToken = await claudeAccountService.getValidAccessToken(accountId)
+
+        // 处理请求体
+        const processedBody = this._processRequestBody(originalRequestBody, clientHeaders)
+
+        // 获取代理配置
+        const proxyAgent = await this._getProxyAgent(accountId)
+
+        // 创建一个 Promise 来处理流式请求
+        const streamPromise = new Promise((resolve, reject) => {
+          let hasError = false
+
+          // 发送流式请求
+          const req = this._makeStreamRequest(
+            processedBody,
+            accessToken,
+            proxyAgent,
+            clientHeaders,
+            options
+          )
+
+          req
+            .then((response) => {
+              response.on('data', (chunk) => {
+                try {
+                  if (hasError) {
+                    return
+                  }
+
+                  const chunkStr = chunk.toString()
+
+                  // 检查是否包含限流错误
+                  if (
+                    chunkStr.includes('"type":"error"') &&
+                    chunkStr.toLowerCase().includes("exceed your account's rate limit")
+                  ) {
+                    hasError = true
+                    logger.warn(
+                      `🚫 Stream retry attempt ${attempt + 1}: Rate limit detected in stream for account ${accountId}`
+                    )
+                    reject(new Error('Rate limit detected in stream'))
+                    return
+                  }
+
+                  // 转发数据到客户端（如果流还没有错误）
+                  if (!responseStream.destroyed && !hasError) {
+                    if (streamTransformer) {
+                      const transformed = streamTransformer(chunkStr)
+                      if (transformed) {
+                        responseStream.write(transformed)
+                      }
+                    } else {
+                      responseStream.write(chunkStr)
+                    }
+                  }
+                } catch (error) {
+                  logger.error('❌ Error processing stream chunk during retry:', error)
+                  hasError = true
+                  reject(error)
+                }
+              })
+
+              response.on('end', () => {
+                if (!hasError) {
+                  logger.info(`✅ Stream retry attempt ${attempt + 1} completed successfully`)
+
+                  // 如果请求成功，检查并移除限流状态
+                  unifiedClaudeScheduler
+                    .isAccountRateLimited(accountId, accountType)
+                    .then((isRateLimited) => {
+                      if (isRateLimited) {
+                        unifiedClaudeScheduler.removeAccountRateLimit(accountId, accountType)
+                      }
+                    })
+                    .catch((err) => logger.error('Error checking rate limit status:', err))
+
+                  // 只有真实的 Claude Code 请求才更新 headers
+                  if (
+                    clientHeaders &&
+                    Object.keys(clientHeaders).length > 0 &&
+                    this.isRealClaudeCodeRequest(originalRequestBody, clientHeaders)
+                  ) {
+                    claudeCodeHeadersService
+                      .storeAccountHeaders(accountId, clientHeaders)
+                      .catch((err) => {
+                        logger.error('Error storing Claude Code headers:', err)
+                      })
+                  }
+
+                  if (!responseStream.destroyed) {
+                    responseStream.end()
+                  }
+                  resolve({ accountId, success: true })
+                }
+              })
+
+              response.on('error', (error) => {
+                hasError = true
+                logger.error(`❌ Stream retry attempt ${attempt + 1} response error:`, error)
+                reject(error)
+              })
+            })
+            .catch((error) => {
+              hasError = true
+              logger.error(`❌ Stream retry attempt ${attempt + 1} request error:`, error)
+              reject(error)
+            })
+
+          // 处理客户端断开连接
+          responseStream.on('close', () => {
+            hasError = true
+            logger.debug('🔌 Client disconnected during stream retry')
+            reject(new Error('Client disconnected'))
+          })
+        })
+
+        // 等待流式请求完成
+        const result = await streamPromise
+
+        if (result.success) {
+          if (attempt > 0) {
+            logger.info(
+              `✅ Stream account switch retry successful after ${attempt + 1} attempts - Key: ${apiKeyData.name}, Final Account: ${result.accountId}, Model: ${originalRequestBody.model}`
+            )
+          }
+          return result
+        }
+      } catch (error) {
+        logger.error(`❌ Stream retry attempt ${attempt + 1} failed:`, error.message)
+
+        // 如果是限流错误，标记当前账户为限流状态
+        if (error.message.includes('Rate limit') || error.message.includes('429')) {
+          try {
+            const accountSelection = await unifiedClaudeScheduler.selectAccountForApiKey(
+              apiKeyData,
+              currentSessionHash,
+              originalRequestBody.model
+            )
+            await unifiedClaudeScheduler.markAccountRateLimited(
+              accountSelection.accountId,
+              accountSelection.accountType,
+              currentSessionHash
+            )
+          } catch (markError) {
+            logger.error('Error marking account as rate limited:', markError)
+          }
+        }
+
+        lastError = error
+
+        if (attempt < maxRetries) {
+          // 短暂延迟后重试，避免过快重试
+          await new Promise((resolve) => setTimeout(resolve, 1000))
+        }
+      }
+    }
+
+    // 所有重试都失败了
+    logger.error(
+      `❌ All stream account switch retries failed after ${maxRetries + 1} attempts for API key: ${apiKeyData.name}`
+    )
+
+    if (lastError) {
+      throw lastError
+    }
+
+    throw new Error(`All stream account switch retries failed for API key: ${apiKeyData.name}`)
+  }
+
+  // 🌊 辅助方法：创建流式请求
+  async _makeStreamRequest(body, accessToken, proxyAgent, clientHeaders, options = {}) {
+    const url = new URL(this.claudeApiUrl)
+
+    // 获取过滤后的客户端 headers
+    const filteredHeaders = this._filterClientHeaders(clientHeaders)
+
+    const requestOptions = {
+      hostname: url.hostname,
+      port: url.port || 443,
+      path: url.pathname,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+        'anthropic-version': this.apiVersion,
+        ...filteredHeaders
+      },
+      agent: proxyAgent,
+      timeout: config.proxy.timeout
+    }
+
+    // 如果客户端没有提供 User-Agent，使用默认值
+    if (!requestOptions.headers['User-Agent'] && !requestOptions.headers['user-agent']) {
+      requestOptions.headers['User-Agent'] = 'claude-cli/1.0.57 (external, cli)'
+    }
+
+    // 使用自定义的 betaHeader 或默认值
+    const betaHeader = options?.betaHeader !== undefined ? options.betaHeader : this.betaHeader
+    if (betaHeader) {
+      requestOptions.headers['anthropic-beta'] = betaHeader
+    }
+
+    return new Promise((resolve, reject) => {
+      const req = https.request(requestOptions, (res) => {
+        if (res.statusCode !== 200) {
+          logger.error(`❌ Stream request failed with status: ${res.statusCode}`)
+          reject(new Error(`Stream request failed with status: ${res.statusCode}`))
+          return
+        }
+
+        logger.debug(`🌊 Stream request successful, status: ${res.statusCode}`)
+        resolve(res)
+      })
+
+      req.on('error', (error) => {
+        logger.error('❌ Stream request error:', error)
+        reject(error)
+      })
+
+      req.on('timeout', () => {
+        req.destroy()
+        logger.error('❌ Stream request timeout')
+        reject(new Error('Stream request timeout'))
+      })
+
+      // 写入请求体
+      req.write(JSON.stringify(body))
+      req.end()
+    })
   }
 
   // 🔐 记录401未授权错误

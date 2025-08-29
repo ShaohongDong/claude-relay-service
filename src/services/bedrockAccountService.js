@@ -15,7 +15,7 @@ class BedrockAccountService {
 
     // 🚀 性能优化：缓存派生的加密密钥，避免每次重复计算
     this._encryptionKeyCache = null
-    this._cachedEncryptionKey = null  // 用于检测密钥变更
+    this._cachedEncryptionKey = null // 用于检测密钥变更
     this._cachedEncryptionSalt = null // 用于检测盐值变更
 
     // 🔄 解密结果缓存，提高解密性能
@@ -363,11 +363,15 @@ class BedrockAccountService {
     // 获取当前配置值
     const currentEncryptionKey = config.security.encryptionKey
     const currentEncryptionSalt = config.security.encryptionSalt
-    
+
     // 🔐 安全修复：检测密钥或盐值变更，自动失效缓存
-    if (this._encryptionKeyCache && this._cachedEncryptionKey !== null && this._cachedEncryptionSalt !== null &&
-        (this._cachedEncryptionKey !== currentEncryptionKey || 
-         this._cachedEncryptionSalt !== currentEncryptionSalt)) {
+    if (
+      this._encryptionKeyCache &&
+      this._cachedEncryptionKey !== null &&
+      this._cachedEncryptionSalt !== null &&
+      (this._cachedEncryptionKey !== currentEncryptionKey ||
+        this._cachedEncryptionSalt !== currentEncryptionSalt)
+    ) {
       logger.warn('🔑 Bedrock encryption key or salt changed, invalidating cache')
       this._encryptionKeyCache = null
       this._decryptCache.clear() // 清理解密缓存
@@ -379,19 +383,15 @@ class BedrockAccountService {
       if (!currentEncryptionSalt || currentEncryptionSalt === 'CHANGE-THIS-ENCRYPTION-SALT-NOW') {
         throw new Error('Encryption salt must be configured with a secure random value')
       }
-      
+
       // 🚨 安全修复：使用与 claudeAccountService 相同的强加密方式
       // 原来的 sha256 方式安全性较弱，改为 scrypt
-      this._encryptionKeyCache = crypto.scryptSync(
-        currentEncryptionKey,
-        currentEncryptionSalt,
-        32
-      )
-      
+      this._encryptionKeyCache = crypto.scryptSync(currentEncryptionKey, currentEncryptionSalt, 32)
+
       // 缓存当前配置值用于变更检测
       this._cachedEncryptionKey = currentEncryptionKey
       this._cachedEncryptionSalt = currentEncryptionSalt
-      
+
       logger.info('🔑 Bedrock encryption key derived and cached for performance optimization')
     }
     return this._encryptionKeyCache

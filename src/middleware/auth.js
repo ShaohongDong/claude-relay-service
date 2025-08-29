@@ -320,7 +320,7 @@ const authenticateApiKey = async (req, res, next) => {
       usage: validation.keyData.usage
     }
     req.usage = validation.keyData.usage
-    
+
     // 向后兼容：同时设置 apiKeyData 和 apiKeyId 供测试使用
     req.apiKeyData = validation.keyData
     req.apiKeyId = validation.keyData.id
@@ -331,7 +331,7 @@ const authenticateApiKey = async (req, res, next) => {
       `🔓 Authenticated request from key: ${validation.keyData.name} (${validation.keyData.id}) in ${authDuration}ms`
     )
     logger.api(`   User-Agent: "${userAgent}"`)
-    
+
     // 设置处理时间供测试验证
     req.authProcessingTime = authDuration
 
@@ -665,19 +665,23 @@ const errorHandler = (error, req, res, _next) => {
   }
 
   // 优先检查express JSON解析错误
-  if (error.type === 'entity.parse.failed' || 
-      error.status === 400 && error.body && error.message.includes('JSON')) {
+  if (
+    error.type === 'entity.parse.failed' ||
+    (error.status === 400 && error.body && error.message.includes('JSON'))
+  ) {
     statusCode = 400
     errorMessage = 'JSON Parse Error'
     userMessage = 'Invalid JSON format in request body'
   }
   // 检查其他JSON相关错误
-  else if ((error.name === 'SyntaxError' || error.constructor.name === 'SyntaxError') &&
-           (error.message.includes('JSON') || 
-            error.message.includes('Unexpected token') ||
-            error.message.includes('in JSON at position') ||
-            error.message.includes('Unexpected end of JSON input') ||
-            error.message.includes('Invalid JSON'))) {
+  else if (
+    (error.name === 'SyntaxError' || error.constructor.name === 'SyntaxError') &&
+    (error.message.includes('JSON') ||
+      error.message.includes('Unexpected token') ||
+      error.message.includes('in JSON at position') ||
+      error.message.includes('Unexpected end of JSON input') ||
+      error.message.includes('Invalid JSON'))
+  ) {
     statusCode = 400
     errorMessage = 'JSON Syntax Error'
     userMessage = 'Invalid JSON format in request body'
@@ -715,12 +719,15 @@ const errorHandler = (error, req, res, _next) => {
       break
     default:
       // 额外检查是否为JSON解析错误
-      if ((error.message && (error.message.includes('JSON at position') || 
-          error.message.includes('Unexpected token') ||
-          error.message.includes('Invalid JSON'))) ||
-          error.type === 'entity.parse.failed') {
+      if (
+        (error.message &&
+          (error.message.includes('JSON at position') ||
+            error.message.includes('Unexpected token') ||
+            error.message.includes('Invalid JSON'))) ||
+        error.type === 'entity.parse.failed'
+      ) {
         statusCode = 400
-        errorMessage = 'JSON Parse Error'  
+        errorMessage = 'JSON Parse Error'
         userMessage = 'Invalid JSON format in request body'
       } else if (error.message && !isDevelopment) {
         // 在生产环境中，只显示安全的错误消息
