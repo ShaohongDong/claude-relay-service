@@ -10,7 +10,6 @@
  * 4. 提供数据修复建议
  */
 
-const path = require('path')
 const crypto = require('crypto')
 
 // 设置环境
@@ -83,7 +82,7 @@ function checkKeyStrength() {
   const issues = []
 
   // 检查加密密钥强度
-  const encryptionKey = config.security.encryptionKey
+  const { encryptionKey } = config.security
   if (encryptionKey) {
     const entropy = calculateEntropy(encryptionKey)
     if (entropy < 4.0) {
@@ -94,7 +93,7 @@ function checkKeyStrength() {
     const hasLower = /[a-z]/.test(encryptionKey)
     const hasUpper = /[A-Z]/.test(encryptionKey)
     const hasDigit = /[0-9]/.test(encryptionKey)
-    const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(encryptionKey)
+    const hasSpecial = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(encryptionKey)
 
     const charTypes = [hasLower, hasUpper, hasDigit, hasSpecial].filter(Boolean).length
     if (charTypes < 3) {
@@ -117,13 +116,13 @@ function checkKeyStrength() {
  */
 function calculateEntropy(str) {
   const freq = {}
-  for (let char of str) {
+  for (const char of str) {
     freq[char] = (freq[char] || 0) + 1
   }
 
   let entropy = 0
   const len = str.length
-  for (let count of Object.values(freq)) {
+  for (const count of Object.values(freq)) {
     const p = count / len
     entropy -= p * Math.log2(p)
   }
@@ -213,7 +212,7 @@ function testEncryptionDecryption() {
   console.log('\n\x1b[36m[检查]\x1b[0m 加密解密功能测试')
 
   try {
-    const testData = 'test-sensitive-data-' + Date.now()
+    const testData = `test-sensitive-data-${Date.now()}`
 
     // 模拟CloudeAccountService的加密逻辑
     const algorithm = 'aes-256-cbc'
@@ -263,7 +262,7 @@ function testApiKeyHashing() {
   console.log('\n\x1b[36m[检查]\x1b[0m API Key哈希功能测试')
 
   try {
-    const testApiKey = 'cr_test_key_' + Date.now()
+    const testApiKey = `cr_test_key_${Date.now()}`
 
     // 模拟ApiKeyService的哈希逻辑
     const hash1 = crypto
