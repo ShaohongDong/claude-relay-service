@@ -696,7 +696,7 @@ start_service() {
     cd "$APP_DIR"
     
     # 检查是否已运行
-    if pgrep -f "node.*src/app.js" > /dev/null; then
+    if is_service_running; then
         print_warning "服务已在运行"
         return 0
     fi
@@ -726,7 +726,7 @@ start_service() {
     sleep 2
     
     # 验证服务是否成功启动
-    if pgrep -f "node.*src/app.js" > /dev/null; then
+    if is_service_running; then
         show_status
     else
         print_error "服务启动失败，请查看日志: $APP_DIR/logs/service.log"
@@ -735,6 +735,61 @@ start_service() {
             tail -n 20 "$APP_DIR/logs/service.log"
         fi
         return 1
+    fi
+}
+
+# 检查服务是否正在运行
+is_service_running() {
+    pgrep -f "node.*src/app.js" > /dev/null
+}
+
+# 等待进程完全停止
+wait_for_process_stop() {
+    local pid=$1
+    local timeout=${2:-15}  # 默认15秒超时
+    local count=0
+    
+    while [ $count -lt $timeout ]; do
+        if ! kill -0 $pid 2>/dev/null; then
+            return 0  # 进程已停止
+        fi
+        sleep 1
+        count=$((count + 1))
+        if [ $((count % 3)) -eq 0 ]; then
+            print_info "等待进程停止... ($count/${timeout}s)"
+        fi
+    done
+    return 1  # 超时
+}
+
+# 优雅关闭进程
+graceful_kill() {
+    local pid=$1
+    local timeout=${2:-15}
+    
+    if ! kill -0 $pid 2>/dev/null; then
+        return 0  # 进程已不存在
+    fi
+    
+    # 发送SIGTERM信号
+    print_info "发送停止信号给进程 $pid..."
+    kill -TERM $pid 2>/dev/null || return 1
+    
+    # 等待进程优雅关闭
+    if wait_for_process_stop $pid $timeout; then
+        print_success "进程已优雅停止"
+        return 0
+    else
+        print_warning "进程未在${timeout}秒内停止，强制关闭..."
+        kill -KILL $pid 2>/dev/null || return 1
+        sleep 1
+        if kill -0 $pid 2>/dev/null; then
+            print_error "无法强制停止进程 $pid"
+            return 1
+        else
+            print_success "进程已强制停止"
+            return 0
+        fi
     fi
 }
 
@@ -772,34 +827,145 @@ start_service_direct() {
 stop_service() {
     print_info "停止服务..."
     
-    # 尝试使用pm2停止
-    if command_exists pm2 && [ -n "$APP_DIR" ] && [ -d "$APP_DIR" ]; then
-        cd "$APP_DIR" 2>/dev/null
-        pm2 stop claude-relay 2>/dev/null || true
-        pm2 delete claude-relay 2>/dev/null || true
+    # 检查服务是否在运行
+    if ! is_service_running; then
+        print_success "服务未在运行"
+        return 0
     fi
     
-    # 使用PID文件停止
-    if [ -f "$APP_DIR/.pid" ]; then
-        local pid=$(cat "$APP_DIR/.pid")
-        if kill -0 $pid 2>/dev/null; then
-            kill $pid
-            rm -f "$APP_DIR/.pid"
+    local stop_success=false
+    local pids_to_kill=()
+    
+    # 1. 尝试使用pm2停止
+    if command_exists pm2 && [ -n "$APP_DIR" ] && [ -d "$APP_DIR" ]; then
+        cd "$APP_DIR" 2>/dev/null
+        if pm2 list 2>/dev/null | grep -q "claude-relay"; then
+            print_info "通过 pm2 停止服务..."
+            pm2 stop claude-relay 2>/dev/null || true
+            sleep 2
+            pm2 delete claude-relay 2>/dev/null || true
+            
+            # 检查是否成功停止
+            if ! is_service_running; then
+                stop_success=true
+            fi
         fi
     fi
     
-    # 强制停止所有相关进程
-    pkill -f "node.*src/app.js" 2>/dev/null || true
+    # 2. 如果pm2未能停止，使用PID文件
+    if [ "$stop_success" = false ] && [ -f "$APP_DIR/.pid" ]; then
+        local pid=$(cat "$APP_DIR/.pid")
+        if kill -0 $pid 2>/dev/null; then
+            pids_to_kill+=($pid)
+            print_info "从PID文件找到进程: $pid"
+        fi
+        rm -f "$APP_DIR/.pid"
+    fi
     
-    print_success "服务已停止"
+    # 3. 查找所有相关进程
+    if [ "$stop_success" = false ]; then
+        local running_pids=$(pgrep -f "node.*src/app.js" | tr '\n' ' ')
+        if [ -n "$running_pids" ]; then
+            for pid in $running_pids; do
+                if [ -n "$pid" ]; then
+                    pids_to_kill+=($pid)
+                fi
+            done
+            print_info "找到运行中的进程: $running_pids"
+        fi
+    fi
+    
+    # 4. 优雅停止找到的进程
+    if [ ${#pids_to_kill[@]} -gt 0 ]; then
+        for pid in "${pids_to_kill[@]}"; do
+            if kill -0 $pid 2>/dev/null; then
+                print_info "优雅停止进程 $pid..."
+                if graceful_kill $pid 15; then
+                    stop_success=true
+                else
+                    print_warning "无法优雅停止进程 $pid"
+                fi
+            fi
+        done
+    fi
+    
+    # 5. 最终检查和强制清理
+    if is_service_running; then
+        print_warning "仍有进程运行，执行最终清理..."
+        pkill -KILL -f "node.*src/app.js" 2>/dev/null || true
+        sleep 2
+        
+        if is_service_running; then
+            print_error "无法完全停止服务，可能有进程卡住"
+            return 1
+        else
+            print_success "服务已强制停止"
+            stop_success=true
+        fi
+    fi
+    
+    if [ "$stop_success" = true ]; then
+        print_success "服务已完全停止"
+        return 0
+    else
+        print_error "服务停止失败"
+        return 1
+    fi
 }
 
 # 重启服务
 restart_service() {
     print_info "重启服务..."
-    stop_service
+    
+    # 记录重启开始时间
+    local restart_start=$(date +%s)
+    
+    # 停止服务
+    if ! stop_service; then
+        print_error "停止服务失败，无法继续重启"
+        return 1
+    fi
+    
+    # 确保服务完全停止
+    print_info "验证服务已完全停止..."
+    local wait_count=0
+    while is_service_running && [ $wait_count -lt 10 ]; do
+        print_info "等待服务完全停止... ($((wait_count + 1))/10)"
+        sleep 1
+        wait_count=$((wait_count + 1))
+    done
+    
+    if is_service_running; then
+        print_error "服务未能完全停止，重启失败"
+        return 1
+    fi
+    
+    # 清理可能残留的PID文件和PM2进程
+    [ -f "$APP_DIR/.pid" ] && rm -f "$APP_DIR/.pid"
+    if command_exists pm2; then
+        pm2 delete claude-relay 2>/dev/null || true
+    fi
+    
+    print_success "服务已确认完全停止"
+    
+    # 等待一小段时间确保端口释放
+    print_info "等待端口释放..."
     sleep 2
-    start_service
+    
+    # 启动服务
+    print_info "启动服务..."
+    if start_service; then
+        local restart_end=$(date +%s)
+        local restart_time=$((restart_end - restart_start))
+        print_success "服务重启完成！耗时: ${restart_time}秒"
+        
+        # 显示重启后的状态
+        sleep 2
+        show_status
+    else
+        print_error "服务启动失败"
+        return 1
+    fi
 }
 
 # 更新模型价格
