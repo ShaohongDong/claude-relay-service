@@ -1424,20 +1424,21 @@ const getClaudeAccountType = (account) => {
           ? JSON.parse(account.subscriptionInfo)
           : account.subscriptionInfo
 
-      // 添加调试日志
-      console.log('Account subscription info:', {
-        accountName: account.name,
-        subscriptionInfo: info,
-        hasClaudeMax_camel: info.hasClaudeMax,
-        hasClaudePro_camel: info.hasClaudePro,
-        has_claude_max_snake: info.has_claude_max,
-        has_claude_pro_snake: info.has_claude_pro
-      })
+      // 优先检查 accountType 字段（前端手动设置时使用）
+      if (info.accountType) {
+        if (info.accountType === 'claude_max') {
+          return 'Claude Max'
+        } else if (info.accountType === 'claude_pro') {
+          return 'Claude Pro'
+        } else if (info.accountType === 'claude_free' || info.accountType === 'free') {
+          return 'Claude Free'
+        }
+      }
 
-      // 根据 has_claude_max 和 has_claude_pro 判断
-      // 同时支持 camelCase 和 snake_case 字段名
+      // 兼容后端 Profile API 返回的格式（snake_case）
       const hasClaudeMax = info.hasClaudeMax === true || info.has_claude_max === true
       const hasClaudePro = info.hasClaudePro === true || info.has_claude_pro === true
+
       if (hasClaudeMax) {
         return 'Claude Max'
       } else if (hasClaudePro) {
@@ -1453,7 +1454,6 @@ const getClaudeAccountType = (account) => {
   }
 
   // 没有订阅信息，保持原有显示
-  console.log('No subscription info for account:', account.name)
   return 'Claude'
 }
 
