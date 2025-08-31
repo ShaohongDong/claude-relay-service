@@ -38,6 +38,7 @@ class Application {
   constructor() {
     this.app = express()
     this.server = null
+    this.cleanupInterval = null // 保存清理任务定时器
   }
 
   async initialize() {
@@ -544,7 +545,7 @@ class Application {
 
   startCleanupTasks() {
     // 🧹 每小时清理一次过期数据
-    setInterval(async () => {
+    this.cleanupInterval = setInterval(async () => {
       try {
         logger.info('🧹 Starting scheduled cleanup...')
 
@@ -575,6 +576,12 @@ class Application {
   setupGracefulShutdown() {
     const shutdown = async (signal) => {
       logger.info(`🛑 Received ${signal}, starting graceful shutdown...`)
+
+      // 清理定时器（防止阻塞进程退出）
+      if (this.cleanupInterval) {
+        clearInterval(this.cleanupInterval)
+        logger.info('🧹 Cleanup interval cleared')
+      }
 
       if (this.server) {
         this.server.close(async () => {
