@@ -37,6 +37,8 @@ describe('ApiKeyService 验证流程测试', () => {
     concurrencyLimit: '5',
     rateLimitWindow: '60',
     rateLimitRequests: '100',
+    rateLimitCost: '2.50',
+    weeklyOpusCostLimit: '25.00',
     enableModelRestriction: 'true',
     restrictedModels: '["claude-3-opus", "claude-3-sonnet"]',
     enableClientRestriction: 'true',
@@ -68,16 +70,19 @@ describe('ApiKeyService 验证流程测试', () => {
     mockRedis = {
       findApiKeyByHash: jest.fn(),
       getUsageStats: jest.fn(),
-      getDailyCost: jest.fn()
+      getDailyCost: jest.fn(),
+      getWeeklyOpusCost: jest.fn()
     }
     
     redis.findApiKeyByHash = mockRedis.findApiKeyByHash
     redis.getUsageStats = mockRedis.getUsageStats
     redis.getDailyCost = mockRedis.getDailyCost
+    redis.getWeeklyOpusCost = mockRedis.getWeeklyOpusCost
     
     // 设置默认 mock 返回值
     mockRedis.getUsageStats.mockResolvedValue(mockUsageStats)
     mockRedis.getDailyCost.mockResolvedValue(mockDailyCost)
+    mockRedis.getWeeklyOpusCost.mockResolvedValue(15.75)
     
     // Mock 环境变量
     process.env.API_KEY_PREFIX = 'cr_'
@@ -124,12 +129,15 @@ describe('ApiKeyService 验证流程测试', () => {
           concurrencyLimit: 5,
           rateLimitWindow: 60,
           rateLimitRequests: 100,
+          rateLimitCost: 2.50,
           enableModelRestriction: true,
           restrictedModels: ['claude-3-opus', 'claude-3-sonnet'],
           enableClientRestriction: true,
           allowedClients: ['claude_code', 'gemini_cli'],
           dailyCostLimit: 10.50,
+          weeklyOpusCostLimit: 25.00,
           dailyCost: 5.25,
+          weeklyOpusCost: 15.75,
           tags: ['production', 'priority'],
           usage: mockUsageStats
         }
@@ -138,6 +146,7 @@ describe('ApiKeyService 验证流程测试', () => {
       expect(mockRedis.findApiKeyByHash).toHaveBeenCalledTimes(1)
       expect(mockRedis.getUsageStats).toHaveBeenCalledWith(testKeyId)
       expect(mockRedis.getDailyCost).toHaveBeenCalledWith(testKeyId)
+      expect(mockRedis.getWeeklyOpusCost).toHaveBeenCalledWith(testKeyId)
     })
 
     test('应该正确处理无效格式的API Key', async () => {
