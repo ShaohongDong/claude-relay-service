@@ -15,7 +15,11 @@ const config = {
     jwtSecret: process.env.JWT_SECRET || 'CHANGE-THIS-JWT-SECRET-IN-PRODUCTION',
     adminSessionTimeout: parseInt(process.env.ADMIN_SESSION_TIMEOUT) || 86400000, // 24小时
     apiKeyPrefix: process.env.API_KEY_PREFIX || 'cr_',
-    encryptionKey: process.env.ENCRYPTION_KEY || 'CHANGE-THIS-32-CHARACTER-KEY-NOW'
+    encryptionKey: process.env.ENCRYPTION_KEY || 'CHANGE-THIS-32-CHARACTER-KEY-NOW',
+    // 数据加密专用盐值，必须配置为随机值
+    encryptionSalt: process.env.ENCRYPTION_SALT || 'CHANGE-THIS-ENCRYPTION-SALT-32CH',
+    // API Key哈希专用盐值，独立于数据加密密钥
+    apiKeySalt: process.env.API_KEY_SALT || 'CHANGE-THIS-API-KEY-SALT-32CHAR_'
   },
 
   // 📊 Redis配置

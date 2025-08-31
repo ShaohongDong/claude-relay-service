@@ -209,11 +209,12 @@ npm run setup  # 自动生成密钥并创建管理员账户
 
 ### 重要架构决策
 
-- 所有敏感数据（OAuth token、refreshToken）都使用 AES 加密存储在 Redis
+- 所有敏感数据（OAuth token、refreshToken）都使用 AES-256-CBC 加密存储在 Redis
 - 每个 Claude 账户支持独立的代理配置，包括 SOCKS5 和 HTTP 代理
-- API Key 使用哈希存储，支持 `cr_` 前缀格式
+- **API Key 哈希已优化**：使用独立的 API_KEY_SALT，与数据加密解耦
 - 请求流程：API Key 验证 → 账户选择 → Token 刷新（如需）→ 请求转发
 - 支持流式和非流式响应，客户端断开时自动清理资源
+- **数据完整性保障**：智能密钥验证、会话窗口数据持久化、完整性检查工具
 
 ### 核心数据流和性能优化
 
@@ -225,8 +226,10 @@ npm run setup  # 自动生成密钥并创建管理员账户
 
 ### 安全和容错机制
 
-- **多层加密**: API Key 哈希 + OAuth Token AES 加密
+- **多层加密**: API Key 哈希 + OAuth Token AES 加密 + 独立盐值管理
 - **零信任验证**: 每个请求都需要完整的认证链
+- **数据持久化保障**: 会话窗口信息自动保存，防止服务重启数据丢失
+- **完整性检查工具**: `scripts/data-integrity-check.js` 验证系统数据完整性
 - **优雅降级**: Redis 连接失败时的回退机制
 - **自动重试**: 指数退避重试策略和错误隔离
 - **资源清理**: 客户端断开时的自动清理机制
@@ -265,6 +268,9 @@ npm run cli accounts refresh <accountId>
 # 管理员操作
 npm run cli admin create -- --username admin2
 npm run cli admin reset-password -- --username admin
+
+# 数据完整性检查
+node scripts/data-integrity-check.js     # 检查系统数据完整性和安全配置
 ```
 
 # important-instruction-reminders

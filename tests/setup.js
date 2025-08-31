@@ -6,11 +6,14 @@
 // 设置测试环境变量
 process.env.NODE_ENV = 'test'
 process.env.API_KEY_PREFIX = 'cr_'
-process.env.ENCRYPTION_KEY = 'test-encryption-key-1234567890123456'
+process.env.ENCRYPTION_KEY = 'test-encryption-key-123456789012'
 process.env.JWT_SECRET = 'test-jwt-secret-key-for-testing-only'
 process.env.REDIS_HOST = 'localhost'
 process.env.REDIS_PORT = '6379'
 process.env.LOG_LEVEL = 'error'
+// 新增安全配置变量
+process.env.ENCRYPTION_SALT = 'test-encryption-salt-for-testing'
+process.env.API_KEY_SALT = 'test-api-key-salt-for-testing-32char'
 
 // 全局测试超时
 jest.setTimeout(30000)

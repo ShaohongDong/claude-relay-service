@@ -711,7 +711,7 @@ class ApiKeyService {
   _hashApiKey(apiKey) {
     return crypto
       .createHash('sha256')
-      .update(apiKey + config.security.encryptionKey)
+      .update(apiKey + config.security.apiKeySalt)
       .digest('hex')
   }
 

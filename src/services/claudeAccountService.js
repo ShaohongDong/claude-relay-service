@@ -23,7 +23,6 @@ class ClaudeAccountService {
 
     // 加密相关常量
     this.ENCRYPTION_ALGORITHM = 'aes-256-cbc'
-    this.ENCRYPTION_SALT = 'salt'
 
     // 🚀 性能优化：缓存派生的加密密钥，避免每次重复计算
     // scryptSync 是 CPU 密集型操作，缓存可以减少 95%+ 的 CPU 占用
@@ -970,7 +969,7 @@ class ClaudeAccountService {
       // 由于输入参数固定，派生结果永远相同，不影响数据兼容性
       this._encryptionKeyCache = crypto.scryptSync(
         config.security.encryptionKey,
-        this.ENCRYPTION_SALT,
+        config.security.encryptionSalt,
         32
       )
       logger.info('🔑 Encryption key derived and cached for performance optimization')
@@ -1249,6 +1248,8 @@ class ClaudeAccountService {
         // 如果当前时间在窗口内，只更新最后请求时间
         if (currentTime < windowEnd) {
           accountData.lastRequestTime = now.toISOString()
+          // 保存更新后的数据到Redis
+          await redis.setClaudeAccount(accountId, accountData)
           return accountData
         }
 
@@ -1267,6 +1268,9 @@ class ClaudeAccountService {
       accountData.sessionWindowStart = windowStart.toISOString()
       accountData.sessionWindowEnd = windowEnd.toISOString()
       accountData.lastRequestTime = now.toISOString()
+
+      // 保存更新后的数据到Redis
+      await redis.setClaudeAccount(accountId, accountData)
 
       logger.info(
         `🕐 Created new session window for account ${accountData.name} (${accountId}): ${windowStart.toISOString()} - ${windowEnd.toISOString()} (from current time)`

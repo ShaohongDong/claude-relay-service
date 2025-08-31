@@ -22,7 +22,7 @@ describe('ApiKeyService 缓存功能测试', () => {
   // 测试数据
   const testApiKey = 'cr_1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
   const testKeyId = 'test-key-id-123'
-  const testHashedKey = crypto.createHash('sha256').update(testApiKey + 'test-encryption-key-1234567890123456').digest('hex')
+  const testHashedKey = crypto.createHash('sha256').update(testApiKey + 'test-api-key-salt-for-testing-32char').digest('hex')
   
   const mockKeyData = {
     id: testKeyId,

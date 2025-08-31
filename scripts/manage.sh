@@ -398,6 +398,29 @@ install_service() {
         if [[ ! "$reinstall" =~ ^[Yy]$ ]]; then
             return 0
         fi
+        
+        # 重新安装时，清理可能存在问题的依赖和配置
+        print_info "清理现有安装以确保重新安装成功..."
+        
+        # 停止现有服务
+        if pgrep -f "node.*src/app.js" > /dev/null; then
+            print_info "停止现有服务..."
+            stop_service
+        fi
+        
+        # 清理可能存在问题的node_modules
+        if [ -d "$APP_DIR/node_modules" ]; then
+            print_info "清理主项目依赖..."
+            rm -rf "$APP_DIR/node_modules"
+        fi
+        
+        # 清理前端依赖在build_frontend_locally函数中处理
+        
+        # 备份现有配置
+        if [ -f "$APP_DIR/.env" ]; then
+            cp "$APP_DIR/.env" "$APP_DIR/.env.backup"
+            print_info "已备份现有配置为 .env.backup"
+        fi
     fi
     
     # 本地部署模式：直接在当前项目目录配置服务
@@ -424,8 +447,23 @@ install_service() {
         cp config/config.example.js config/config.js
     fi
     
-    # 创建.env文件
-    cat > .env << EOF
+    # 处理.env文件（重新安装时保留用户配置）
+    local create_new_env=true
+    if [ -f ".env.backup" ]; then
+        echo -n "检测到备份的配置文件，是否使用备份配置？(Y/n): "
+        read -n 1 use_backup
+        echo
+        if [[ ! "$use_backup" =~ ^[Nn]$ ]]; then
+            cp ".env.backup" ".env"
+            print_success "已恢复备份的配置文件"
+            create_new_env=false
+        fi
+    fi
+    
+    # 创建新的.env文件
+    if [ "$create_new_env" = true ]; then
+        print_info "创建新的环境配置文件..."
+        cat > .env << EOF
 # 环境变量配置
 NODE_ENV=production
 PORT=$APP_PORT
@@ -435,6 +473,8 @@ JWT_SECRET=$(generate_random_string 64)
 
 # 加密配置
 ENCRYPTION_KEY=$(generate_random_string 32)
+ENCRYPTION_SALT=$(generate_random_string 32)
+API_KEY_SALT=$(generate_random_string 32)
 
 # Redis配置
 REDIS_HOST=$REDIS_HOST
@@ -444,6 +484,7 @@ REDIS_PASSWORD=$REDIS_PASSWORD
 # 日志配置
 LOG_LEVEL=info
 EOF
+    fi
     
     # 运行setup命令
     print_info "运行初始化设置..."
@@ -807,19 +848,46 @@ build_frontend_locally() {
         rm -rf web/admin-spa/dist
     fi
     
-    # 在子shell中执行构建，确保环境一致
+    # 清理可能存在问题的node_modules（重复安装时）
+    if [ -d "web/admin-spa/node_modules" ]; then
+        print_info "检测到现有前端依赖，清理以确保构建成功..."
+        rm -rf web/admin-spa/node_modules
+    fi
+    
+    # 保存当前目录
+    local original_dir=$(pwd)
+    
+    # 在同一shell环境中执行构建，确保PATH正确继承
     print_info "安装前端依赖并构建..."
-    if (cd web/admin-spa && npm install --silent && NODE_ENV=production npm run build 2>/dev/null); then
-        # 验证构建结果
-        if [ -d "web/admin-spa/dist" ] && [ -f "web/admin-spa/dist/index.html" ]; then
-            print_success "前端本地构建完成"
-            return 0
-        else
-            print_error "构建完成但未找到预期的输出文件"
-            return 1
-        fi
-    else
+    cd web/admin-spa || {
+        print_error "无法进入前端目录"
+        return 1
+    }
+    
+    # 安装依赖，包括开发依赖（构建需要）
+    print_info "安装前端依赖（包括构建工具）..."
+    if ! npm install --include=dev; then
+        cd "$original_dir"
+        print_error "前端依赖安装失败"
+        return 1
+    fi
+    
+    # 构建项目，显示错误信息
+    print_info "构建前端项目..."
+    if ! NODE_ENV=production npm run build; then
+        cd "$original_dir"
         print_error "前端构建失败"
+        return 1
+    fi
+    
+    # 验证构建结果
+    if [ -d "dist" ] && [ -f "dist/index.html" ]; then
+        cd "$original_dir"
+        print_success "前端本地构建完成"
+        return 0
+    else
+        cd "$original_dir"
+        print_error "构建完成但未找到预期的输出文件"
         return 1
     fi
 }
