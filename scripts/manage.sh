@@ -13,7 +13,6 @@ BOLD='\033[1m'
 NC='\033[0m' # No Color
 
 # 默认配置
-DEFAULT_INSTALL_DIR="$HOME/crs"
 DEFAULT_REDIS_HOST="localhost"
 DEFAULT_REDIS_PORT="6379"
 DEFAULT_REDIS_PASSWORD=""
@@ -366,28 +365,13 @@ check_installation() {
 install_service() {
     print_info "开始安装 Claude Relay Service..."
     
-    # 获取当前项目目录
+    # 获取当前项目目录，直接使用本地部署模式
     local current_dir=$(pwd)
+    INSTALL_DIR="$current_dir"
+    APP_DIR="$current_dir"
     
-    # 询问安装目录，默认为当前目录（本地部署）
-    echo -e "\n${YELLOW}安装模式选择：${NC}"
-    echo "1) 本地部署 (在当前项目目录: $current_dir)"
-    echo "2) 复制部署 (复制到其他目录)"
-    echo -n "请选择安装模式 [1-2] (默认: 1): "
-    read mode_choice
-    mode_choice=${mode_choice:-1}
-    
-    if [ "$mode_choice" = "1" ]; then
-        INSTALL_DIR="$current_dir"
-        APP_DIR="$current_dir"
-        print_info "选择本地部署模式，使用当前目录: $current_dir"
-    else
-        echo -n "安装目录 (默认: $DEFAULT_INSTALL_DIR): "
-        read input
-        INSTALL_DIR=${input:-$DEFAULT_INSTALL_DIR}
-        APP_DIR="$INSTALL_DIR/app"
-        print_info "选择复制部署模式，目标目录: $INSTALL_DIR"
-    fi
+    print_info "本地部署模式：在当前项目目录进行安装配置"
+    print_info "项目目录: $current_dir"
     
     # 询问服务端口
     echo -n "服务端口 (默认: $DEFAULT_APP_PORT): "
@@ -416,28 +400,8 @@ install_service() {
         fi
     fi
     
-    # 创建安装目录
-    mkdir -p "$INSTALL_DIR"
-    
-    # 处理项目文件部署
-    if [ "$(realpath "$INSTALL_DIR")" != "$(realpath "$current_dir")" ]; then
-        print_info "复制项目文件到安装目录..."
-        if [ -d "$APP_DIR" ]; then
-            rm -rf "$APP_DIR"
-        fi
-        
-        # 复制项目文件，排除不必要的文件
-        rsync -av --exclude='.git' --exclude='node_modules' --exclude='logs' --exclude='.env' \
-              "$current_dir/" "$APP_DIR/" || {
-            # 如果没有 rsync，使用 cp
-            cp -r "$current_dir" "$INSTALL_DIR/app" && \
-            rm -rf "$APP_DIR/.git" "$APP_DIR/node_modules" "$APP_DIR/logs" "$APP_DIR/.env" 2>/dev/null
-        }
-        
-        print_success "项目文件复制完成"
-    else
-        print_info "本地部署模式：直接在当前项目目录配置服务"
-    fi
+    # 本地部署模式：直接在当前项目目录配置服务
+    print_info "本地部署：直接配置当前项目目录"
     
     # 进入项目目录
     cd "$APP_DIR"
@@ -514,13 +478,8 @@ EOF
     
     echo -e "\n${GREEN}Claude Relay Service 已成功安装并启动！${NC}"
     echo -e "\n${YELLOW}部署信息：${NC}"
-    if [ "$INSTALL_DIR" = "$current_dir" ]; then
-        echo -e "  部署模式: ${GREEN}本地部署${NC}"
-        echo -e "  项目目录: $INSTALL_DIR"
-    else
-        echo -e "  部署模式: ${GREEN}复制部署${NC}"
-        echo -e "  安装目录: $INSTALL_DIR"
-    fi
+    echo -e "  部署模式: ${GREEN}本地部署${NC}"
+    echo -e "  项目目录: $INSTALL_DIR"
     
     echo -e "\n${YELLOW}访问地址：${NC}"
     echo -e "  本地 Web: ${GREEN}http://localhost:$APP_PORT/web${NC}"
@@ -608,43 +567,25 @@ update_service() {
 
 # 卸载服务
 uninstall_service() {
+    # 本地部署模式：使用当前目录
     if [ -z "$INSTALL_DIR" ]; then
-        echo -n "请输入安装目录 (默认: $DEFAULT_INSTALL_DIR): "
-        read input
-        INSTALL_DIR=${input:-$DEFAULT_INSTALL_DIR}
-        APP_DIR="$INSTALL_DIR/app"
+        INSTALL_DIR=$(pwd)
+        APP_DIR="$INSTALL_DIR"
     fi
     
-    if [ ! -d "$INSTALL_DIR" ]; then
-        print_error "安装目录不存在"
+    if [ ! -f "$INSTALL_DIR/package.json" ] || [ ! -f "$INSTALL_DIR/src/app.js" ]; then
+        print_error "当前目录不是有效的 Claude Relay Service 项目目录"
         return 1
     fi
     
-    # 检测部署模式
-    local current_dir=$(pwd)
-    local is_local_deploy=false
-    
-    # 判断是否为本地部署模式
-    if [ "$(realpath "$INSTALL_DIR" 2>/dev/null)" = "$(realpath "$current_dir" 2>/dev/null)" ] ||
-       [ -f "$INSTALL_DIR/package.json" ] && [ -f "$INSTALL_DIR/src/app.js" ] && [ -d "$INSTALL_DIR/.git" ]; then
-        is_local_deploy=true
-    fi
-    
-    print_warning "即将卸载 Claude Relay Service"
-    
-    if [ "$is_local_deploy" = true ]; then
-        echo -e "${RED}警告: 检测到本地部署模式！${NC}"
-        echo -e "当前卸载${RED}不会删除${NC}项目源码目录，只会清理："
-        echo "  - 服务配置文件 (.env)"
-        echo "  - 运行时日志 (logs/)"
-        echo "  - node_modules/ (可选)"
-        echo "  - 前端构建文件 (web/admin-spa/dist/)"
-        echo ""
-        echo -n "确定要清理这些文件吗？(y/N): "
-    else
-        echo -e "${YELLOW}复制部署模式${NC}: 将删除整个安装目录: $INSTALL_DIR"
-        echo -n "确定要完全卸载吗？(y/N): "
-    fi
+    print_warning "即将卸载 Claude Relay Service (本地部署)"
+    echo -e "${RED}注意: 本地部署卸载${RED}不会删除${NC}项目源码，只会清理："
+    echo "  - 服务配置文件 (.env)"
+    echo "  - 运行时日志 (logs/)"
+    echo "  - node_modules/ (可选)"
+    echo "  - 前端构建文件 (web/admin-spa/dist/)"
+    echo ""
+    echo -n "确定要清理这些文件吗？(y/N): "
     
     read -n 1 confirm
     echo
@@ -676,39 +617,30 @@ uninstall_service() {
         print_success "配置文件已备份到: $backup_dir"
     fi
     
-    # 根据部署模式进行不同的清理
-    if [ "$is_local_deploy" = true ]; then
-        # 本地部署模式：只清理生成的文件，保留源码
-        print_info "清理本地部署的配置和临时文件..."
-        
-        # 清理配置文件
-        [ -f "$APP_DIR/.env" ] && rm -f "$APP_DIR/.env"
-        [ -f "$APP_DIR/.pid" ] && rm -f "$APP_DIR/.pid"
-        
-        # 清理日志目录
-        [ -d "$APP_DIR/logs" ] && rm -rf "$APP_DIR/logs"
-        
-        # 清理前端构建文件
-        [ -d "$APP_DIR/web/admin-spa/dist" ] && rm -rf "$APP_DIR/web/admin-spa/dist"
-        
-        # 询问是否清理 node_modules
-        echo -n "是否清理 node_modules 目录？(y/N): "
-        read -n 1 clean_node_modules
-        echo
-        if [[ "$clean_node_modules" =~ ^[Yy]$ ]]; then
-            [ -d "$APP_DIR/node_modules" ] && rm -rf "$APP_DIR/node_modules"
-            [ -d "$APP_DIR/web/admin-spa/node_modules" ] && rm -rf "$APP_DIR/web/admin-spa/node_modules"
-            print_info "已清理 node_modules 目录"
-        fi
-        
-        print_success "本地部署清理完成！项目源码已保留。"
-        
-    else
-        # 复制部署模式：删除整个安装目录
-        print_info "删除复制部署的安装目录..."
-        rm -rf "$INSTALL_DIR"
-        print_success "复制部署卸载完成！"
+    # 本地部署模式：只清理生成的文件，保留源码
+    print_info "清理本地部署的配置和临时文件..."
+    
+    # 清理配置文件
+    [ -f "$APP_DIR/.env" ] && rm -f "$APP_DIR/.env"
+    [ -f "$APP_DIR/.pid" ] && rm -f "$APP_DIR/.pid"
+    
+    # 清理日志目录
+    [ -d "$APP_DIR/logs" ] && rm -rf "$APP_DIR/logs"
+    
+    # 清理前端构建文件
+    [ -d "$APP_DIR/web/admin-spa/dist" ] && rm -rf "$APP_DIR/web/admin-spa/dist"
+    
+    # 询问是否清理 node_modules
+    echo -n "是否清理 node_modules 目录？(y/N): "
+    read -n 1 clean_node_modules
+    echo
+    if [[ "$clean_node_modules" =~ ^[Yy]$ ]]; then
+        [ -d "$APP_DIR/node_modules" ] && rm -rf "$APP_DIR/node_modules"
+        [ -d "$APP_DIR/web/admin-spa/node_modules" ] && rm -rf "$APP_DIR/web/admin-spa/node_modules"
+        print_info "已清理 node_modules 目录"
     fi
+    
+    print_success "本地部署清理完成！项目源码已保留。"
 }
 
 # 启动服务
@@ -1217,13 +1149,13 @@ show_help() {
     echo "用法: $0 [命令]"
     echo ""
     echo "说明:"
-    echo "  本脚本支持本地部署模式，无需网络连接即可完成安装"
-    echo "  推荐在项目源码目录中运行此脚本进行本地部署"
+    echo "  本脚本采用本地部署模式，无需网络连接即可完成安装"
+    echo "  直接在当前项目源码目录中进行服务配置和运行"
     echo ""
     echo "命令:"
-    echo "  install        - 安装服务 (支持本地/复制两种部署模式)"
+    echo "  install        - 在当前目录安装并配置服务"
     echo "  update         - 更新服务 (本地重新构建)"
-    echo "  uninstall      - 卸载服务"
+    echo "  uninstall      - 清理服务配置 (保留源码)"
     echo "  start          - 启动服务"
     echo "  stop           - 停止服务"
     echo "  restart        - 重启服务"
@@ -1232,9 +1164,10 @@ show_help() {
     echo "  update-pricing - 更新模型价格数据"
     echo "  help           - 显示帮助"
     echo ""
-    echo "安装模式:"
-    echo "  1) 本地部署 - 直接在当前项目目录配置和运行服务"
-    echo "  2) 复制部署 - 复制项目到指定目录 (默认: ~/crs)"
+    echo "特点:"
+    echo "  • 本地部署 - 直接在项目目录配置和运行"
+    echo "  • 离线安装 - 无需网络连接和远程代码下载"
+    echo "  • 源码保护 - 卸载时只清理配置文件，保留项目源码"
     echo ""
 }
 
