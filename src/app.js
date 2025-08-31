@@ -390,6 +390,27 @@ class Application {
     }
   }
 
+  // 🔍 端口可用性检查
+  async checkPortAvailability(port, host = '0.0.0.0') {
+    return new Promise((resolve) => {
+      const net = require('net')
+      const server = net.createServer()
+
+      server.listen(port, host, () => {
+        server.once('close', () => resolve(true))
+        server.close()
+      })
+
+      server.on('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+          resolve(false)
+        } else {
+          resolve(false)
+        }
+      })
+    })
+  }
+
   // 🔍 Redis健康检查
   async checkRedisHealth() {
     try {
@@ -431,6 +452,16 @@ class Application {
     try {
       await this.initialize()
 
+      // 🔍 检查端口可用性
+      const isPortAvailable = await this.checkPortAvailability(config.server.port, config.server.host)
+      if (!isPortAvailable) {
+        logger.error(`❌ Port ${config.server.port} is already in use on ${config.server.host}`)
+        logger.error('💡 Try stopping the existing service: npm run service stop')
+        logger.error('💡 Or check running processes: lsof -i :' + config.server.port)
+        process.exit(1)
+      }
+
+      // 🚀 启动服务器
       this.server = this.app.listen(config.server.port, config.server.host, () => {
         logger.start(
           `🚀 Claude Relay Service started on ${config.server.host}:${config.server.port}`
@@ -444,6 +475,21 @@ class Application {
         logger.info(`⚙️  Admin API: http://${config.server.host}:${config.server.port}/admin`)
         logger.info(`🏥 Health check: http://${config.server.host}:${config.server.port}/health`)
         logger.info(`📊 Metrics: http://${config.server.host}:${config.server.port}/metrics`)
+      })
+
+      // 🚨 处理服务器错误
+      this.server.on('error', (error) => {
+        if (error.code === 'EADDRINUSE') {
+          logger.error(`❌ Port ${config.server.port} is already in use on ${config.server.host}`)
+          logger.error('💡 Another instance may already be running. Check with: npm run service status')
+          logger.error('💡 Or stop existing service with: npm run service stop')
+        } else if (error.code === 'EACCES') {
+          logger.error(`❌ Permission denied to bind to ${config.server.host}:${config.server.port}`)
+          logger.error('💡 You may need elevated privileges to use this port')
+        } else {
+          logger.error('❌ Server startup failed:', error)
+        }
+        process.exit(1)
       })
 
       const serverTimeout = 600000 // 默认10分钟
@@ -552,11 +598,11 @@ class Application {
           process.exit(0)
         })
 
-        // 强制关闭超时
+        // 强制关闭超时（给优雅关闭足够时间）
         setTimeout(() => {
           logger.warn('⚠️ Forced shutdown due to timeout')
           process.exit(1)
-        }, 10000)
+        }, 20000)
       } else {
         process.exit(0)
       }
