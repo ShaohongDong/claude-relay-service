@@ -73,7 +73,7 @@ const config = {
 
   // 📝 日志配置
   logging: {
-    level: process.env.LOG_LEVEL || 'info',
+    level: process.env.LOG_LEVEL || 'warn',
     dirname: path.join(__dirname, '..', 'logs'),
     maxSize: process.env.LOG_MAX_SIZE || '10m',
     maxFiles: parseInt(process.env.LOG_MAX_FILES) || 5
