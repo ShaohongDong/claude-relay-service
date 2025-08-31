@@ -3,10 +3,28 @@ const { v4: uuidv4 } = require('uuid')
 const config = require('../../config/config')
 const redis = require('../models/redis')
 const logger = require('../utils/logger')
+const LRUCache = require('../utils/lruCache')
+const cacheMonitor = require('../utils/cacheMonitor')
 
 class ApiKeyService {
   constructor() {
     this.prefix = config.security.apiKeyPrefix
+
+    // 🔄 验证结果缓存（100个条目，5分钟TTL）
+    this._validationCache = new LRUCache(100)
+
+    // 📊 缓存统计信息
+    this._cacheStats = {
+      hits: 0,
+      misses: 0,
+      errors: 0,
+      invalidations: 0
+    }
+
+    // 📝 注册到缓存监控器进行统一管理
+    cacheMonitor.registerCache('api-key-validation', this._validationCache)
+
+    logger.info('🔄 ApiKeyService validation cache initialized (100 entries, 5min TTL)')
   }
 
   // 🔑 生成新的API Key
@@ -103,100 +121,195 @@ class ApiKeyService {
     }
   }
 
-  // 🔍 验证API Key
-  async validateApiKey(apiKey) {
+  // 🔐 生成缓存键
+  _generateValidationCacheKey(apiKey) {
+    // 使用API Key的哈希值作为缓存键（安全且唯一）
+    return this._hashApiKey(apiKey)
+  }
+
+  // 🗑️ 清除特定API Key的验证缓存
+  _invalidateValidationCache(apiKey) {
     try {
-      if (!apiKey || !apiKey.startsWith(this.prefix)) {
+      const cacheKey = this._generateValidationCacheKey(apiKey)
+
+      // 尝试从缓存中删除
+      if (this._validationCache.cache && this._validationCache.cache.has(cacheKey)) {
+        this._validationCache.cache.delete(cacheKey)
+        this._cacheStats.invalidations++
+        logger.debug(`🗑️ Invalidated validation cache for API key: ${cacheKey.substring(0, 8)}...`)
+        return true
+      }
+
+      return false
+    } catch (error) {
+      logger.warn('⚠️ Error invalidating validation cache:', error)
+      return false
+    }
+  }
+
+  // 🧹 清除所有验证缓存
+  _clearAllValidationCache() {
+    try {
+      const beforeSize = this._validationCache.cache ? this._validationCache.cache.size : 0
+      this._validationCache.clear()
+      this._cacheStats.invalidations += beforeSize
+      logger.info(`🧹 Cleared all validation cache (${beforeSize} entries)`)
+    } catch (error) {
+      logger.warn('⚠️ Error clearing validation cache:', error)
+    }
+  }
+
+  // 📊 获取缓存统计
+  getValidationCacheStats() {
+    const lruStats = this._validationCache.getStats()
+    return {
+      ...this._cacheStats,
+      size: lruStats.size,
+      maxSize: lruStats.maxSize,
+      hitRate: lruStats.hitRate
+    }
+  }
+
+  // 🔍 验证API Key（带缓存优化）
+  async validateApiKey(apiKey) {
+    const startTime = Date.now()
+
+    try {
+      // 基本格式检查
+      if (
+        !apiKey ||
+        typeof apiKey !== 'string' ||
+        !apiKey.startsWith(this.prefix) ||
+        apiKey.length < 67
+      ) {
         return { valid: false, error: 'Invalid API key format' }
       }
 
-      // 计算API Key的哈希值
-      const hashedKey = this._hashApiKey(apiKey)
-
-      // 通过哈希值直接查找API Key（性能优化）
-      const keyData = await redis.findApiKeyByHash(hashedKey)
-
-      if (!keyData) {
-        return { valid: false, error: 'API key not found' }
-      }
-
-      // 检查是否激活
-      if (keyData.isActive !== 'true') {
-        return { valid: false, error: 'API key is disabled' }
-      }
-
-      // 检查是否过期
-      if (keyData.expiresAt && new Date() > new Date(keyData.expiresAt)) {
-        return { valid: false, error: 'API key has expired' }
-      }
-
-      // 获取使用统计（供返回数据使用）
-      const usage = await redis.getUsageStats(keyData.id)
-
-      // 获取当日费用统计
-      const dailyCost = await redis.getDailyCost(keyData.id)
-
-      // 更新最后使用时间（优化：只在实际API调用时更新，而不是验证时）
-      // 注意：lastUsedAt的更新已移至recordUsage方法中
-
-      logger.api(`🔓 API key validated successfully: ${keyData.id}`)
-
-      // 解析限制模型数据
-      let restrictedModels = []
+      // 🔄 尝试从缓存获取验证结果
+      const cacheKey = this._generateValidationCacheKey(apiKey)
+      let cached = null
       try {
-        restrictedModels = keyData.restrictedModels ? JSON.parse(keyData.restrictedModels) : []
-      } catch (e) {
-        restrictedModels = []
+        cached = this._validationCache.get(cacheKey)
+      } catch (cacheError) {
+        logger.warn('⚠️ Cache get operation failed, falling back to normal validation:', cacheError)
+        // 继续执行正常验证，不抛出异常
       }
 
-      // 解析允许的客户端
-      let allowedClients = []
-      try {
-        allowedClients = keyData.allowedClients ? JSON.parse(keyData.allowedClients) : []
-      } catch (e) {
-        allowedClients = []
+      if (cached) {
+        this._cacheStats.hits++
+        const cacheTime = Date.now() - startTime
+        logger.debug(`🎯 Cache hit for API key validation (${cacheTime}ms)`)
+        return cached
       }
 
-      // 解析标签
-      let tags = []
-      try {
-        tags = keyData.tags ? JSON.parse(keyData.tags) : []
-      } catch (e) {
-        tags = []
-      }
+      // 🔄 缓存未命中，执行完整验证
+      this._cacheStats.misses++
+      const result = await this._performFullValidation(apiKey, startTime)
 
-      return {
-        valid: true,
-        keyData: {
-          id: keyData.id,
-          name: keyData.name,
-          description: keyData.description,
-          createdAt: keyData.createdAt,
-          expiresAt: keyData.expiresAt,
-          claudeAccountId: keyData.claudeAccountId,
-          claudeConsoleAccountId: keyData.claudeConsoleAccountId,
-          geminiAccountId: keyData.geminiAccountId,
-          openaiAccountId: keyData.openaiAccountId,
-          azureOpenaiAccountId: keyData.azureOpenaiAccountId,
-          bedrockAccountId: keyData.bedrockAccountId, // 添加 Bedrock 账号ID
-          permissions: keyData.permissions || 'all',
-          tokenLimit: parseInt(keyData.tokenLimit),
-          concurrencyLimit: parseInt(keyData.concurrencyLimit || 0),
-          rateLimitWindow: parseInt(keyData.rateLimitWindow || 0),
-          rateLimitRequests: parseInt(keyData.rateLimitRequests || 0),
-          enableModelRestriction: keyData.enableModelRestriction === 'true',
-          restrictedModels,
-          enableClientRestriction: keyData.enableClientRestriction === 'true',
-          allowedClients,
-          dailyCostLimit: parseFloat(keyData.dailyCostLimit || 0),
-          dailyCost: dailyCost || 0,
-          tags,
-          usage
+      // 🔄 只缓存有效的验证结果
+      if (result.valid) {
+        try {
+          this._validationCache.set(cacheKey, result, 5 * 60 * 1000) // 5分钟TTL
+        } catch (cacheError) {
+          logger.warn('⚠️ Cache set operation failed:', cacheError)
+          // 继续执行，不影响验证结果
         }
       }
+
+      return result
     } catch (error) {
+      this._cacheStats.errors++
       logger.error('❌ API key validation error:', error)
       return { valid: false, error: 'Internal validation error' }
+    }
+  }
+
+  // 🔍 执行完整的API Key验证（内部方法）
+  async _performFullValidation(apiKey, startTime) {
+    // 计算API Key的哈希值
+    const hashedKey = this._hashApiKey(apiKey)
+
+    // 通过哈希值直接查找API Key（性能优化）
+    const keyData = await redis.findApiKeyByHash(hashedKey)
+
+    if (!keyData) {
+      return { valid: false, error: 'API key not found' }
+    }
+
+    // 检查是否激活
+    if (keyData.isActive !== 'true') {
+      return { valid: false, error: 'API key is disabled' }
+    }
+
+    // 检查是否过期
+    if (keyData.expiresAt && new Date() > new Date(keyData.expiresAt)) {
+      return { valid: false, error: 'API key has expired' }
+    }
+
+    // 获取使用统计（供返回数据使用）
+    const usage = await redis.getUsageStats(keyData.id)
+
+    // 获取当日费用统计
+    const dailyCost = await redis.getDailyCost(keyData.id)
+
+    // 更新最后使用时间（优化：只在实际API调用时更新，而不是验证时）
+    // 注意：lastUsedAt的更新已移至recordUsage方法中
+
+    const validationTime = Date.now() - startTime
+    logger.debug(`🔓 API key validated successfully: ${keyData.id} (${validationTime}ms)`)
+
+    // 解析限制模型数据
+    let restrictedModels = []
+    try {
+      restrictedModels = keyData.restrictedModels ? JSON.parse(keyData.restrictedModels) : []
+    } catch (e) {
+      restrictedModels = []
+    }
+
+    // 解析允许的客户端
+    let allowedClients = []
+    try {
+      allowedClients = keyData.allowedClients ? JSON.parse(keyData.allowedClients) : []
+    } catch (e) {
+      allowedClients = []
+    }
+
+    // 解析标签
+    let tags = []
+    try {
+      tags = keyData.tags ? JSON.parse(keyData.tags) : []
+    } catch (e) {
+      tags = []
+    }
+
+    return {
+      valid: true,
+      keyData: {
+        id: keyData.id,
+        name: keyData.name || '',
+        description: keyData.description || '',
+        createdAt: keyData.createdAt || '',
+        expiresAt: keyData.expiresAt || '',
+        claudeAccountId: keyData.claudeAccountId || '',
+        claudeConsoleAccountId: keyData.claudeConsoleAccountId || '',
+        geminiAccountId: keyData.geminiAccountId || '',
+        openaiAccountId: keyData.openaiAccountId || '',
+        azureOpenaiAccountId: keyData.azureOpenaiAccountId || '',
+        bedrockAccountId: keyData.bedrockAccountId || '', // 添加 Bedrock 账号ID
+        permissions: keyData.permissions || 'all',
+        tokenLimit: parseInt(keyData.tokenLimit || 0),
+        concurrencyLimit: parseInt(keyData.concurrencyLimit || 0),
+        rateLimitWindow: parseInt(keyData.rateLimitWindow || 0),
+        rateLimitRequests: parseInt(keyData.rateLimitRequests || 0),
+        enableModelRestriction: keyData.enableModelRestriction === 'true',
+        restrictedModels,
+        enableClientRestriction: keyData.enableClientRestriction === 'true',
+        allowedClients,
+        dailyCostLimit: parseFloat(keyData.dailyCostLimit || 0),
+        dailyCost: dailyCost || 0,
+        tags,
+        usage
+      }
     }
   }
 
@@ -344,6 +457,11 @@ class ApiKeyService {
       // 更新时不需要重新建立哈希映射，因为API Key本身没有变化
       await redis.setApiKey(keyId, updatedData)
 
+      // 🔄 清除相关的验证缓存
+      // 注意：由于我们没有原始API Key，我们清除所有缓存以确保一致性
+      // 在真实环境中可以考虑存储keyId到apiKey的映射以实现精确清除
+      this._clearAllValidationCache()
+
       logger.success(`📝 Updated API key: ${keyId}`)
 
       return { success: true }
@@ -361,6 +479,10 @@ class ApiKeyService {
       if (result === 0) {
         throw new Error('API key not found')
       }
+
+      // 🔄 清除相关的验证缓存
+      // 注意：由于我们没有原始API Key，我们清除所有缓存以确保一致性
+      this._clearAllValidationCache()
 
       logger.success(`🗑️ Deleted API key: ${keyId}`)
 
@@ -643,4 +765,6 @@ const apiKeyService = new ApiKeyService()
 // 为了方便其他服务调用，导出 recordUsage 方法
 apiKeyService.recordUsageMetrics = apiKeyService.recordUsage.bind(apiKeyService)
 
+// 导出实例（默认导出）和类（用于测试）
 module.exports = apiKeyService
+module.exports.ApiKeyService = ApiKeyService

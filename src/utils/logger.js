@@ -158,18 +158,20 @@ const createRotateTransport = (filename, level = null) => {
     transport.level = level
   }
 
-  // 监听轮转事件
-  transport.on('rotate', (oldFilename, newFilename) => {
-    console.log(`📦 Log rotated: ${oldFilename} -> ${newFilename}`)
-  })
+  // 监听轮转事件 - 在测试环境中禁用console输出
+  if (process.env.NODE_ENV !== 'test') {
+    transport.on('rotate', (oldFilename, newFilename) => {
+      console.log(`📦 Log rotated: ${oldFilename} -> ${newFilename}`)
+    })
 
-  transport.on('new', (newFilename) => {
-    console.log(`📄 New log file created: ${newFilename}`)
-  })
+    transport.on('new', (newFilename) => {
+      console.log(`📄 New log file created: ${newFilename}`)
+    })
 
-  transport.on('archive', (zipFilename) => {
-    console.log(`🗜️ Log archived: ${zipFilename}`)
-  })
+    transport.on('archive', (zipFilename) => {
+      console.log(`🗜️ Log archived: ${zipFilename}`)
+    })
+  }
 
   return transport
 }
@@ -291,7 +293,9 @@ logger.security = (message, metadata = {}) => {
     securityLogger.warn(`🔒 ${message}`, securityData)
   } catch (error) {
     // 如果安全日志文件不可用，只记录到主日志
-    console.warn('Security logger not available:', error.message)
+    if (process.env.NODE_ENV !== 'test') {
+      console.warn('Security logger not available:', error.message)
+    }
   }
 }
 
