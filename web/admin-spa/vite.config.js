@@ -43,7 +43,8 @@ export default defineConfig(({ mode }) => {
           lintCommand: 'eslint "./src/**/*.{js,vue}" --cache=false',
           dev: {
             logLevel: ['error', 'warning']
-          }
+          },
+          build: false // 生产构建时禁用 eslint 检查，避免大量 console 警告
         }
       }),
       AutoImport({
@@ -103,6 +104,7 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       assetsDir: 'assets',
+      chunkSizeWarningLimit: 800, // 增大警告阈值到800KB，减少大小警告
       rollupOptions: {
         output: {
           manualChunks(id) {

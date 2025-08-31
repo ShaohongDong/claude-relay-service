@@ -2,7 +2,6 @@
 
 # Claude Relay Service 管理脚本
 # 用于安装、更新、卸载、启动、停止、重启服务
-# 可以使用 crs 快捷命令调用
 
 # 颜色定义
 RED='\033[0;31m'
@@ -516,8 +515,6 @@ EOF
         fi
     fi
     
-    # 创建软链接
-    create_symlink
     
     print_success "安装完成！"
     
@@ -543,9 +540,6 @@ EOF
         echo -e "  公网 API: ${GREEN}http://$public_ip:$APP_PORT/api/v1${NC}"
     fi
     echo -e "\n${YELLOW}管理命令：${NC}"
-    echo "  查看状态: crs status"
-    echo "  停止服务: crs stop"
-    echo "  重启服务: crs restart"
 }
 
 
@@ -556,7 +550,21 @@ update_service() {
         return 1
     fi
     
-    print_info "更新 Claude Relay Service..."
+    # 检查APP_DIR是否正确设置
+    if [ -z "$APP_DIR" ]; then
+        print_error "项目目录未设置，请检查安装状态"
+        print_info "当前工作目录: $(pwd)"
+        print_info "期望的默认安装目录: $DEFAULT_INSTALL_DIR"
+        return 1
+    fi
+    
+    if [ ! -d "$APP_DIR" ]; then
+        print_error "项目目录不存在: $APP_DIR"
+        return 1
+    fi
+    
+    print_info "更新 Claude Relay Service（重新构建）..."
+    print_info "项目目录: $APP_DIR"
     
     cd "$APP_DIR"
     
@@ -568,75 +576,8 @@ update_service() {
         stop_service
     fi
     
-    # 备份配置文件（只备份.env，config.js可从example恢复）
-    print_info "备份配置文件..."
-    if [ -f ".env" ]; then
-        cp .env .env.backup.$(date +%Y%m%d%H%M%S)
-    fi
-    
-    # 检查本地修改
-    print_info "检查本地文件修改..."
-    local has_changes=false
-    if git status --porcelain | grep -v "^??" | grep -q .; then
-        has_changes=true
-        print_warning "检测到本地文件已修改："
-        git status --short | grep -v "^??"
-        echo ""
-        echo -e "${YELLOW}警告：更新将使用远程版本覆盖本地修改！${NC}"
-        
-        # 创建本地修改的备份
-        local backup_branch="backup-$(date +%Y%m%d-%H%M%S)"
-        print_info "创建本地修改备份分支: $backup_branch"
-        git stash push -m "Backup before update $(date +%Y-%m-%d)" >/dev/null 2>&1
-        git branch "$backup_branch" 2>/dev/null || true
-        
-        echo -e "${GREEN}已创建备份分支: $backup_branch${NC}"
-        echo "如需恢复，可执行: git checkout $backup_branch"
-        echo ""
-        
-        echo -n "是否继续更新？(y/N): "
-        read -n 1 confirm_update
-        echo
-        
-        if [[ ! "$confirm_update" =~ ^[Yy]$ ]]; then
-            print_info "已取消更新"
-            # 恢复 stash 的修改
-            git stash pop >/dev/null 2>&1 || true
-            # 如果之前在运行，重新启动服务
-            if [ "$was_running" = true ]; then
-                print_info "重新启动服务..."
-                start_service
-            fi
-            return 0
-        fi
-    fi
-    
-    # 获取最新代码（强制使用远程版本）
-    print_info "获取最新代码..."
-    
-    # 先获取远程更新
-    if ! git fetch origin main; then
-        print_error "获取远程代码失败，请检查网络连接"
-        return 1
-    fi
-    
-    # 强制重置到远程版本
-    print_info "应用远程更新..."
-    if ! git reset --hard origin/main; then
-        print_error "重置到远程版本失败"
-        # 尝试恢复
-        print_info "尝试恢复..."
-        git reset --hard HEAD
-        return 1
-    fi
-    
-    # 清理未跟踪的文件（可选，保留用户新建的文件）
-    # git clean -fd  # 注释掉，避免删除用户的新文件
-    
-    print_success "代码已更新到最新版本"
-    
     # 更新依赖
-    print_info "更新依赖..."
+    print_info "更新项目依赖..."
     npm install
     
     # 确保脚本有执行权限（仅在权限不正确时设置）
@@ -644,101 +585,12 @@ update_service() {
         chmod +x "$APP_DIR/scripts/manage.sh"
     fi
     
-    # 获取最新的预构建前端文件
-    print_info "更新前端文件..."
-    
-    # 创建目标目录
-    mkdir -p web/admin-spa/dist
-    
-    # 清理旧的前端文件（保留用户自定义文件）
-    if [ -d "web/admin-spa/dist" ]; then
-        print_info "清理旧的前端文件..."
-        # 只删除已知的前端文件，保留用户可能添加的自定义文件
-        rm -rf web/admin-spa/dist/assets 2>/dev/null
-        rm -f web/admin-spa/dist/index.html 2>/dev/null
-        rm -f web/admin-spa/dist/favicon.ico 2>/dev/null
+    # 本地构建前端文件
+    if ! build_frontend_locally; then
+        print_error "前端构建失败，更新终止"
+        return 1
     fi
     
-    # 从 web-dist 分支获取构建好的文件
-    if git ls-remote --heads origin web-dist | grep -q web-dist; then
-        print_info "从 web-dist 分支下载最新前端文件..."
-        
-        # 创建临时目录用于 clone
-        TEMP_CLONE_DIR=$(mktemp -d)
-        
-        # 添加错误处理
-        if [ ! -d "$TEMP_CLONE_DIR" ]; then
-            print_error "无法创建临时目录"
-            return 1
-        fi
-        
-        # 使用 sparse-checkout 来只获取需要的文件，添加重试机制
-        local clone_success=false
-        for attempt in 1 2 3; do
-            print_info "尝试下载前端文件 (第 $attempt 次)..."
-            
-            if git clone --depth 1 --branch web-dist --single-branch \
-                https://github.com/Wei-Shaw/claude-relay-service.git \
-                "$TEMP_CLONE_DIR" 2>/dev/null; then
-                clone_success=true
-                break
-            fi
-            
-            # 如果 HTTPS 失败，尝试使用当前仓库的 remote URL
-            REPO_URL=$(git config --get remote.origin.url)
-            if git clone --depth 1 --branch web-dist --single-branch "$REPO_URL" "$TEMP_CLONE_DIR" 2>/dev/null; then
-                clone_success=true
-                break
-            fi
-            
-            if [ $attempt -lt 3 ]; then
-                print_warning "下载失败，等待 2 秒后重试..."
-                sleep 2
-            fi
-        done
-        
-        if [ "$clone_success" = false ]; then
-            print_error "无法下载前端文件"
-            rm -rf "$TEMP_CLONE_DIR"
-            return 1
-        fi
-        
-        # 复制文件到目标目录（排除 .git 和 README.md）
-        rsync -av --exclude='.git' --exclude='README.md' "$TEMP_CLONE_DIR/" web/admin-spa/dist/ 2>/dev/null || {
-            # 如果没有 rsync，使用 cp
-            cp -r "$TEMP_CLONE_DIR"/* web/admin-spa/dist/ 2>/dev/null
-            rm -rf web/admin-spa/dist/.git 2>/dev/null
-            rm -f web/admin-spa/dist/README.md 2>/dev/null
-        }
-        
-        # 清理临时目录
-        rm -rf "$TEMP_CLONE_DIR"
-        
-        print_success "前端文件更新完成"
-    else
-        print_warning "web-dist 分支不存在，尝试本地构建..."
-        
-        # 检查是否有 Node.js 和 npm
-        if command_exists npm; then
-            # 回退到原始构建方式
-            if [ -f "web/admin-spa/package.json" ]; then
-                print_info "开始本地构建前端..."
-                cd web/admin-spa
-                npm install
-                npm run build
-                cd ../..
-                print_success "前端本地构建完成"
-            else
-                print_error "无法找到前端项目文件"
-            fi
-        else
-            print_error "无法获取前端文件，且本地环境不支持构建"
-            print_info "请确保仓库已正确配置 web-dist 分支"
-        fi
-    fi
-    
-    # 更新软链接到最新版本
-    create_symlink
     
     # 如果之前在运行，则重新启动服务
     if [ "$was_running" = true ]; then
@@ -748,32 +600,15 @@ update_service() {
     
     print_success "更新完成！"
     
-    # 显示更新摘要
+    # 显示简单摘要
     echo ""
     echo -e "${BLUE}=== 更新摘要 ===${NC}"
-    
-    # 显示版本信息
-    if [ -f "$APP_DIR/VERSION" ]; then
-        echo -e "当前版本: ${GREEN}$(cat "$APP_DIR/VERSION")${NC}"
+    echo -e "  ✓ 项目依赖已更新"
+    echo -e "  ✓ 前端已重新构建"
+    if [ "$was_running" = true ]; then
+        echo -e "  ✓ 服务已重启"
     fi
-    
-    # 显示最新的提交信息
-    local latest_commit=$(git log -1 --oneline 2>/dev/null)
-    if [ -n "$latest_commit" ]; then
-        echo -e "最新提交: ${GREEN}$latest_commit${NC}"
-    fi
-    
-    # 显示备份信息
-    echo -e "\n${YELLOW}配置文件备份：${NC}"
-    ls -la .env.backup.* 2>/dev/null | tail -3 || echo "  无备份文件"
-    
-    # 提醒用户检查配置
-    echo -e "\n${YELLOW}提示：${NC}"
-    echo "  - 配置文件已自动备份"
-    echo "  - 如有本地修改已保存到备份分支"
-    echo "  - 建议检查 .env 和 config/config.js 配置"
-    
-    echo -e "\n${BLUE}==================${NC}"
+    echo -e "${BLUE}==================${NC}"
 }
 
 # 卸载服务
@@ -974,6 +809,39 @@ update_model_pricing() {
         fi
     else
         print_error "模型价格数据更新失败"
+        return 1
+    fi
+}
+
+# 本地构建前端
+build_frontend_locally() {
+    print_info "开始本地构建前端..."
+    
+    # 检查前端项目文件
+    if [ ! -f "web/admin-spa/package.json" ]; then
+        print_error "无法找到前端项目文件 web/admin-spa/package.json"
+        return 1
+    fi
+    
+    # 清理旧构建文件
+    if [ -d "web/admin-spa/dist" ]; then
+        print_info "清理旧的前端文件..."
+        rm -rf web/admin-spa/dist
+    fi
+    
+    # 在子shell中执行构建，确保环境一致
+    print_info "安装前端依赖并构建..."
+    if (cd web/admin-spa && npm install --silent && NODE_ENV=production npm run build 2>/dev/null); then
+        # 验证构建结果
+        if [ -d "web/admin-spa/dist" ] && [ -f "web/admin-spa/dist/index.html" ]; then
+            print_success "前端本地构建完成"
+            return 0
+        else
+            print_error "构建完成但未找到预期的输出文件"
+            return 1
+        fi
+    else
+        print_error "前端构建失败"
         return 1
     fi
 }
@@ -1222,7 +1090,6 @@ switch_branch() {
     fi
     
     echo ""
-    print_info "提示：如遇到问题，可以运行 'crs update' 强制更新到最新版本"
 }
 
 # 显示状态
@@ -1313,7 +1180,6 @@ show_help() {
     echo "  status         - 查看状态"
     echo "  switch-branch  - 切换分支"
     echo "  update-pricing - 更新模型价格数据"
-    echo "  symlink        - 创建 crs 快捷命令"
     echo "  help           - 显示帮助"
     echo ""
 }
@@ -1433,8 +1299,6 @@ handle_menu_choice() {
                 # 安装服务
                 install_service
                 
-                # 创建软链接
-                create_symlink
                 
                 echo -n "按回车键继续..."
                 read
@@ -1511,80 +1375,25 @@ handle_menu_choice() {
     fi
 }
 
-# 创建软链接
-create_symlink() {
-    # 获取脚本的绝对路径
-    local script_path=""
-    
-    # 优先使用项目中的 manage.sh（在 app/scripts 目录下）
-    if [ -n "$APP_DIR" ] && [ -f "$APP_DIR/scripts/manage.sh" ]; then
-        script_path="$APP_DIR/scripts/manage.sh"
-        # 确保脚本有执行权限
-        chmod +x "$script_path" 2>/dev/null || sudo chmod +x "$script_path" 2>/dev/null || true
-    elif [ -f "/app/scripts/manage.sh" ] && [ "$(basename "$0")" = "manage.sh" ]; then
-        # Docker 容器中的路径
-        script_path="/app/scripts/manage.sh"
-    elif command_exists realpath; then
-        script_path="$(realpath "$0")"
-    elif command_exists readlink && readlink -f "$0" >/dev/null 2>&1; then
-        script_path="$(readlink -f "$0")"
-    else
-        # 备用方法：使用pwd和脚本名
-        script_path="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
-    fi
-    
-    local symlink_path="/usr/bin/crs"
-    
-    print_info "创建命令行快捷方式..."
-    print_info "APP_DIR: $APP_DIR"
-    print_info "脚本路径: $script_path"
-    
-    # 检查脚本文件是否存在
-    if [ ! -f "$script_path" ]; then
-        print_error "找不到脚本文件: $script_path"
-        print_info "当前目录: $(pwd)"
-        print_info "脚本参数 \$0: $0"
-        if [ -n "$APP_DIR" ]; then
-            print_info "检查项目目录结构:"
-            ls -la "$APP_DIR/" 2>/dev/null | head -5
-            if [ -d "$APP_DIR/scripts" ]; then
-                print_info "scripts 目录内容:"
-                ls -la "$APP_DIR/scripts/" 2>/dev/null | grep manage.sh
-            fi
-        fi
-        return 1
-    fi
-    
-    # 如果已存在，直接删除并重新创建（默认使用代码中的最新版本）
-    if [ -L "$symlink_path" ] || [ -f "$symlink_path" ]; then
-        print_info "更新已存在的软链接..."
-        sudo rm -f "$symlink_path" 2>/dev/null || {
-            print_error "删除旧文件失败"
-            return 1
-        }
-    fi
-    
-    # 创建软链接
-    if sudo ln -s "$script_path" "$symlink_path"; then
-        print_success "已创建快捷命令 'crs'"
-        echo "您现在可以在任何地方使用 'crs' 命令管理服务"
-        
-        # 验证软链接
-        if [ -L "$symlink_path" ]; then
-            print_info "软链接验证成功"
-        else
-            print_warning "软链接验证失败"
-        fi
-    else
-        print_error "创建软链接失败"
-        print_info "请手动执行以下命令："
-        echo "  sudo ln -s '$script_path' '$symlink_path'"
-        return 1
-    fi
-}
 
 # 加载已安装的配置
 load_config() {
+    # 首先检查是否从项目目录本身运行脚本
+    local current_dir=$(pwd)
+    if [ -f "$current_dir/package.json" ] && [ -f "$current_dir/src/app.js" ] && [ -d "$current_dir/.git" ]; then
+        print_info "检测到从项目目录运行脚本: $current_dir"
+        APP_DIR="$current_dir"
+        INSTALL_DIR="$current_dir"
+        
+        # 加载.env配置
+        if [ -f "$APP_DIR/.env" ]; then
+            export $(cat "$APP_DIR/.env" | grep -v '^#' | xargs) 2>/dev/null || true
+            # 特别加载端口配置
+            APP_PORT=$(grep "^PORT=" "$APP_DIR/.env" 2>/dev/null | cut -d'=' -f2)
+        fi
+        return 0
+    fi
+    
     # 尝试找到安装目录
     if [ -z "$INSTALL_DIR" ]; then
         if [ -d "$DEFAULT_INSTALL_DIR" ]; then
@@ -1651,8 +1460,6 @@ main() {
             # 安装服务
             install_service
             
-            # 创建软链接
-            create_symlink
             ;;
         update)
             update_service
@@ -1677,16 +1484,6 @@ main() {
             ;;
         update-pricing)
             update_model_pricing
-            ;;
-        symlink)
-            # 单独创建软链接
-            # 确保 APP_DIR 已设置
-            if [ -z "$APP_DIR" ]; then
-                print_error "请先安装项目后再创建软链接"
-                print_info "运行: $0 install"
-                exit 1
-            fi
-            create_symlink
             ;;
         help)
             show_help
