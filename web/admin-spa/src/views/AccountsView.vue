@@ -1438,7 +1438,6 @@ const getClaudeAccountType = (account) => {
       // 同时支持 camelCase 和 snake_case 字段名
       const hasClaudeMax = info.hasClaudeMax === true || info.has_claude_max === true
       const hasClaudePro = info.hasClaudePro === true || info.has_claude_pro === true
-      
       if (hasClaudeMax) {
         return 'Claude Max'
       } else if (hasClaudePro) {
