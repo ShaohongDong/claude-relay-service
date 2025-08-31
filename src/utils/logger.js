@@ -286,11 +286,11 @@ logger.security = (message, metadata = {}) => {
   }
 
   // 记录到主日志
-  logger.warn(`🔒 ${message}`, securityData)
+  logger.info(`🔒 ${message}`, securityData)
 
   // 记录到专门的安全日志文件
   try {
-    securityLogger.warn(`🔒 ${message}`, securityData)
+    securityLogger.info(`🔒 ${message}`, securityData)
   } catch (error) {
     // 如果安全日志文件不可用，只记录到主日志
     if (process.env.NODE_ENV !== 'test') {
