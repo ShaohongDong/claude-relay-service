@@ -149,19 +149,17 @@ class ClaudeRelayService {
       }
 
       // 发送请求到Claude API（传入回调以获取请求对象）
-      const response = await this._retryNetworkRequest(async () => {
-        return await this._makeClaudeRequest(
-          processedBody,
-          accessToken,
-          proxyAgent,
-          clientHeaders,
-          accountId,
-          (req) => {
-            upstreamRequest = req
-          },
-          options
-        )
-      }, config.proxy?.maxRetries || 3)
+      const response = await this._makeClaudeRequest(
+        processedBody,
+        accessToken,
+        proxyAgent,
+        clientHeaders,
+        accountId,
+        (req) => {
+          upstreamRequest = req
+        },
+        options
+      )
 
       // 移除监听器（请求成功完成）
       if (clientRequest) {
@@ -593,7 +591,7 @@ class ClaudeRelayService {
     }
   }
 
-  // 🏊 获取代理Agent（使用连接池管理器）
+  // 🌐 获取代理Agent（使用统一的代理工具）
   async _getProxyAgent(accountId) {
     try {
       const accountData = await claudeAccountService.getAllAccounts()
@@ -604,19 +602,15 @@ class ClaudeRelayService {
         return null
       }
 
-      // 使用账户专用连接池获取Agent
-      const proxyAgent = ProxyHelper.createAccountAgent(accountId, account.proxy)
+      const proxyAgent = ProxyHelper.createProxyAgent(account.proxy)
       if (proxyAgent) {
-        logger.debug(
-          `🏊 Using connection pool agent for account ${accountId}: ${ProxyHelper.getProxyDescription(account.proxy)}`
+        logger.info(
+          `🌐 Using proxy for Claude request: ${ProxyHelper.getProxyDescription(account.proxy)}`
         )
-      } else {
-        logger.warn(`⚠️ Failed to get connection pool agent for account ${accountId}`)
       }
-      
       return proxyAgent
     } catch (error) {
-      logger.warn('⚠️ Failed to get proxy agent from connection pool:', error.message)
+      logger.warn('⚠️ Failed to create proxy agent:', error)
       return null
     }
   }
@@ -713,7 +707,7 @@ class ClaudeRelayService {
           ...finalHeaders
         },
         agent: proxyAgent,
-        timeout: config.proxy.socketTimeout || 30000
+        timeout: config.proxy.timeout
       }
 
       // 如果客户端没有提供 User-Agent，使用默认值
@@ -794,23 +788,15 @@ class ClaudeRelayService {
         let errorMessage = 'Upstream request failed'
         if (error.code === 'ECONNRESET') {
           errorMessage = 'Connection reset by Claude API server'
-          logger.warn('🔌 Socket hang up detected - this may be due to network instability or proxy issues')
         } else if (error.code === 'ENOTFOUND') {
           errorMessage = 'Unable to resolve Claude API hostname'
         } else if (error.code === 'ECONNREFUSED') {
           errorMessage = 'Connection refused by Claude API server'
         } else if (error.code === 'ETIMEDOUT') {
           errorMessage = 'Connection timed out to Claude API server'
-        } else if (error.message && error.message.toLowerCase().includes('socket hang up')) {
-          errorMessage = 'Socket hang up - connection terminated unexpectedly'
-          logger.warn('🔌 Socket hang up detected in error message')
         }
 
-        // 保持原始错误信息，让重试机制可以识别
-        const enrichedError = new Error(errorMessage)
-        enrichedError.code = error.code
-        enrichedError.originalError = error
-        reject(enrichedError)
+        reject(new Error(errorMessage))
       })
 
       req.on('timeout', () => {
@@ -940,24 +926,22 @@ class ClaudeRelayService {
         const proxyAgent = await this._getProxyAgent(accountId)
 
         // 发送流式请求并捕获usage数据
-        await this._retryNetworkRequest(async () => {
-          return await this._makeClaudeStreamRequestWithUsageCapture(
-            processedBody,
-            accessToken,
-            proxyAgent,
-            clientHeaders,
-            responseStream,
-            (usageData) => {
-              // 在usageCallback中添加accountId
-              usageCallback({ ...usageData, accountId })
-            },
-            accountId,
-            accountType,
-            currentSessionHash,
-            streamTransformer,
-            options
-          )
-        }, config.proxy?.maxRetries || 3)
+        await this._makeClaudeStreamRequestWithUsageCapture(
+          processedBody,
+          accessToken,
+          proxyAgent,
+          clientHeaders,
+          responseStream,
+          (usageData) => {
+            // 在usageCallback中添加accountId
+            usageCallback({ ...usageData, accountId })
+          },
+          accountId,
+          accountType,
+          currentSessionHash,
+          streamTransformer,
+          options
+        )
 
         // 如果执行到这里，说明流式请求成功完成
         if (attempt > 0) {
@@ -1058,7 +1042,7 @@ class ClaudeRelayService {
           ...finalHeaders
         },
         agent: proxyAgent,
-        timeout: config.proxy.socketTimeout || 30000
+        timeout: config.proxy.timeout
       }
 
       // 如果客户端没有提供 User-Agent，使用默认值
@@ -1507,7 +1491,6 @@ class ClaudeRelayService {
         if (error.code === 'ECONNRESET') {
           errorMessage = 'Connection reset by Claude API server'
           statusCode = 502
-          logger.warn('🔌 Stream socket hang up detected - this may be due to network instability or proxy issues')
         } else if (error.code === 'ENOTFOUND') {
           errorMessage = 'Unable to resolve Claude API hostname'
           statusCode = 502
@@ -1517,10 +1500,6 @@ class ClaudeRelayService {
         } else if (error.code === 'ETIMEDOUT') {
           errorMessage = 'Connection timed out to Claude API server'
           statusCode = 504
-        } else if (error.message && error.message.toLowerCase().includes('socket hang up')) {
-          errorMessage = 'Socket hang up - connection terminated unexpectedly'
-          statusCode = 502
-          logger.warn('🔌 Stream socket hang up detected in error message')
         }
 
         if (!responseStream.headersSent) {
@@ -1543,12 +1522,7 @@ class ClaudeRelayService {
           )
           responseStream.end()
         }
-        
-        // 保持原始错误信息，让重试机制可以识别
-        const enrichedError = new Error(errorMessage)
-        enrichedError.code = error.code
-        enrichedError.originalError = error
-        reject(enrichedError)
+        reject(error)
       })
 
       req.on('timeout', () => {
@@ -1617,7 +1591,7 @@ class ClaudeRelayService {
           ...filteredHeaders
         },
         agent: proxyAgent,
-        timeout: config.proxy.socketTimeout || 30000
+        timeout: config.proxy.timeout
       }
 
       // 如果客户端没有提供 User-Agent，使用默认值
@@ -1753,54 +1727,6 @@ class ClaudeRelayService {
     }
 
     throw lastError
-  }
-
-  // 🔄 网络错误重试逻辑（专用于连接错误）
-  async _retryNetworkRequest(requestFunc, maxRetries = 3) {
-    let lastError
-
-    for (let i = 0; i < maxRetries; i++) {
-      try {
-        return await requestFunc()
-      } catch (error) {
-        lastError = error
-
-        // 检查是否是可重试的网络错误
-        const isRetryableError = this._isRetryableNetworkError(error)
-        
-        if (!isRetryableError || i >= maxRetries - 1) {
-          // 不可重试的错误或已达到最大重试次数
-          throw error
-        }
-
-        // 计算重试延迟（使用配置的退避策略）
-        const baseDelay = config.proxy?.retryDelay || 1000
-        const multiplier = config.proxy?.retryDelayMultiplier || 2
-        const delay = baseDelay * Math.pow(multiplier, i)
-        
-        logger.warn(`🔌 Network error (${error.code}), retry ${i + 1}/${maxRetries} in ${delay}ms: ${error.message}`)
-        await new Promise((resolve) => setTimeout(resolve, delay))
-      }
-    }
-
-    throw lastError
-  }
-
-  // 🔍 判断是否是可重试的网络错误
-  _isRetryableNetworkError(error) {
-    const retryableCodes = [
-      'ECONNRESET',    // 连接被重置
-      'ECONNREFUSED',  // 连接被拒绝
-      'ETIMEDOUT',     // 连接超时
-      'ENOTFOUND',     // DNS解析失败
-      'ENETUNREACH',   // 网络不可达
-      'EHOSTUNREACH',  // 主机不可达
-      'EPIPE',         // 管道断开
-      'ECONNABORTED'   // 连接中止
-    ]
-    
-    return retryableCodes.includes(error.code) || 
-           (error.message && error.message.toLowerCase().includes('socket hang up'))
   }
 
   // 🔄 账户切换重试逻辑（专用于429限流错误和401未授权错误）

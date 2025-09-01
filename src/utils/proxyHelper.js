@@ -1,21 +1,18 @@
-const connectionPoolManager = require('./connectionPoolManager')
-const logger = require('./logger')
-const config = require('../../config/config')
 const { SocksProxyAgent } = require('socks-proxy-agent')
 const { HttpsProxyAgent } = require('https-proxy-agent')
+const logger = require('./logger')
+const config = require('../../config/config')
 
 /**
  * 统一的代理创建工具
  * 支持 SOCKS5 和 HTTP/HTTPS 代理，可配置 IPv4/IPv6
- * 集成专用连接池管理器以实现连接复用和故障转移
  */
 class ProxyHelper {
   /**
-   * 创建代理 Agent（使用连接池管理器）
+   * 创建代理 Agent
    * @param {object|string|null} proxyConfig - 代理配置对象或 JSON 字符串
    * @param {object} options - 额外选项
    * @param {boolean|number} options.useIPv4 - 是否使用 IPv4 (true=IPv4, false=IPv6, undefined=auto)
-   * @param {string} options.accountId - 账户ID（用于连接池分离）
    * @returns {Agent|null} 代理 Agent 实例或 null
    */
   static createProxyAgent(proxyConfig, options = {}) {
@@ -33,61 +30,39 @@ class ProxyHelper {
         return null
       }
 
-      // 获取账户ID，如果没有提供则使用默认值
-      const accountId = options.accountId || 'default'
-
-      // 从连接池管理器获取Agent
-      const agent = connectionPoolManager.getAgent(accountId, proxyConfig, {
-        useIPv4: ProxyHelper._getIPFamilyPreference(options.useIPv4)
-      })
-
-      if (agent) {
-        logger.debug(`🏊 Retrieved connection pool agent for account ${accountId}: ${ProxyHelper.getProxyDescription(proxyConfig)}`)
-      }
-
-      return agent
-    } catch (error) {
-      logger.warn('⚠️ Failed to get proxy agent from connection pool:', error.message)
-      // 降级到直接创建Agent（兼容性保证）
-      return ProxyHelper._createDirectAgent(proxyConfig, options)
-    }
-  }
-
-  /**
-   * 直接创建Agent（降级方案）
-   * @private
-   */
-  static _createDirectAgent(proxyConfig, options = {}) {
-    logger.warn('⚠️ Using direct agent creation as fallback')
-    
-    try {
-      const proxy = typeof proxyConfig === 'string' ? JSON.parse(proxyConfig) : proxyConfig
+      // 获取 IPv4/IPv6 配置
       const useIPv4 = ProxyHelper._getIPFamilyPreference(options.useIPv4)
+
+      // 构建认证信息
       const auth = proxy.username && proxy.password ? `${proxy.username}:${proxy.password}@` : ''
 
-      const agentOptions = {
-        timeout: config.proxy?.connectTimeout || 10000,
-        keepAlive: config.proxy?.keepAlive !== false,
-        keepAliveMsecs: 30000,
-        maxSockets: config.proxy?.maxSockets || 100,
-        maxFreeSockets: config.proxy?.maxFreeSockets || 10
-      }
-
-      if (useIPv4 !== null) {
-        agentOptions.family = useIPv4 ? 4 : 6
-      }
-
+      // 根据代理类型创建 Agent
       if (proxy.type === 'socks5') {
         const socksUrl = `socks5://${auth}${proxy.host}:${proxy.port}`
-        return new SocksProxyAgent(socksUrl, agentOptions)
+        const socksOptions = {}
+
+        // 设置 IP 协议族（如果指定）
+        if (useIPv4 !== null) {
+          socksOptions.family = useIPv4 ? 4 : 6
+        }
+
+        return new SocksProxyAgent(socksUrl, socksOptions)
       } else if (proxy.type === 'http' || proxy.type === 'https') {
         const proxyUrl = `${proxy.type}://${auth}${proxy.host}:${proxy.port}`
-        return new HttpsProxyAgent(proxyUrl, agentOptions)
+        const httpOptions = {}
+
+        // HttpsProxyAgent 支持 family 参数（通过底层的 agent-base）
+        if (useIPv4 !== null) {
+          httpOptions.family = useIPv4 ? 4 : 6
+        }
+
+        return new HttpsProxyAgent(proxyUrl, httpOptions)
       } else {
-        throw new Error(`Unsupported proxy type: ${proxy.type}`)
+        logger.warn(`⚠️ Unsupported proxy type: ${proxy.type}`)
+        return null
       }
     } catch (error) {
-      logger.error('❌ Direct agent creation failed:', error.message)
+      logger.warn('⚠️ Failed to create proxy agent:', error.message)
       return null
     }
   }
@@ -222,48 +197,14 @@ class ProxyHelper {
   }
 
   /**
-   * 获取连接池统计信息
-   * @returns {object} 连接池统计
-   */
-  static getConnectionPoolStats() {
-    return connectionPoolManager.getStats()
-  }
-
-  /**
-   * 清理连接池
-   */
-  static cleanupConnectionPools() {
-    connectionPoolManager.cleanup()
-  }
-
-  /**
-   * 为账户创建专用Agent（推荐接口）
-   * @param {string} accountId - 账户ID
-   * @param {object|string} proxyConfig - 代理配置
-   * @param {object} options - 额外选项
-   * @returns {Agent|null} 代理Agent实例
-   */
-  static createAccountAgent(accountId, proxyConfig, options = {}) {
-    if (!accountId) {
-      logger.warn('⚠️ Account ID is required for connection pooling')
-      return null
-    }
-
-    return ProxyHelper.createProxyAgent(proxyConfig, {
-      ...options,
-      accountId
-    })
-  }
-
-  /**
    * 创建代理 Agent（兼容旧的函数接口）
    * @param {object|string|null} proxyConfig - 代理配置
    * @param {boolean} useIPv4 - 是否使用 IPv4
    * @returns {Agent|null} 代理 Agent 实例或 null
-   * @deprecated 使用 createProxyAgent 或 createAccountAgent 替代
+   * @deprecated 使用 createProxyAgent 替代
    */
   static createProxy(proxyConfig, useIPv4 = true) {
-    logger.warn('⚠️ ProxyHelper.createProxy is deprecated, use createAccountAgent for connection pooling')
+    logger.warn('⚠️ ProxyHelper.createProxy is deprecated, use createProxyAgent instead')
     return ProxyHelper.createProxyAgent(proxyConfig, { useIPv4 })
   }
 }
