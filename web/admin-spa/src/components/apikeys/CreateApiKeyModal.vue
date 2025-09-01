@@ -72,7 +72,8 @@
             </div>
 
             <!-- 批量创建数量输入 -->
-            <div v-if="form.createType === 'batch'" class="mt-3">
+            <div v-if="form.createType === 'batch'"
+class="mt-3">
               <div class="flex items-center gap-4">
                 <div class="flex-1">
                   <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
@@ -123,7 +124,8 @@
               type="text"
               @input="errors.name = ''"
             />
-            <p v-if="errors.name" class="mt-1 text-xs text-red-500 dark:text-red-400">
+            <p v-if="errors.name"
+class="mt-1 text-xs text-red-500 dark:text-red-400">
               {{ errors.name }}
             </p>
           </div>
@@ -428,7 +430,8 @@
               <option value="365d">365 天</option>
               <option value="custom">自定义日期</option>
             </select>
-            <div v-if="form.expireDuration === 'custom'" class="mt-3">
+            <div v-if="form.expireDuration === 'custom'"
+class="mt-3">
               <input
                 v-model="form.customExpireDate"
                 class="form-input w-full dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
@@ -437,7 +440,8 @@
                 @change="updateCustomExpireAt"
               />
             </div>
-            <p v-if="form.expiresAt" class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            <p v-if="form.expiresAt"
+class="mt-2 text-xs text-gray-500 dark:text-gray-400">
               将于 {{ formatExpireDate(form.expiresAt) }} 过期
             </p>
           </div>
@@ -473,15 +477,6 @@
                   value="gemini"
                 />
                 <span class="text-sm text-gray-700 dark:text-gray-300">仅 Gemini</span>
-              </label>
-              <label class="flex cursor-pointer items-center">
-                <input
-                  v-model="form.permissions"
-                  class="mr-2 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
-                  type="radio"
-                  value="openai"
-                />
-                <span class="text-sm text-gray-700 dark:text-gray-300">仅 OpenAI</span>
               </label>
             </div>
             <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
@@ -520,7 +515,7 @@
                   v-model="form.claudeAccountId"
                   :accounts="localAccounts.claude"
                   default-option-text="使用共享账号池"
-                  :disabled="form.permissions === 'gemini' || form.permissions === 'openai'"
+                  :disabled="form.permissions === 'gemini'"
                   :groups="localAccounts.claudeGroups"
                   placeholder="请选择Claude账号"
                   platform="claude"
@@ -534,24 +529,10 @@
                   v-model="form.geminiAccountId"
                   :accounts="localAccounts.gemini"
                   default-option-text="使用共享账号池"
-                  :disabled="form.permissions === 'claude' || form.permissions === 'openai'"
+                  :disabled="form.permissions === 'claude'"
                   :groups="localAccounts.geminiGroups"
                   placeholder="请选择Gemini账号"
                   platform="gemini"
-                />
-              </div>
-              <div>
-                <label class="mb-1 block text-sm font-medium text-gray-600 dark:text-gray-400"
-                  >OpenAI 专属账号</label
-                >
-                <AccountSelector
-                  v-model="form.openaiAccountId"
-                  :accounts="localAccounts.openai"
-                  default-option-text="使用共享账号池"
-                  :disabled="form.permissions === 'claude' || form.permissions === 'gemini'"
-                  :groups="localAccounts.openaiGroups"
-                  placeholder="请选择OpenAI账号"
-                  platform="openai"
                 />
               </div>
               <div>
@@ -562,7 +543,7 @@
                   v-model="form.claudeAccount"
                   :accounts="localAccounts.claude"
                   default-option-text="使用共享账号池"
-                  :disabled="form.permissions === 'gemini' || form.permissions === 'openai'"
+                  :disabled="form.permissions === 'gemini'"
                   :groups="localAccounts.claudeGroups"
                 />
               </div>
@@ -588,7 +569,8 @@
               </label>
             </div>
 
-            <div v-if="form.enableModelRestriction" class="space-y-3">
+            <div v-if="form.enableModelRestriction"
+class="space-y-3">
               <div>
                 <label class="mb-2 block text-sm font-medium text-gray-600">限制的模型列表</label>
                 <div
@@ -608,7 +590,8 @@
                       <i class="fas fa-times text-xs" />
                     </button>
                   </span>
-                  <span v-if="form.restrictedModels.length === 0" class="text-sm text-gray-400">
+                  <span v-if="form.restrictedModels.length === 0"
+class="text-sm text-gray-400">
                     暂无限制的模型
                   </span>
                 </div>
@@ -683,7 +666,8 @@
                   >允许的客户端</label
                 >
                 <div class="space-y-1">
-                  <div v-for="client in supportedClients" :key="client.id" class="flex items-start">
+                  <div v-for="client in supportedClients"
+:key="client.id" class="flex items-start">
                     <input
                       :id="`client_${client.id}`"
                       v-model="form.allowedClients"
@@ -691,7 +675,8 @@
                       type="checkbox"
                       :value="client.id"
                     />
-                    <label class="ml-2 flex-1 cursor-pointer" :for="`client_${client.id}`">
+                    <label class="ml-2 flex-1 cursor-pointer"
+:for="`client_${client.id}`">
                       <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{
                         client.name
                       }}</span>
@@ -718,8 +703,10 @@
               :disabled="loading"
               type="submit"
             >
-              <div v-if="loading" class="loading-spinner mr-2" />
-              <i v-else class="fas fa-plus mr-2" />
+              <div v-if="loading"
+class="loading-spinner mr-2" />
+              <i v-else
+class="fas fa-plus mr-2" />
               {{ loading ? '创建中...' : '创建' }}
             </button>
           </div>
@@ -753,10 +740,8 @@ const accountsLoading = ref(false)
 const localAccounts = ref({
   claude: [],
   gemini: [],
-  openai: [],
   claudeGroups: [],
-  geminiGroups: [],
-  openaiGroups: []
+  geminiGroups: []
 })
 
 // 表单验证状态
@@ -794,7 +779,6 @@ const form = reactive({
   permissions: 'all',
   claudeAccountId: '',
   geminiAccountId: '',
-  openaiAccountId: '',
   enableModelRestriction: false,
   restrictedModels: [],
   modelInput: '',
@@ -812,10 +796,8 @@ onMounted(async () => {
     localAccounts.value = {
       claude: props.accounts.claude || [],
       gemini: props.accounts.gemini || [],
-      openai: props.accounts.openai || [],
       claudeGroups: props.accounts.claudeGroups || [],
-      geminiGroups: props.accounts.geminiGroups || [],
-      openaiGroups: props.accounts.openaiGroups || []
+      geminiGroups: props.accounts.geminiGroups || []
     }
   }
 })
@@ -824,11 +806,10 @@ onMounted(async () => {
 const refreshAccounts = async () => {
   accountsLoading.value = true
   try {
-    const [claudeData, claudeConsoleData, geminiData, openaiData, groupsData] = await Promise.all([
+    const [claudeData, claudeConsoleData, geminiData, groupsData] = await Promise.all([
       apiClient.get('/admin/claude-accounts'),
       apiClient.get('/admin/claude-console-accounts'),
       apiClient.get('/admin/gemini-accounts'),
-      apiClient.get('/admin/openai-accounts'),
       apiClient.get('/admin/account-groups')
     ])
 
@@ -864,23 +845,15 @@ const refreshAccounts = async () => {
       }))
     }
 
-    if (openaiData.success) {
-      localAccounts.value.openai = (openaiData.data || []).map((account) => ({
-        ...account,
-        isDedicated: account.accountType === 'dedicated' // 保留以便向后兼容
-      }))
-    }
-
     // 处理分组数据
     if (groupsData.success) {
       const allGroups = groupsData.data || []
       localAccounts.value.claudeGroups = allGroups.filter((g) => g.platform === 'claude')
       localAccounts.value.geminiGroups = allGroups.filter((g) => g.platform === 'gemini')
-      localAccounts.value.openaiGroups = allGroups.filter((g) => g.platform === 'openai')
     }
 
     showToast('账号列表已刷新', 'success')
-  } catch (error) {
+  } catch {
     showToast('刷新账号列表失败', 'error')
   } finally {
     accountsLoading.value = false
@@ -1097,11 +1070,6 @@ const createApiKey = async () => {
       baseData.geminiAccountId = form.geminiAccountId
     }
 
-    // OpenAI账户绑定
-    if (form.openaiAccountId) {
-      baseData.openaiAccountId = form.openaiAccountId
-    }
-
     if (form.createType === 'single') {
       // 单个创建
       const data = {
@@ -1137,7 +1105,7 @@ const createApiKey = async () => {
         showToast(result.message || '批量创建失败', 'error')
       }
     }
-  } catch (error) {
+  } catch {
     showToast('创建失败', 'error')
   } finally {
     loading.value = false

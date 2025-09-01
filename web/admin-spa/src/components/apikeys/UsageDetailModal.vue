@@ -1,8 +1,10 @@
 <template>
   <Teleport to="body">
-    <div v-if="show" class="modal fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
+    <div v-if="show"
+class="modal fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
       <!-- 背景遮罩 -->
-      <div class="fixed inset-0 bg-gray-900 bg-opacity-50 backdrop-blur-sm" @click="close" />
+      <div class="fixed inset-0 bg-gray-900 bg-opacity-50 backdrop-blur-sm"
+@click="close" />
 
       <!-- 模态框 -->
       <div
@@ -20,7 +22,8 @@
               使用统计详情 - {{ apiKey.name }}
             </h3>
           </div>
-          <button class="p-1 text-gray-400 transition-colors hover:text-gray-600" @click="close">
+          <button class="p-1 text-gray-400 transition-colors hover:text-gray-600"
+@click="close">
             <i class="fas fa-times text-lg sm:text-xl" />
           </button>
         </div>
@@ -125,7 +128,8 @@
                   {{ formatTokenCount(outputTokens) }}
                 </span>
               </div>
-              <div v-if="cacheCreateTokens > 0" class="flex items-center justify-between">
+              <div v-if="cacheCreateTokens > 0"
+class="flex items-center justify-between">
                 <div class="flex items-center">
                   <i class="fas fa-save mr-2 text-purple-500" />
                   <span class="text-sm text-gray-600 dark:text-gray-400">缓存创建 Token</span>
@@ -134,7 +138,8 @@
                   {{ formatTokenCount(cacheCreateTokens) }}
                 </span>
               </div>
-              <div v-if="cacheReadTokens > 0" class="flex items-center justify-between">
+              <div v-if="cacheReadTokens > 0"
+class="flex items-center justify-between">
                 <div class="flex items-center">
                   <i class="fas fa-download mr-2 text-purple-500" />
                   <span class="text-sm text-gray-600 dark:text-gray-400">缓存读取 Token</span>
@@ -147,7 +152,8 @@
           </div>
 
           <!-- 限制信息 -->
-          <div v-if="hasLimits" class="mb-6">
+          <div v-if="hasLimits"
+class="mb-6">
             <h4
               class="mb-3 flex items-center text-sm font-semibold text-gray-700 dark:text-gray-300"
             >
@@ -155,7 +161,8 @@
               限制设置
             </h4>
             <div class="space-y-3 rounded-lg bg-gray-50 p-4 dark:bg-gray-700/50">
-              <div v-if="apiKey.dailyCostLimit > 0" class="space-y-2">
+              <div v-if="apiKey.dailyCostLimit > 0"
+class="space-y-2">
                 <div class="flex items-center justify-between text-sm">
                   <span class="text-gray-600 dark:text-gray-400">每日费用限制</span>
                   <span class="font-semibold text-gray-900 dark:text-gray-100">
@@ -190,7 +197,8 @@
                 </span>
               </div>
 
-              <div v-if="apiKey.rateLimitWindow > 0" class="space-y-2">
+              <div v-if="apiKey.rateLimitWindow > 0"
+class="space-y-2">
                 <h5 class="text-sm font-medium text-gray-700 dark:text-gray-300">
                   <i class="fas fa-clock mr-1 text-blue-500" />
                   时间窗口限制
@@ -217,7 +225,8 @@
 
         <!-- 底部按钮 -->
         <div class="mt-4 flex justify-end gap-2 sm:mt-6 sm:gap-3">
-          <button class="btn btn-secondary px-4 py-2 text-sm" type="button" @click="close">
+          <button class="btn btn-secondary px-4 py-2 text-sm"
+type="button" @click="close">
             关闭
           </button>
         </div>

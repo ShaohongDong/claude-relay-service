@@ -166,8 +166,7 @@ const copyApiKey = async () => {
   try {
     await navigator.clipboard.writeText(key)
     showToast('API Key 已复制到剪贴板', 'success')
-  } catch (error) {
-    console.error('Failed to copy:', error)
+  } catch {
     // 降级方案：创建一个临时文本区域
     const textArea = document.createElement('textarea')
     textArea.value = key
@@ -176,7 +175,7 @@ const copyApiKey = async () => {
     try {
       document.execCommand('copy')
       showToast('API Key 已复制到剪贴板', 'success')
-    } catch (fallbackError) {
+    } catch {
       showToast('复制失败，请手动复制', 'error')
     } finally {
       document.body.removeChild(textArea)

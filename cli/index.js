@@ -570,42 +570,6 @@ async function deleteApiKey() {
   }
 }
 
-// async function listClaudeAccounts() {
-//   const spinner = ora('正在获取 Claude 账户...').start();
-
-//   try {
-//     const accounts = await claudeAccountService.getAllAccounts();
-//     spinner.succeed(`找到 ${accounts.length} 个 Claude 账户`);
-
-//     if (accounts.length === 0) {
-//       console.log(styles.warning('没有找到任何 Claude 账户'));
-//       return;
-//     }
-
-//     const tableData = [
-//       ['ID', '名称', '邮箱', '状态', '代理', '最后使用']
-//     ];
-
-//     accounts.forEach(account => {
-//       tableData.push([
-//         account.id.substring(0, 8) + '...',
-//         account.name,
-//         account.email || '-',
-//         account.isActive ? (account.status === 'active' ? '🟢 活跃' : '🟡 待激活') : '🔴 停用',
-//         account.proxy ? '🌐 是' : '-',
-//         account.lastUsedAt ? new Date(account.lastUsedAt).toLocaleDateString() : '-'
-//       ]);
-//     });
-
-//     console.log('\n🏢 Claude 账户列表:\n');
-//     console.log(table(tableData));
-
-//   } catch (error) {
-//     spinner.fail('获取 Claude 账户失败');
-//     console.error(styles.error(error.message));
-//   }
-// }
-
 // 程序信息
 program.name('claude-relay-cli').description('Claude Relay Service 命令行管理工具').version('1.0.0')
 

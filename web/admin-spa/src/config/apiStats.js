@@ -9,31 +9,26 @@ class ApiStatsClient {
   }
 
   async request(url, options = {}) {
-    try {
-      // 在开发环境中，为 /admin 路径添加 /webapi 前缀
-      if (this.isDev && url.startsWith('/admin')) {
-        url = '/webapi' + url
-      }
-
-      const response = await fetch(`${this.baseURL}${url}`, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers
-        },
-        ...options
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.message || `请求失败: ${response.status}`)
-      }
-
-      return data
-    } catch (error) {
-      console.error('API Stats request error:', error)
-      throw error
+    // 在开发环境中，为 /admin 路径添加 /webapi 前缀
+    if (this.isDev && url.startsWith('/admin')) {
+      url = '/webapi' + url
     }
+
+    const response = await fetch(`${this.baseURL}${url}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+      },
+      ...options
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data.message || `请求失败: ${response.status}`)
+    }
+
+    return data
   }
 
   // 获取 API Key ID
@@ -64,8 +59,7 @@ class ApiStatsClient {
   async getOemSettings() {
     try {
       return await this.request('/admin/oem-settings')
-    } catch (error) {
-      console.error('Failed to load OEM settings:', error)
+    } catch {
       return {
         success: true,
         data: {

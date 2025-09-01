@@ -7,15 +7,20 @@
       :title="themeTooltip"
       @click="handleCycleTheme"
     >
-      <transition mode="out-in" name="fade">
-        <i v-if="themeStore.themeMode === 'light'" key="sun" class="fas fa-sun" />
-        <i v-else-if="themeStore.themeMode === 'dark'" key="moon" class="fas fa-moon" />
-        <i v-else key="auto" class="fas fa-circle-half-stroke" />
+      <transition mode="out-in"
+name="fade">
+        <i v-if="themeStore.themeMode === 'light'"
+key="sun" class="fas fa-sun" />
+        <i v-else-if="themeStore.themeMode === 'dark'"
+key="moon" class="fas fa-moon" />
+        <i v-else
+key="auto" class="fas fa-circle-half-stroke" />
       </transition>
     </button>
 
     <!-- 下拉菜单模式 - 改为创意切换开关 -->
-    <div v-else-if="mode === 'dropdown'" class="theme-switch-wrapper">
+    <div v-else-if="mode === 'dropdown'"
+class="theme-switch-wrapper">
       <button
         class="theme-switch"
         :class="{
@@ -28,29 +33,33 @@
         <!-- 背景装饰 -->
         <div class="switch-bg">
           <div class="stars">
-            <span></span>
-            <span></span>
-            <span></span>
+            <span />
+            <span />
+            <span />
           </div>
           <div class="clouds">
-            <span></span>
-            <span></span>
+            <span />
+            <span />
           </div>
         </div>
 
         <!-- 切换滑块 -->
         <div class="switch-handle">
           <div class="handle-icon">
-            <i v-if="themeStore.themeMode === 'light'" class="fas fa-sun" />
-            <i v-else-if="themeStore.themeMode === 'dark'" class="fas fa-moon" />
-            <i v-else class="fas fa-circle-half-stroke" />
+            <i v-if="themeStore.themeMode === 'light'"
+class="fas fa-sun" />
+            <i v-else-if="themeStore.themeMode === 'dark'"
+class="fas fa-moon" />
+            <i v-else
+class="fas fa-circle-half-stroke" />
           </div>
         </div>
       </button>
     </div>
 
     <!-- 分段按钮模式 -->
-    <div v-else-if="mode === 'segmented'" class="theme-segmented">
+    <div v-else-if="mode === 'segmented'"
+class="theme-segmented">
       <button
         v-for="option in themeOptions"
         :key="option.value"
@@ -60,7 +69,8 @@
         @click="selectTheme(option.value)"
       >
         <i :class="option.icon" />
-        <span v-if="showLabel" class="ml-1 hidden sm:inline">{{ option.shortLabel }}</span>
+        <span v-if="showLabel"
+class="ml-1 hidden sm:inline">{{ option.shortLabel }}</span>
       </button>
     </div>
   </div>

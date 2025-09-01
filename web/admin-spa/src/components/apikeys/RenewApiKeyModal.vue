@@ -56,7 +56,8 @@
               <option value="custom">自定义日期</option>
               <option value="permanent">设为永不过期</option>
             </select>
-            <div v-if="form.renewDuration === 'custom'" class="mt-3">
+            <div v-if="form.renewDuration === 'custom'"
+class="mt-3">
               <input
                 v-model="form.customExpireDate"
                 class="form-input w-full"
@@ -65,7 +66,8 @@
                 @change="updateCustomRenewExpireAt"
               />
             </div>
-            <p v-if="form.newExpiresAt" class="mt-2 text-xs text-gray-500">
+            <p v-if="form.newExpiresAt"
+class="mt-2 text-xs text-gray-500">
               新的过期时间：{{ formatExpireDate(form.newExpiresAt) }}
             </p>
           </div>
@@ -85,8 +87,10 @@
             type="button"
             @click="renewApiKey"
           >
-            <div v-if="loading" class="loading-spinner mr-2" />
-            <i v-else class="fas fa-clock mr-2" />
+            <div v-if="loading"
+class="loading-spinner mr-2" />
+            <i v-else
+class="fas fa-clock mr-2" />
             {{ loading ? '续期中...' : '确认续期' }}
           </button>
         </div>
@@ -215,7 +219,7 @@ const renewApiKey = async () => {
     } else {
       showToast(result.message || '续期失败', 'error')
     }
-  } catch (error) {
+  } catch {
     showToast('续期失败', 'error')
   } finally {
     loading.value = false

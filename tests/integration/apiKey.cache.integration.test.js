@@ -65,8 +65,6 @@ describe('ApiKeyService 缓存集成测试', () => {
     claudeAccountId: 'claude-123',
     claudeConsoleAccountId: '',
     geminiAccountId: '',
-    openaiAccountId: '',
-    azureOpenaiAccountId: '',
     permissions: 'all',
     tokenLimit: '1000000',
     concurrencyLimit: '0',

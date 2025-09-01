@@ -7,7 +7,8 @@
       </h2>
 
       <div class="flex items-center gap-3">
-        <el-radio-group v-model="granularity" size="small" @change="handleGranularityChange">
+        <el-radio-group v-model="granularity"
+size="small" @change="handleGranularityChange">
           <el-radio-button label="day"> 按天 </el-radio-button>
           <el-radio-button label="hour"> 按小时 </el-radio-button>
         </el-radio-group>
@@ -28,7 +29,8 @@
       </div>
     </div>
 
-    <div class="relative" style="height: 300px">
+    <div class="relative"
+style="height: 300px">
       <canvas ref="chartCanvas" />
     </div>
   </div>

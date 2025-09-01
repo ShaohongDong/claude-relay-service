@@ -17,7 +17,7 @@
             <div class="group relative min-w-[140px]">
               <div
                 class="absolute -inset-0.5 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 opacity-0 blur transition duration-300 group-hover:opacity-20"
-              ></div>
+              />
               <CustomDropdown
                 v-model="apiKeyStatsTimeRange"
                 icon="fa-calendar-alt"
@@ -32,7 +32,7 @@
             <div class="group relative min-w-[140px]">
               <div
                 class="absolute -inset-0.5 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 opacity-0 blur transition duration-300 group-hover:opacity-20"
-              ></div>
+              />
               <div class="relative">
                 <CustomDropdown
                   v-model="selectedTagFilter"
@@ -55,7 +55,7 @@
             <div class="group relative min-w-[200px]">
               <div
                 class="absolute -inset-0.5 rounded-lg bg-gradient-to-r from-cyan-500 to-teal-500 opacity-0 blur transition duration-300 group-hover:opacity-20"
-              ></div>
+              />
               <div class="relative flex items-center">
                 <input
                   v-model="searchKeyword"
@@ -83,7 +83,7 @@
             >
               <div
                 class="absolute -inset-0.5 rounded-lg bg-gradient-to-r from-green-500 to-teal-500 opacity-0 blur transition duration-300 group-hover:opacity-20"
-              ></div>
+              />
               <i
                 :class="[
                   'fas relative text-green-500',
@@ -101,7 +101,7 @@
             >
               <div
                 class="absolute -inset-0.5 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-500 opacity-0 blur transition duration-300 group-hover:opacity-20"
-              ></div>
+              />
               <i class="fas fa-edit relative text-blue-600" />
               <span class="relative">编辑选中 ({{ selectedApiKeys.length }})</span>
             </button>
@@ -114,7 +114,7 @@
             >
               <div
                 class="absolute -inset-0.5 rounded-lg bg-gradient-to-r from-red-500 to-pink-500 opacity-0 blur transition duration-300 group-hover:opacity-20"
-              ></div>
+              />
               <i class="fas fa-trash relative text-red-600" />
               <span class="relative">删除选中 ({{ selectedApiKeys.length }})</span>
             </button>
@@ -124,18 +124,20 @@
             class="flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-md transition-all duration-200 hover:from-blue-600 hover:to-blue-700 hover:shadow-lg sm:w-auto"
             @click.stop="openCreateApiKeyModal"
           >
-            <i class="fas fa-plus"></i>
+            <i class="fas fa-plus" />
             <span>创建新 Key</span>
           </button>
         </div>
       </div>
 
-      <div v-if="apiKeysLoading" class="py-12 text-center">
+      <div v-if="apiKeysLoading"
+class="py-12 text-center">
         <div class="loading-spinner mx-auto mb-4" />
         <p class="text-gray-500">正在加载 API Keys...</p>
       </div>
 
-      <div v-else-if="apiKeys.length === 0" class="py-12 text-center">
+      <div v-else-if="apiKeys.length === 0"
+class="py-12 text-center">
         <div
           class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100"
         >
@@ -146,7 +148,8 @@
       </div>
 
       <!-- 桌面端表格视图 -->
-      <div v-else class="table-container hidden md:block">
+      <div v-else
+class="table-container hidden md:block">
         <table class="w-full table-fixed">
           <thead class="bg-gray-50/80 backdrop-blur-sm dark:bg-gray-700/80">
             <tr>
@@ -174,7 +177,8 @@
                     'ml-1'
                   ]"
                 />
-                <i v-else class="fas fa-sort ml-1 text-gray-400" />
+                <i v-else
+class="fas fa-sort ml-1 text-gray-400" />
               </th>
               <th
                 class="w-[10%] min-w-[80px] px-3 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300"
@@ -194,7 +198,8 @@
                     'ml-1'
                   ]"
                 />
-                <i v-else class="fas fa-sort ml-1 text-gray-400" />
+                <i v-else
+class="fas fa-sort ml-1 text-gray-400" />
               </th>
               <th
                 class="w-[17%] min-w-[140px] px-3 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300"
@@ -213,7 +218,8 @@
                       'ml-1'
                     ]"
                   />
-                  <i v-else class="fas fa-sort ml-1 text-gray-400" />)
+                  <i v-else
+class="fas fa-sort ml-1 text-gray-400" />)
                 </span>
               </th>
               <th
@@ -229,7 +235,8 @@
                     'ml-1'
                   ]"
                 />
-                <i v-else class="fas fa-sort ml-1 text-gray-400" />
+                <i v-else
+class="fas fa-sort ml-1 text-gray-400" />
               </th>
               <th
                 class="w-[10%] min-w-[90px] cursor-pointer px-3 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-600"
@@ -244,7 +251,8 @@
                     'ml-1'
                   ]"
                 />
-                <i v-else class="fas fa-sort ml-1 text-gray-400" />
+                <i v-else
+class="fas fa-sort ml-1 text-gray-400" />
               </th>
               <th
                 class="w-[20%] min-w-[180px] px-3 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300"
@@ -254,7 +262,8 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-200/50 dark:divide-gray-600/50">
-            <template v-for="key in paginatedApiKeys" :key="key.id">
+            <template v-for="key in paginatedApiKeys"
+:key="key.id">
               <!-- API Key 主行 -->
               <tr class="table-row">
                 <td class="px-3 py-4">
@@ -306,7 +315,8 @@
                           </span>
                         </div>
                         <!-- Gemini 绑定 -->
-                        <div v-if="key.geminiAccountId" class="flex items-center gap-1 text-xs">
+                        <div v-if="key.geminiAccountId"
+class="flex items-center gap-1 text-xs">
                           <span
                             class="inline-flex items-center rounded bg-yellow-100 px-1.5 py-0.5 text-yellow-700"
                           >
@@ -317,25 +327,12 @@
                             {{ getGeminiBindingInfo(key) }}
                           </span>
                         </div>
-                        <!-- OpenAI 绑定 -->
-                        <div v-if="key.openaiAccountId" class="flex items-center gap-1 text-xs">
-                          <span
-                            class="inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-gray-700"
-                          >
-                            <i class="fa-openai mr-1 text-[10px]" />
-                            OpenAI
-                          </span>
-                          <span class="truncate text-gray-600 dark:text-gray-400">
-                            {{ getOpenAIBindingInfo(key) }}
-                          </span>
-                        </div>
                         <!-- 无绑定时显示共享池 -->
                         <div
                           v-if="
                             !key.claudeAccountId &&
                             !key.claudeConsoleAccountId &&
-                            !key.geminiAccountId &&
-                            !key.openaiAccountId
+                            !key.geminiAccountId
                           "
                           class="text-xs text-gray-500"
                         >
@@ -355,7 +352,8 @@
                     >
                       {{ tag }}
                     </span>
-                    <span v-if="!key.tags || key.tags.length === 0" class="text-xs text-gray-400"
+                    <span
+v-if="!key.tags || key.tags.length === 0" class="text-xs text-gray-400"
                       >无标签</span
                     >
                   </div>
@@ -401,7 +399,8 @@
                     </div>
 
                     <!-- 每日费用限制进度条 -->
-                    <div v-if="key.dailyCostLimit > 0" class="space-y-1">
+                    <div v-if="key.dailyCostLimit > 0"
+class="space-y-1">
                       <div class="flex items-center justify-between text-xs">
                         <span class="text-gray-500 dark:text-gray-400">每日费用</span>
                         <span class="text-gray-700 dark:text-gray-300">
@@ -420,7 +419,8 @@
                     </div>
 
                     <!-- Opus 周费用限制进度条 -->
-                    <div v-if="key.weeklyOpusCostLimit > 0" class="space-y-1">
+                    <div v-if="key.weeklyOpusCostLimit > 0"
+class="space-y-1">
                       <div class="flex items-center justify-between text-xs">
                         <span class="text-gray-500 dark:text-gray-400">Opus周费用</span>
                         <span class="text-gray-700 dark:text-gray-300">
@@ -487,11 +487,13 @@
                         <i class="fas fa-clock mr-1" />
                         {{ formatExpireDate(key.expiresAt) }}
                       </span>
-                      <span v-else class="text-gray-600">
+                      <span v-else
+class="text-gray-600">
                         {{ formatExpireDate(key.expiresAt) }}
                       </span>
                     </span>
-                    <span v-else class="inline-flex items-center text-gray-400">
+                    <span v-else
+class="inline-flex items-center text-gray-400">
                       <i class="fas fa-infinity mr-1" />
                       永不过期
                     </span>
@@ -500,13 +502,14 @@
                       title="编辑过期时间"
                       @click.stop="startEditExpiry(key)"
                     >
-                      <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg class="h-3 w-3"
+fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path
                           d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
                           stroke-linecap="round"
                           stroke-linejoin="round"
                           stroke-width="2"
-                        ></path>
+                        />
                       </svg>
                     </button>
                   </div>
@@ -584,8 +587,10 @@
 
               <!-- 模型统计展开区域 -->
               <tr v-if="key && key.id && expandedApiKeys[key.id]">
-                <td class="bg-gray-50 px-3 py-4 dark:bg-gray-700" colspan="8">
-                  <div v-if="!apiKeyModelStats[key.id]" class="py-4 text-center">
+                <td class="bg-gray-50 px-3 py-4 dark:bg-gray-700"
+colspan="8">
+                  <div v-if="!apiKeyModelStats[key.id]"
+class="py-4 text-center">
                     <div class="loading-spinner mx-auto" />
                     <p class="mt-2 text-sm text-gray-500">加载模型统计...</p>
                   </div>
@@ -828,7 +833,8 @@
       </div>
 
       <!-- 移动端卡片视图 -->
-      <div v-if="!apiKeysLoading && sortedApiKeys.length > 0" class="space-y-3 md:hidden">
+      <div v-if="!apiKeysLoading && sortedApiKeys.length > 0"
+class="space-y-3 md:hidden">
         <div
           v-for="key in paginatedApiKeys"
           :key="key.id"
@@ -892,7 +898,8 @@
               </span>
             </div>
             <!-- Gemini 绑定 -->
-            <div v-if="key.geminiAccountId" class="flex flex-wrap items-center gap-1 text-xs">
+            <div v-if="key.geminiAccountId"
+class="flex flex-wrap items-center gap-1 text-xs">
               <span
                 class="inline-flex items-center rounded bg-yellow-100 px-2 py-0.5 text-yellow-700"
               >
@@ -903,31 +910,16 @@
                 {{ getGeminiBindingInfo(key) }}
               </span>
             </div>
-            <!-- OpenAI 绑定 -->
-            <div v-if="key.openaiAccountId" class="flex flex-wrap items-center gap-1 text-xs">
-              <span class="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-gray-700">
-                <i class="fa-openai mr-1" />
-                OpenAI
-              </span>
-              <span class="text-gray-600">
-                {{ getOpenAIBindingInfo(key) }}
-              </span>
-            </div>
             <span
               class="inline-flex items-center rounded bg-orange-100 px-2 py-0.5 text-orange-700"
             >
               <i class="fas fa-cloud mr-1" />
             </span>
-            <span class="text-gray-600"> </span>
+            <span class="text-gray-600" />
           </div>
           <!-- 无绑定时显示共享池 -->
           <div
-            v-if="
-              !key.claudeAccountId &&
-              !key.claudeConsoleAccountId &&
-              !key.geminiAccountId &&
-              !key.openaiAccountId
-            "
+            v-if="!key.claudeAccountId && !key.claudeConsoleAccountId && !key.geminiAccountId"
             class="text-xs text-gray-500"
           >
             <i class="fas fa-share-alt mr-1" />
@@ -971,7 +963,8 @@
           </div>
 
           <!-- 限制进度 -->
-          <div v-if="key.dailyCostLimit > 0" class="space-y-1">
+          <div v-if="key.dailyCostLimit > 0"
+class="space-y-1">
             <div class="flex items-center justify-between text-xs">
               <span class="text-gray-500">每日费用限额</span>
               <span class="text-gray-700">
@@ -1027,13 +1020,14 @@
                 title="编辑过期时间"
                 @click.stop="startEditExpiry(key)"
               >
-                <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="h-3 w-3"
+fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
                     stroke-linecap="round"
                     stroke-linejoin="round"
                     stroke-width="2"
-                  ></path>
+                  />
                 </svg>
               </button>
             </div>
@@ -1041,7 +1035,8 @@
         </div>
 
         <!-- 标签 -->
-        <div v-if="key.tags && key.tags.length > 0" class="mb-3 flex flex-wrap gap-1">
+        <div v-if="key.tags && key.tags.length > 0"
+class="mb-3 flex flex-wrap gap-1">
           <span
             v-for="tag in key.tags"
             :key="tag"
@@ -1116,7 +1111,8 @@
             class="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 transition-colors hover:border-gray-300 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-gray-500 sm:text-sm"
             @change="currentPage = 1"
           >
-            <option v-for="size in pageSizeOptions" :key="size" :value="size">
+            <option v-for="size in pageSizeOptions"
+:key="size" :value="size">
               {{ size }}
             </option>
           </select>
@@ -1288,10 +1284,8 @@ const defaultTime = ref([new Date(2000, 1, 1, 0, 0, 0), new Date(2000, 2, 1, 23,
 const accounts = ref({
   claude: [],
   gemini: [],
-  openai: [],
   claudeGroups: [],
-  geminiGroups: [],
-  openaiGroups: []
+  geminiGroups: []
 })
 const editingExpiryKey = ref(null)
 const expiryEditModalRef = ref(null)
@@ -1437,11 +1431,10 @@ const paginatedApiKeys = computed(() => {
 // 加载账户列表
 const loadAccounts = async () => {
   try {
-    const [claudeData, claudeConsoleData, geminiData, openaiData, groupsData] = await Promise.all([
+    const [claudeData, claudeConsoleData, geminiData, groupsData] = await Promise.all([
       apiClient.get('/admin/claude-accounts'),
       apiClient.get('/admin/claude-console-accounts'),
       apiClient.get('/admin/gemini-accounts'),
-      apiClient.get('/admin/openai-accounts'),
       apiClient.get('/admin/account-groups')
     ])
 
@@ -1477,22 +1470,14 @@ const loadAccounts = async () => {
       }))
     }
 
-    if (openaiData.success) {
-      accounts.value.openai = (openaiData.data || []).map((account) => ({
-        ...account,
-        isDedicated: account.accountType === 'dedicated'
-      }))
-    }
-
     if (groupsData.success) {
       // 处理分组数据
       const allGroups = groupsData.data || []
       accounts.value.claudeGroups = allGroups.filter((g) => g.platform === 'claude')
       accounts.value.geminiGroups = allGroups.filter((g) => g.platform === 'gemini')
-      accounts.value.openaiGroups = allGroups.filter((g) => g.platform === 'openai')
     }
-  } catch (error) {
-    console.error('加载账户列表失败:', error)
+  } catch {
+    // 静默处理错误
   }
 }
 
@@ -1513,7 +1498,7 @@ const loadApiKeys = async () => {
       })
       availableTags.value = Array.from(tagsSet).sort()
     }
-  } catch (error) {
+  } catch {
     showToast('加载 API Keys 失败', 'error')
   } finally {
     apiKeysLoading.value = false
@@ -1563,12 +1548,6 @@ const getBoundAccountName = (accountId) => {
       return `分组-${geminiGroup.name}`
     }
 
-    // 从OpenAI分组中查找
-    const openaiGroup = accounts.value.openaiGroups.find((g) => g.id === groupId)
-    if (openaiGroup) {
-      return `分组-${openaiGroup.name}`
-    }
-
     // 如果找不到分组，返回分组ID的前8位
     return `分组-${groupId.substring(0, 8)}`
   }
@@ -1583,12 +1562,6 @@ const getBoundAccountName = (accountId) => {
   const geminiAccount = accounts.value.gemini.find((acc) => acc.id === accountId)
   if (geminiAccount) {
     return `${geminiAccount.name}`
-  }
-
-  // 从OpenAI账户列表中查找
-  const openaiAccount = accounts.value.openai.find((acc) => acc.id === accountId)
-  if (openaiAccount) {
-    return `${openaiAccount.name}`
   }
 
   // 如果找不到，返回账户ID的前8位
@@ -1633,26 +1606,6 @@ const getGeminiBindingInfo = (key) => {
     }
     // 检查账户是否存在
     const account = accounts.value.gemini.find((acc) => acc.id === key.geminiAccountId)
-    if (!account) {
-      return `⚠️ ${info} (账户不存在)`
-    }
-    if (account.accountType === 'dedicated') {
-      return `🔒 专属-${info}`
-    }
-    return info
-  }
-  return ''
-}
-
-// 获取OpenAI绑定信息
-const getOpenAIBindingInfo = (key) => {
-  if (key.openaiAccountId) {
-    const info = getBoundAccountName(key.openaiAccountId)
-    if (key.openaiAccountId.startsWith('group:')) {
-      return info
-    }
-    // 检查账户是否存在
-    const account = accounts.value.openai.find((acc) => acc.id === key.openaiAccountId)
     if (!account) {
       return `⚠️ ${info} (账户不存在)`
     }
@@ -1726,7 +1679,7 @@ const loadApiKeyModelStats = async (keyId, forceReload = false) => {
     if (data.success) {
       apiKeyModelStats.value[keyId] = data.data || []
     }
-  } catch (error) {
+  } catch {
     showToast('加载模型统计失败', 'error')
     apiKeyModelStats.value[keyId] = []
   }
@@ -1969,7 +1922,7 @@ const toggleApiKeyStatus = async (key) => {
     } else {
       showToast(data.message || '操作失败', 'error')
     }
-  } catch (error) {
+  } catch {
     showToast('操作失败', 'error')
   }
 }
@@ -2006,7 +1959,7 @@ const deleteApiKey = async (keyId) => {
     } else {
       showToast(data.message || '删除失败', 'error')
     }
-  } catch (error) {
+  } catch {
     showToast('删除失败', 'error')
   }
 }
@@ -2059,9 +2012,8 @@ const batchDeleteApiKeys = async () => {
     } else {
       showToast(data.message || '批量删除失败', 'error')
     }
-  } catch (error) {
+  } catch {
     showToast('批量删除失败', 'error')
-    console.error('批量删除 API Keys 失败:', error)
   }
 }
 
@@ -2124,12 +2076,9 @@ const copyApiStatsLink = (apiKey) => {
       showToast(`已复制统计页面链接`, 'success')
     } else {
       showToast('复制失败，请手动复制', 'error')
-      console.log('统计页面链接:', statsUrl)
     }
-  } catch (err) {
+  } catch {
     showToast('复制失败，请手动复制', 'error')
-    console.error('复制错误:', err)
-    console.log('统计页面链接:', statsUrl)
   } finally {
     document.body.removeChild(textarea)
   }
@@ -2167,7 +2116,7 @@ const handleSaveExpiry = async ({ keyId, expiresAt }) => {
         expiryEditModalRef.value.resetSaving()
       }
     }
-  } catch (error) {
+  } catch {
     showToast('更新失败', 'error')
     // 重置保存状态
     if (expiryEditModalRef.value) {

@@ -38,11 +38,14 @@
                       :disabled="loading"
                       @click="generateAuthUrl"
                     >
-                      <i v-if="!loading" class="fas fa-link mr-2" />
-                      <div v-else class="loading-spinner mr-2" />
+                      <i v-if="!loading"
+class="fas fa-link mr-2" />
+                      <div v-else
+class="loading-spinner mr-2" />
                       {{ loading ? '生成中...' : '生成授权链接' }}
                     </button>
-                    <div v-else class="space-y-3">
+                    <div v-else
+class="space-y-3">
                       <div class="flex items-center gap-2">
                         <input
                           class="form-input flex-1 bg-gray-50 font-mono text-xs dark:bg-gray-700"
@@ -183,11 +186,14 @@
                       :disabled="loading"
                       @click="generateAuthUrl"
                     >
-                      <i v-if="!loading" class="fas fa-link mr-2" />
-                      <div v-else class="loading-spinner mr-2" />
+                      <i v-if="!loading"
+class="fas fa-link mr-2" />
+                      <div v-else
+class="loading-spinner mr-2" />
                       {{ loading ? '生成中...' : '生成授权链接' }}
                     </button>
-                    <div v-else class="space-y-3">
+                    <div v-else
+class="space-y-3">
                       <div class="flex items-center gap-2">
                         <input
                           class="form-input flex-1 bg-gray-50 font-mono text-xs dark:bg-gray-700"
@@ -291,179 +297,6 @@
       </div>
     </div>
 
-    <!-- OpenAI OAuth流程 -->
-    <div v-else-if="platform === 'openai'">
-      <div
-        class="rounded-lg border border-orange-200 bg-orange-50 p-6 dark:border-orange-700 dark:bg-orange-900/30"
-      >
-        <div class="flex items-start gap-4">
-          <div
-            class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-orange-500"
-          >
-            <i class="fas fa-brain text-white" />
-          </div>
-          <div class="flex-1">
-            <h4 class="mb-3 font-semibold text-orange-900 dark:text-orange-200">OpenAI 账户授权</h4>
-            <p class="mb-4 text-sm text-orange-800 dark:text-orange-300">
-              请按照以下步骤完成 OpenAI 账户的授权：
-            </p>
-
-            <div class="space-y-4">
-              <!-- 步骤1: 生成授权链接 -->
-              <div
-                class="rounded-lg border border-orange-300 bg-white/80 p-4 dark:border-orange-600 dark:bg-gray-800/80"
-              >
-                <div class="flex items-start gap-3">
-                  <div
-                    class="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-orange-600 text-xs font-bold text-white"
-                  >
-                    1
-                  </div>
-                  <div class="flex-1">
-                    <p class="mb-2 font-medium text-orange-900 dark:text-orange-200">
-                      点击下方按钮生成授权链接
-                    </p>
-                    <button
-                      v-if="!authUrl"
-                      class="btn btn-primary px-4 py-2 text-sm"
-                      :disabled="loading"
-                      @click="generateAuthUrl"
-                    >
-                      <i v-if="!loading" class="fas fa-link mr-2" />
-                      <div v-else class="loading-spinner mr-2" />
-                      {{ loading ? '生成中...' : '生成授权链接' }}
-                    </button>
-                    <div v-else class="space-y-3">
-                      <div class="flex items-center gap-2">
-                        <input
-                          class="form-input flex-1 bg-gray-50 font-mono text-xs dark:bg-gray-700"
-                          readonly
-                          type="text"
-                          :value="authUrl"
-                        />
-                        <button
-                          class="rounded-lg bg-gray-100 px-3 py-2 transition-colors hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600"
-                          title="复制链接"
-                          @click="copyAuthUrl"
-                        >
-                          <i :class="copied ? 'fas fa-check text-green-500' : 'fas fa-copy'" />
-                        </button>
-                      </div>
-                      <button
-                        class="text-xs text-orange-600 hover:text-orange-700"
-                        @click="regenerateAuthUrl"
-                      >
-                        <i class="fas fa-sync-alt mr-1" />重新生成
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 步骤2: 访问链接并授权 -->
-              <div
-                class="rounded-lg border border-orange-300 bg-white/80 p-4 dark:border-orange-600 dark:bg-gray-800/80"
-              >
-                <div class="flex items-start gap-3">
-                  <div
-                    class="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-orange-600 text-xs font-bold text-white"
-                  >
-                    2
-                  </div>
-                  <div class="flex-1">
-                    <p class="mb-2 font-medium text-orange-900 dark:text-orange-200">
-                      在浏览器中打开链接并完成授权
-                    </p>
-                    <p class="mb-2 text-sm text-orange-700 dark:text-orange-300">
-                      请在新标签页中打开授权链接，登录您的 OpenAI 账户并授权。
-                    </p>
-                    <div
-                      class="mb-3 rounded border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-900/30"
-                    >
-                      <p class="text-xs text-amber-800 dark:text-amber-300">
-                        <i class="fas fa-clock mr-1" />
-                        <strong>重要提示：</strong>授权后页面可能会加载较长时间，请耐心等待。
-                      </p>
-                      <p class="mt-2 text-xs text-amber-700 dark:text-amber-400">
-                        当浏览器地址栏变为
-                        <strong class="font-mono">http://localhost:1455/...</strong>
-                        开头时，表示授权已完成。
-                      </p>
-                    </div>
-                    <div
-                      class="rounded border border-yellow-300 bg-yellow-50 p-3 dark:border-yellow-700 dark:bg-yellow-900/30"
-                    >
-                      <p class="text-xs text-yellow-800 dark:text-yellow-300">
-                        <i class="fas fa-exclamation-triangle mr-1" />
-                        <strong>注意：</strong
-                        >如果您设置了代理，请确保浏览器也使用相同的代理访问授权页面。
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 步骤3: 输入授权码 -->
-              <div
-                class="rounded-lg border border-orange-300 bg-white/80 p-4 dark:border-orange-600 dark:bg-gray-800/80"
-              >
-                <div class="flex items-start gap-3">
-                  <div
-                    class="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-orange-600 text-xs font-bold text-white"
-                  >
-                    3
-                  </div>
-                  <div class="flex-1">
-                    <p class="mb-2 font-medium text-orange-900 dark:text-orange-200">
-                      输入授权链接或 Code
-                    </p>
-                    <p class="mb-3 text-sm text-orange-700 dark:text-orange-300">
-                      授权完成后，当页面地址变为
-                      <strong class="font-mono">http://localhost:1455/...</strong> 时：
-                    </p>
-                    <div class="space-y-3">
-                      <div>
-                        <label
-                          class="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-300"
-                        >
-                          <i class="fas fa-link mr-2 text-orange-500" />授权链接或 Code
-                        </label>
-                        <textarea
-                          v-model="authCode"
-                          class="form-input w-full resize-none font-mono text-sm"
-                          placeholder="方式1：复制完整的链接（http://localhost:1455/auth/callback?code=...）&#10;方式2：仅复制 code 参数的值&#10;系统会自动识别并提取所需信息"
-                          rows="3"
-                        />
-                      </div>
-                      <div
-                        class="rounded border border-blue-300 bg-blue-50 p-2 dark:border-blue-700 dark:bg-blue-900/30"
-                      >
-                        <p class="text-xs text-blue-700 dark:text-blue-300">
-                          <i class="fas fa-lightbulb mr-1" />
-                          <strong>提示：</strong>您可以直接复制整个链接或仅复制 code
-                          参数值，系统会自动识别。
-                        </p>
-                        <p class="mt-1 text-xs text-blue-600 dark:text-blue-400">
-                          • 完整链接示例：<span class="font-mono"
-                            >http://localhost:1455/auth/callback?code=ac_4hm8...</span
-                          >
-                        </p>
-                        <p class="text-xs text-blue-600">
-                          • 仅 Code 示例：<span class="font-mono"
-                            >ac_4hm8iqmx9A2fzMy_cwye7U3W7...</span
-                          >
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <div class="flex gap-3 pt-4">
       <button
         class="flex-1 rounded-xl bg-gray-100 px-6 py-3 font-semibold text-gray-700 transition-colors hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -478,7 +311,8 @@
         type="button"
         @click="exchangeCode"
       >
-        <div v-if="exchanging" class="loading-spinner mr-2" />
+        <div v-if="exchanging"
+class="loading-spinner mr-2" />
         {{ exchanging ? '验证中...' : '完成授权' }}
       </button>
     </div>
@@ -545,18 +379,16 @@ watch(authCode, (newValue) => {
           // 成功提取授权码
           authCode.value = code
           showToast('成功提取授权码！', 'success')
-          console.log('Successfully extracted authorization code from URL')
         } else {
           // URL 中没有 code 参数
           showToast('URL 中未找到授权码参数，请检查链接是否正确', 'error')
         }
-      } catch (error) {
+      } catch {
         // URL 解析失败
-        console.error('Failed to parse URL:', error)
         showToast('链接格式错误，请检查是否为完整的 URL', 'error')
       }
-    } else if (props.platform === 'gemini' || props.platform === 'openai') {
-      // Gemini 和 OpenAI 平台可能使用不同的回调URL
+    } else if (props.platform === 'gemini') {
+      // Gemini 平台可能使用不同的回调URL
       // 尝试从任何URL中提取code参数
       try {
         const url = new URL(trimmedValue)
@@ -566,7 +398,7 @@ watch(authCode, (newValue) => {
           authCode.value = code
           showToast('成功提取授权码！', 'success')
         }
-      } catch (error) {
+      } catch {
         // 不是有效的URL，保持原值
       }
     } else {
@@ -601,10 +433,6 @@ const generateAuthUrl = async () => {
       const result = await accountsStore.generateGeminiAuthUrl(proxyConfig)
       authUrl.value = result.authUrl
       sessionId.value = result.sessionId
-    } else if (props.platform === 'openai') {
-      const result = await accountsStore.generateOpenAIAuthUrl(proxyConfig)
-      authUrl.value = result.authUrl
-      sessionId.value = result.sessionId
     }
   } catch (error) {
     showToast(error.message || '生成授权链接失败', 'error')
@@ -629,7 +457,7 @@ const copyAuthUrl = async () => {
     setTimeout(() => {
       copied.value = false
     }, 2000)
-  } catch (error) {
+  } catch {
     // 降级方案
     const input = document.createElement('input')
     input.value = authUrl.value
@@ -665,12 +493,6 @@ const exchangeCode = async () => {
         code: authCode.value.trim(),
         sessionId: sessionId.value
       }
-    } else if (props.platform === 'openai') {
-      // OpenAI使用code和sessionId
-      data = {
-        code: authCode.value.trim(),
-        sessionId: sessionId.value
-      }
     }
 
     // 添加代理配置（如果启用）
@@ -689,8 +511,6 @@ const exchangeCode = async () => {
       tokenInfo = await accountsStore.exchangeClaudeCode(data)
     } else if (props.platform === 'gemini') {
       tokenInfo = await accountsStore.exchangeGeminiCode(data)
-    } else if (props.platform === 'openai') {
-      tokenInfo = await accountsStore.exchangeOpenAICode(data)
     }
 
     emit('success', tokenInfo)

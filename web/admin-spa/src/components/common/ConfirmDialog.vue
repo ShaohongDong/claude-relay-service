@@ -1,6 +1,7 @@
 <template>
   <Teleport to="body">
-    <Transition appear name="modal">
+    <Transition appear
+name="modal">
       <div
         v-if="isVisible"
         class="modal fixed inset-0 z-[100] flex items-center justify-center p-4"
@@ -37,7 +38,8 @@
               :disabled="isProcessing"
               @click="handleConfirm"
             >
-              <div v-if="isProcessing" class="loading-spinner mr-2" />
+              <div v-if="isProcessing"
+class="loading-spinner mr-2" />
               {{ confirmText }}
             </button>
           </div>

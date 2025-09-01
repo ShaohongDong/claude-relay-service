@@ -7,7 +7,7 @@
             账户管理
           </h3>
           <p class="text-sm text-gray-600 dark:text-gray-400 sm:text-base">
-            管理您的 Claude、Gemini、OpenAI 和 Azure OpenAI 账户及代理配置
+            管理您的 Claude 和 Gemini 账户及代理配置
           </p>
         </div>
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -17,7 +17,7 @@
             <div class="group relative min-w-[160px]">
               <div
                 class="absolute -inset-0.5 rounded-lg bg-gradient-to-r from-indigo-500 to-blue-500 opacity-0 blur transition duration-300 group-hover:opacity-20"
-              ></div>
+              />
               <CustomDropdown
                 v-model="accountSortBy"
                 icon="fa-sort-amount-down"
@@ -32,7 +32,7 @@
             <div class="group relative min-w-[140px]">
               <div
                 class="absolute -inset-0.5 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-500 opacity-0 blur transition duration-300 group-hover:opacity-20"
-              ></div>
+              />
               <CustomDropdown
                 v-model="platformFilter"
                 icon="fa-server"
@@ -47,7 +47,7 @@
             <div class="group relative min-w-[160px]">
               <div
                 class="absolute -inset-0.5 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 opacity-0 blur transition duration-300 group-hover:opacity-20"
-              ></div>
+              />
               <CustomDropdown
                 v-model="groupFilter"
                 icon="fa-layer-group"
@@ -74,7 +74,7 @@
                 >
                   <div
                     class="absolute -inset-0.5 rounded-lg bg-gradient-to-r from-green-500 to-teal-500 opacity-0 blur transition duration-300 group-hover:opacity-20"
-                  ></div>
+                  />
                   <i
                     :class="[
                       'fas relative text-green-500',
@@ -92,18 +92,20 @@
             class="flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-green-500 to-green-600 px-5 py-2.5 text-sm font-medium text-white shadow-md transition-all duration-200 hover:from-green-600 hover:to-green-700 hover:shadow-lg sm:w-auto"
             @click.stop="openCreateAccountModal"
           >
-            <i class="fas fa-plus"></i>
+            <i class="fas fa-plus" />
             <span>添加账户</span>
           </button>
         </div>
       </div>
 
-      <div v-if="accountsLoading" class="py-12 text-center">
+      <div v-if="accountsLoading"
+class="py-12 text-center">
         <div class="loading-spinner mx-auto mb-4" />
         <p class="text-gray-500 dark:text-gray-400">正在加载账户...</p>
       </div>
 
-      <div v-else-if="sortedAccounts.length === 0" class="py-12 text-center">
+      <div v-else-if="sortedAccounts.length === 0"
+class="py-12 text-center">
         <div
           class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700"
         >
@@ -114,7 +116,8 @@
       </div>
 
       <!-- 桌面端表格视图 -->
-      <div v-else class="table-container hidden md:block">
+      <div v-else
+class="table-container hidden md:block">
         <table class="w-full table-fixed">
           <thead class="bg-gray-50/80 backdrop-blur-sm dark:bg-gray-700/80">
             <tr>
@@ -131,7 +134,8 @@
                     'ml-1'
                   ]"
                 />
-                <i v-else class="fas fa-sort ml-1 text-gray-400" />
+                <i v-else
+class="fas fa-sort ml-1 text-gray-400" />
               </th>
               <th
                 class="w-[15%] min-w-[120px] cursor-pointer px-3 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-600"
@@ -146,7 +150,8 @@
                     'ml-1'
                   ]"
                 />
-                <i v-else class="fas fa-sort ml-1 text-gray-400" />
+                <i v-else
+class="fas fa-sort ml-1 text-gray-400" />
               </th>
               <th
                 class="w-[12%] min-w-[100px] cursor-pointer px-3 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-600"
@@ -161,7 +166,8 @@
                     'ml-1'
                   ]"
                 />
-                <i v-else class="fas fa-sort ml-1 text-gray-400" />
+                <i v-else
+class="fas fa-sort ml-1 text-gray-400" />
               </th>
               <th
                 class="w-[8%] min-w-[80px] cursor-pointer px-3 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-600"
@@ -176,7 +182,8 @@
                     'ml-1'
                   ]"
                 />
-                <i v-else class="fas fa-sort ml-1 text-gray-400" />
+                <i v-else
+class="fas fa-sort ml-1 text-gray-400" />
               </th>
               <th
                 class="w-[10%] min-w-[100px] px-3 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300"
@@ -201,19 +208,19 @@
                           <div class="flex items-center gap-2">
                             <div
                               class="h-2 w-16 rounded bg-gradient-to-r from-blue-500 to-indigo-600"
-                            ></div>
+                            />
                             <span>正常：请求正常处理</span>
                           </div>
                           <div class="flex items-center gap-2">
                             <div
                               class="h-2 w-16 rounded bg-gradient-to-r from-yellow-500 to-orange-500"
-                            ></div>
+                            />
                             <span>警告：接近限制</span>
                           </div>
                           <div class="flex items-center gap-2">
                             <div
                               class="h-2 w-16 rounded bg-gradient-to-r from-red-500 to-red-600"
-                            ></div>
+                            />
                             <span>拒绝：达到速率限制</span>
                           </div>
                         </div>
@@ -238,7 +245,8 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-200/50 dark:divide-gray-600/50">
-            <tr v-for="account in sortedAccounts" :key="account.id" class="table-row">
+            <tr v-for="account in sortedAccounts"
+:key="account.id" class="table-row">
               <td class="px-3 py-4">
                 <div class="flex items-center">
                   <div
@@ -313,28 +321,6 @@
                     <span class="text-xs font-semibold text-purple-800">Console</span>
                     <span class="mx-1 h-4 w-px bg-purple-300" />
                     <span class="text-xs font-medium text-purple-700">API Key</span>
-                  </div>
-                  <div
-                    v-else-if="account.platform === 'openai'"
-                    class="flex items-center gap-1.5 rounded-lg border border-gray-700 bg-gray-100 bg-gradient-to-r from-gray-100 to-gray-100 px-2.5 py-1"
-                  >
-                    <div class="fa-openai" />
-                    <span class="text-xs font-semibold text-gray-950">OpenAi</span>
-                    <span class="mx-1 h-4 w-px bg-gray-400" />
-                    <span class="text-xs font-medium text-gray-950">{{ getOpenAIAuthType() }}</span>
-                  </div>
-                  <div
-                    v-else-if="account.platform === 'azure_openai'"
-                    class="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-gradient-to-r from-blue-100 to-cyan-100 px-2.5 py-1 dark:border-blue-700 dark:from-blue-900/20 dark:to-cyan-900/20"
-                  >
-                    <i class="fab fa-microsoft text-xs text-blue-700 dark:text-blue-400" />
-                    <span class="text-xs font-semibold text-blue-800 dark:text-blue-300"
-                      >Azure OpenAI</span
-                    >
-                    <span class="mx-1 h-4 w-px bg-blue-300 dark:bg-blue-600" />
-                    <span class="text-xs font-medium text-blue-700 dark:text-blue-400"
-                      >API Key</span
-                    >
                   </div>
                   <div
                     v-else-if="account.platform === 'claude' || account.platform === 'claude-oauth'"
@@ -447,8 +433,7 @@
                   v-if="
                     account.platform === 'claude' ||
                     account.platform === 'claude-console' ||
-                    account.platform === 'gemini' ||
-                    account.platform === 'openai'
+                    account.platform === 'gemini'
                   "
                   class="flex items-center gap-2"
                 >
@@ -462,7 +447,8 @@
                     {{ account.priority || 50 }}
                   </span>
                 </div>
-                <div v-else class="text-sm text-gray-400">
+                <div v-else
+class="text-sm text-gray-400">
                   <span class="text-xs">N/A</span>
                 </div>
               </td>
@@ -474,10 +460,12 @@
                 >
                   {{ formatProxyDisplay(account.proxy) }}
                 </div>
-                <div v-else class="text-gray-400">无代理</div>
+                <div
+v-else class="text-gray-400">无代理</div>
               </td>
               <td class="whitespace-nowrap px-3 py-4 text-sm">
-                <div v-if="account.usage && account.usage.daily" class="space-y-1">
+                <div v-if="account.usage && account.usage.daily"
+class="space-y-1">
                   <div class="flex items-center gap-2">
                     <div class="h-2 w-2 rounded-full bg-blue-500" />
                     <span class="text-sm font-medium text-gray-900 dark:text-gray-100"
@@ -503,7 +491,8 @@
                     平均 {{ account.usage.averages.rpm.toFixed(2) }} RPM
                   </div>
                 </div>
-                <div v-else class="text-xs text-gray-400">暂无数据</div>
+                <div
+v-else class="text-xs text-gray-400">暂无数据</div>
               </td>
               <td class="whitespace-nowrap px-3 py-4">
                 <div
@@ -567,10 +556,12 @@
                     </div>
                   </div>
                 </div>
-                <div v-else-if="account.platform === 'claude'" class="text-sm text-gray-400">
+                <div v-else-if="account.platform === 'claude'"
+class="text-sm text-gray-400">
                   <i class="fas fa-minus" />
                 </div>
-                <div v-else class="text-sm text-gray-400">
+                <div v-else
+class="text-sm text-gray-400">
                   <span class="text-xs">N/A</span>
                 </div>
               </td>
@@ -641,7 +632,8 @@
       </div>
 
       <!-- 移动端卡片视图 -->
-      <div v-if="!accountsLoading && sortedAccounts.length > 0" class="space-y-3 md:hidden">
+      <div v-if="!accountsLoading && sortedAccounts.length > 0"
+class="space-y-3 md:hidden">
         <div
           v-for="account in sortedAccounts"
           :key="account.id"
@@ -657,11 +649,7 @@
                     ? 'bg-gradient-to-br from-purple-500 to-purple-600'
                     : account.platform === 'claude-console'
                       ? 'bg-gradient-to-br from-orange-500 to-red-600'
-                      : account.platform === 'azure_openai'
-                        ? 'bg-gradient-to-br from-blue-500 to-cyan-600'
-                        : account.platform === 'openai'
-                          ? 'bg-gradient-to-br from-gray-600 to-gray-700'
-                          : 'bg-gradient-to-br from-blue-500 to-blue-600'
+                      : 'bg-gradient-to-br from-blue-500 to-blue-600'
                 ]"
               >
                 <i
@@ -671,11 +659,7 @@
                       ? 'fas fa-brain'
                       : account.platform === 'claude-console'
                         ? 'fab fa-aws'
-                        : account.platform === 'azure_openai'
-                          ? 'fab fa-microsoft'
-                          : account.platform === 'openai'
-                            ? 'fas fa-openai'
-                            : 'fas fa-robot'
+                        : 'fas fa-robot'
                   ]"
                 />
               </div>
@@ -732,7 +716,8 @@
             </div>
             <div>
               <p class="text-xs text-gray-500 dark:text-gray-400">会话窗口</p>
-              <div v-if="account.usage && account.usage.sessionWindow" class="space-y-1">
+              <div v-if="account.usage && account.usage.sessionWindow"
+class="space-y-1">
                 <div class="flex items-center gap-1.5">
                   <div class="h-1.5 w-1.5 rounded-full bg-purple-500" />
                   <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
@@ -746,7 +731,8 @@
                   </p>
                 </div>
               </div>
-              <div v-else class="text-sm font-semibold text-gray-400">-</div>
+              <div
+v-else class="text-sm font-semibold text-gray-400">-</div>
             </div>
           </div>
 
@@ -801,7 +787,8 @@
                 >
                   剩余 {{ formatRemainingTime(account.sessionWindow.remainingTime) }}
                 </span>
-                <span v-else class="text-gray-500"> 已结束 </span>
+                <span v-else
+class="text-gray-500"> 已结束 </span>
               </div>
             </div>
 
@@ -938,9 +925,7 @@ const platformOptions = ref([
   { value: 'all', label: '所有平台', icon: 'fa-globe' },
   { value: 'claude', label: 'Claude', icon: 'fa-brain' },
   { value: 'claude-console', label: 'Claude Console', icon: 'fa-terminal' },
-  { value: 'gemini', label: 'Gemini', icon: 'fa-google' },
-  { value: 'openai', label: 'OpenAi', icon: 'fa-openai' },
-  { value: 'azure_openai', label: 'Azure OpenAI', icon: 'fab fa-microsoft' }
+  { value: 'gemini', label: 'Gemini', icon: 'fa-google' }
 ])
 
 const groupOptions = computed(() => {
@@ -951,13 +936,8 @@ const groupOptions = computed(() => {
   accountGroups.value.forEach((group) => {
     options.push({
       value: group.id,
-      label: `${group.name} (${group.platform === 'claude' ? 'Claude' : group.platform === 'gemini' ? 'Gemini' : 'OpenAI'})`,
-      icon:
-        group.platform === 'claude'
-          ? 'fa-brain'
-          : group.platform === 'gemini'
-            ? 'fa-robot'
-            : 'fa-openai'
+      label: `${group.name} (${group.platform === 'claude' ? 'Claude' : 'Gemini'})`,
+      icon: group.platform === 'claude' ? 'fa-brain' : 'fa-robot'
     })
   })
   return options
@@ -1030,9 +1010,7 @@ const loadAccounts = async (forceReload = false) => {
       requests.push(
         apiClient.get('/admin/claude-accounts', { params }),
         apiClient.get('/admin/claude-console-accounts', { params }),
-        apiClient.get('/admin/gemini-accounts', { params }),
-        apiClient.get('/admin/openai-accounts', { params }),
-        apiClient.get('/admin/azure-openai-accounts', { params })
+        apiClient.get('/admin/gemini-accounts', { params })
       )
     } else {
       // 只请求指定平台，其他平台设为null占位
@@ -1041,45 +1019,21 @@ const loadAccounts = async (forceReload = false) => {
           requests.push(
             apiClient.get('/admin/claude-accounts', { params }),
             Promise.resolve({ success: true, data: [] }), // claude-console 占位
-            Promise.resolve({ success: true, data: [] }), // gemini 占位
-            Promise.resolve({ success: true, data: [] }), // openai 占位
-            Promise.resolve({ success: true, data: [] }) // azure-openai 占位
+            Promise.resolve({ success: true, data: [] }) // gemini 占位
           )
           break
         case 'claude-console':
           requests.push(
             Promise.resolve({ success: true, data: [] }), // claude 占位
             apiClient.get('/admin/claude-console-accounts', { params }),
-            Promise.resolve({ success: true, data: [] }), // gemini 占位
-            Promise.resolve({ success: true, data: [] }), // openai 占位
-            Promise.resolve({ success: true, data: [] }) // azure-openai 占位
+            Promise.resolve({ success: true, data: [] }) // gemini 占位
           )
           break
         case 'gemini':
           requests.push(
             Promise.resolve({ success: true, data: [] }), // claude 占位
             Promise.resolve({ success: true, data: [] }), // claude-console 占位
-            apiClient.get('/admin/gemini-accounts', { params }),
-            Promise.resolve({ success: true, data: [] }), // openai 占位
-            Promise.resolve({ success: true, data: [] }) // azure-openai 占位
-          )
-          break
-        case 'openai':
-          requests.push(
-            Promise.resolve({ success: true, data: [] }), // claude 占位
-            Promise.resolve({ success: true, data: [] }), // claude-console 占位
-            Promise.resolve({ success: true, data: [] }), // gemini 占位
-            apiClient.get('/admin/openai-accounts', { params }),
-            Promise.resolve({ success: true, data: [] }) // azure-openai 占位
-          )
-          break
-        case 'azure_openai':
-          requests.push(
-            Promise.resolve({ success: true, data: [] }), // claude 占位
-            Promise.resolve({ success: true, data: [] }), // claude-console 占位
-            Promise.resolve({ success: true, data: [] }), // gemini 占位
-            Promise.resolve({ success: true, data: [] }), // openai 占位
-            apiClient.get('/admin/azure-openai-accounts', { params })
+            apiClient.get('/admin/gemini-accounts', { params })
           )
           break
       }
@@ -1091,8 +1045,7 @@ const loadAccounts = async (forceReload = false) => {
     // 后端账户API已经包含分组信息，不需要单独加载分组成员关系
     // await loadGroupMembers(forceReload)
 
-    const [claudeData, claudeConsoleData, geminiData, openaiData, azureOpenaiData] =
-      await Promise.all(requests)
+    const [claudeData, claudeConsoleData, geminiData] = await Promise.all(requests)
 
     const allAccounts = []
 
@@ -1128,31 +1081,9 @@ const loadAccounts = async (forceReload = false) => {
       })
       allAccounts.push(...geminiAccounts)
     }
-    if (openaiData.success) {
-      const openaiAccounts = (openaiData.data || []).map((acc) => {
-        // 计算每个OpenAI账户绑定的API Key数量
-        const boundApiKeysCount = apiKeys.value.filter(
-          (key) => key.openaiAccountId === acc.id
-        ).length
-        // 后端已经包含了groupInfos，直接使用
-        return { ...acc, platform: 'openai', boundApiKeysCount }
-      })
-      allAccounts.push(...openaiAccounts)
-    }
-    if (azureOpenaiData && azureOpenaiData.success) {
-      const azureOpenaiAccounts = (azureOpenaiData.data || []).map((acc) => {
-        // 计算每个Azure OpenAI账户绑定的API Key数量
-        const boundApiKeysCount = apiKeys.value.filter(
-          (key) => key.azureOpenaiAccountId === acc.id
-        ).length
-        const groupInfo = accountGroupMap.value.get(acc.id) || null
-        return { ...acc, platform: 'azure_openai', boundApiKeysCount, groupInfo }
-      })
-      allAccounts.push(...azureOpenaiAccounts)
-    }
 
     accounts.value = allAccounts
-  } catch (error) {
+  } catch {
     showToast('加载账户失败', 'error')
   } finally {
     accountsLoading.value = false
@@ -1211,8 +1142,8 @@ const loadApiKeys = async (forceReload = false) => {
       apiKeys.value = response.data || []
       apiKeysLoaded.value = true
     }
-  } catch (error) {
-    console.error('Failed to load API keys:', error)
+  } catch {
+    // 静默处理错误
   }
 }
 
@@ -1228,8 +1159,8 @@ const loadAccountGroups = async (forceReload = false) => {
       accountGroups.value = response.data || []
       groupsLoaded.value = true
     }
-  } catch (error) {
-    console.error('Failed to load account groups:', error)
+  } catch {
+    // 静默处理错误
   }
 }
 
@@ -1317,10 +1248,7 @@ const editAccount = (account) => {
 const deleteAccount = async (account) => {
   // 检查是否有API Key绑定到此账号
   const boundKeysCount = apiKeys.value.filter(
-    (key) =>
-      key.claudeAccountId === account.id ||
-      key.geminiAccountId === account.id ||
-      key.openaiAccountId === account.id
+    (key) => key.claudeAccountId === account.id || key.geminiAccountId === account.id
   ).length
 
   if (boundKeysCount > 0) {
@@ -1346,10 +1274,6 @@ const deleteAccount = async (account) => {
       endpoint = `/admin/claude-accounts/${account.id}`
     } else if (account.platform === 'claude-console') {
       endpoint = `/admin/claude-console-accounts/${account.id}`
-    } else if (account.platform === 'openai') {
-      endpoint = `/admin/openai-accounts/${account.id}`
-    } else if (account.platform === 'azure_openai') {
-      endpoint = `/admin/azure-openai-accounts/${account.id}`
     } else {
       endpoint = `/admin/gemini-accounts/${account.id}`
     }
@@ -1364,7 +1288,7 @@ const deleteAccount = async (account) => {
     } else {
       showToast(data.message || '删除失败', 'error')
     }
-  } catch (error) {
+  } catch {
     showToast('删除失败', 'error')
   }
 }
@@ -1397,7 +1321,7 @@ const resetAccountStatus = async (account) => {
     } else {
       showToast(data.message || '状态重置失败', 'error')
     }
-  } catch (error) {
+  } catch {
     showToast('状态重置失败', 'error')
   } finally {
     account.isResetting = false
@@ -1418,10 +1342,6 @@ const toggleSchedulable = async (account) => {
       endpoint = `/admin/claude-console-accounts/${account.id}/toggle-schedulable`
     } else if (account.platform === 'gemini') {
       endpoint = `/admin/gemini-accounts/${account.id}/toggle-schedulable`
-    } else if (account.platform === 'openai') {
-      endpoint = `/admin/openai-accounts/${account.id}/toggle-schedulable`
-    } else if (account.platform === 'azure_openai') {
-      endpoint = `/admin/azure-openai-accounts/${account.id}/toggle-schedulable`
     } else {
       showToast('该账户类型暂不支持调度控制', 'warning')
       return
@@ -1435,7 +1355,7 @@ const toggleSchedulable = async (account) => {
     } else {
       showToast(data.message || '操作失败', 'error')
     }
-  } catch (error) {
+  } catch {
     showToast('切换调度状态失败', 'error')
   } finally {
     account.isTogglingSchedulable = false
@@ -1475,12 +1395,6 @@ const getGeminiAuthType = () => {
   return 'OAuth'
 }
 
-// 获取 OpenAI 账号的添加方式
-const getOpenAIAuthType = () => {
-  // OpenAI 统一显示 OAuth
-  return 'OAuth'
-}
-
 // 获取 Claude 账号类型显示
 const getClaudeAccountType = (account) => {
   // 如果有订阅信息
@@ -1514,9 +1428,8 @@ const getClaudeAccountType = (account) => {
       } else {
         return 'Claude Free'
       }
-    } catch (e) {
+    } catch {
       // 解析失败，返回默认值
-      console.error('Failed to parse subscription info:', e)
       return 'Claude'
     }
   }

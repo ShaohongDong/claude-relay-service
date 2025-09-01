@@ -21,7 +21,7 @@
             ]"
             @click="activeSection = 'branding'"
           >
-            <i class="fas fa-palette mr-2"></i>
+            <i class="fas fa-palette mr-2" />
             品牌设置
           </button>
           <button
@@ -33,14 +33,15 @@
             ]"
             @click="activeSection = 'webhook'"
           >
-            <i class="fas fa-bell mr-2"></i>
+            <i class="fas fa-bell mr-2" />
             通知设置
           </button>
         </nav>
       </div>
 
       <!-- 加载状态 -->
-      <div v-if="loading" class="py-12 text-center">
+      <div v-if="loading"
+class="py-12 text-center">
         <div class="loading-spinner mx-auto mb-4">
           <p class="text-gray-500 dark:text-gray-400">正在加载设置...</p>
         </div>
@@ -150,7 +151,8 @@
 
                 <!-- 操作按钮 -->
                 <tr>
-                  <td class="px-6 py-6" colspan="2">
+                  <td class="px-6 py-6"
+colspan="2">
                     <div class="flex items-center justify-between">
                       <div class="flex gap-3">
                         <button
@@ -159,8 +161,10 @@
                           :disabled="saving"
                           @click="saveOemSettings"
                         >
-                          <div v-if="saving" class="loading-spinner mr-2"></div>
-                          <i v-else class="fas fa-save mr-2" />
+                          <div
+v-if="saving" class="loading-spinner mr-2" />
+                          <i v-else
+class="fas fa-save mr-2" />
                           {{ saving ? '保存中...' : '保存设置' }}
                         </button>
 
@@ -218,7 +222,7 @@
                 />
                 <div
                   class="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-blue-600 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:border-gray-600 dark:bg-gray-700 dark:peer-focus:ring-blue-800"
-                ></div>
+                />
               </label>
             </div>
           </div>
@@ -251,7 +255,7 @@
                   />
                   <div
                     class="peer h-5 w-9 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-green-600 peer-checked:after:translate-x-full peer-checked:after:border-white dark:border-gray-600 dark:bg-gray-700"
-                  ></div>
+                  />
                 </label>
               </div>
             </div>
@@ -267,7 +271,7 @@
                 class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
                 @click="showAddPlatformModal = true"
               >
-                <i class="fas fa-plus mr-2"></i>
+                <i class="fas fa-plus mr-2" />
                 添加平台
               </button>
             </div>
@@ -285,7 +289,8 @@
                 <div class="flex items-start justify-between">
                   <div class="flex-1">
                     <div class="flex items-center">
-                      <i class="mr-3 text-xl" :class="getPlatformIcon(platform.type)"></i>
+                      <i
+class="mr-3 text-xl" :class="getPlatformIcon(platform.type)" />
                       <div>
                         <h3 class="font-semibold text-gray-800 dark:text-gray-200">
                           {{ platform.name || getPlatformName(platform.type) }}
@@ -297,14 +302,14 @@
                     </div>
                     <div class="mt-3 space-y-1 text-sm">
                       <div class="flex items-center text-gray-600 dark:text-gray-400">
-                        <i class="fas fa-link mr-2"></i>
+                        <i class="fas fa-link mr-2" />
                         <span class="truncate">{{ platform.url }}</span>
                       </div>
                       <div
                         v-if="platform.enableSign"
                         class="flex items-center text-gray-600 dark:text-gray-400"
                       >
-                        <i class="fas fa-shield-alt mr-2"></i>
+                        <i class="fas fa-shield-alt mr-2" />
                         <span>已启用签名验证</span>
                       </div>
                     </div>
@@ -320,7 +325,7 @@
                       />
                       <div
                         class="peer h-5 w-9 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-green-600 peer-checked:after:translate-x-full peer-checked:after:border-white dark:border-gray-600 dark:bg-gray-700"
-                      ></div>
+                      />
                     </label>
                     <!-- 测试按钮 -->
                     <button
@@ -328,7 +333,7 @@
                       title="测试连接"
                       @click="testPlatform(platform)"
                     >
-                      <i class="fas fa-vial"></i>
+                      <i class="fas fa-vial" />
                     </button>
                     <!-- 编辑按钮 -->
                     <button
@@ -336,7 +341,7 @@
                       title="编辑"
                       @click="editPlatform(platform)"
                     >
-                      <i class="fas fa-edit"></i>
+                      <i class="fas fa-edit" />
                     </button>
                     <!-- 删除按钮 -->
                     <button
@@ -344,13 +349,14 @@
                       title="删除"
                       @click="deletePlatform(platform.id)"
                     >
-                      <i class="fas fa-trash"></i>
+                      <i class="fas fa-trash" />
                     </button>
                   </div>
                 </div>
               </div>
             </div>
-            <div v-else class="py-8 text-center text-gray-500 dark:text-gray-400">
+            <div v-else
+class="py-8 text-center text-gray-500 dark:text-gray-400">
               暂无配置的通知平台，请点击"添加平台"按钮添加
             </div>
           </div>
@@ -409,7 +415,7 @@
               class="rounded-lg bg-green-600 px-6 py-3 text-white shadow-lg transition-all hover:bg-green-700 hover:shadow-xl"
               @click="sendTestNotification"
             >
-              <i class="fas fa-paper-plane mr-2"></i>
+              <i class="fas fa-paper-plane mr-2" />
               发送测试通知
             </button>
           </div>
@@ -437,7 +443,7 @@
             <div
               class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg"
             >
-              <i class="fas fa-bell"></i>
+              <i class="fas fa-bell" />
             </div>
             <div>
               <h3 class="text-xl font-semibold text-gray-900 dark:text-white">
@@ -452,7 +458,7 @@
             class="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
             @click="closePlatformModal"
           >
-            <i class="fas fa-times text-lg"></i>
+            <i class="fas fa-times text-lg" />
           </button>
         </div>
       </div>
@@ -465,7 +471,7 @@
             <label
               class="mb-2 flex items-center text-sm font-medium text-gray-700 dark:text-gray-300"
             >
-              <i class="fas fa-layer-group mr-2 text-gray-400"></i>
+              <i class="fas fa-layer-group mr-2 text-gray-400" />
               平台类型
             </label>
             <div class="relative">
@@ -482,11 +488,12 @@
                 <option value="custom">⚙️ 自定义</option>
               </select>
               <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-                <i class="fas fa-chevron-down text-gray-400"></i>
+                <i class="fas fa-chevron-down text-gray-400" />
               </div>
             </div>
-            <p v-if="editingPlatform" class="mt-1 text-xs text-amber-600 dark:text-amber-400">
-              <i class="fas fa-info-circle mr-1"></i>
+            <p v-if="editingPlatform"
+class="mt-1 text-xs text-amber-600 dark:text-amber-400">
+              <i class="fas fa-info-circle mr-1" />
               编辑模式下不能更改平台类型
             </p>
           </div>
@@ -496,7 +503,7 @@
             <label
               class="mb-2 flex items-center text-sm font-medium text-gray-700 dark:text-gray-300"
             >
-              <i class="fas fa-tag mr-2 text-gray-400"></i>
+              <i class="fas fa-tag mr-2 text-gray-400" />
               名称
               <span class="ml-2 text-xs text-gray-500">(可选)</span>
             </label>
@@ -513,7 +520,7 @@
             <label
               class="mb-2 flex items-center text-sm font-medium text-gray-700 dark:text-gray-300"
             >
-              <i class="fas fa-link mr-2 text-gray-400"></i>
+              <i class="fas fa-link mr-2 text-gray-400" />
               Webhook URL
               <span class="ml-1 text-xs text-red-500">*</span>
             </label>
@@ -530,18 +537,20 @@
                 type="url"
                 @input="validateUrl"
               />
-              <div v-if="urlValid" class="absolute inset-y-0 right-0 flex items-center pr-3">
-                <i class="fas fa-check-circle text-green-500"></i>
+              <div v-if="urlValid"
+class="absolute inset-y-0 right-0 flex items-center pr-3">
+                <i class="fas fa-check-circle text-green-500" />
               </div>
-              <div v-if="urlError" class="absolute inset-y-0 right-0 flex items-center pr-3">
-                <i class="fas fa-exclamation-circle text-red-500"></i>
+              <div v-if="urlError"
+class="absolute inset-y-0 right-0 flex items-center pr-3">
+                <i class="fas fa-exclamation-circle text-red-500" />
               </div>
             </div>
             <div
               v-if="getWebhookHint(platformForm.type)"
               class="mt-2 flex items-start rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20"
             >
-              <i class="fas fa-info-circle mr-2 mt-0.5 text-blue-600 dark:text-blue-400"></i>
+              <i class="fas fa-info-circle mr-2 mt-0.5 text-blue-600 dark:text-blue-400" />
               <p class="text-sm text-blue-700 dark:text-blue-300">
                 {{ getWebhookHint(platformForm.type) }}
               </p>
@@ -555,7 +564,8 @@
           >
             <div class="space-y-4">
               <div class="flex items-center justify-between">
-                <label class="flex cursor-pointer items-center" for="enableSign">
+                <label class="flex cursor-pointer items-center"
+for="enableSign">
                   <input
                     id="enableSign"
                     v-model="platformForm.enableSign"
@@ -565,7 +575,7 @@
                   <span
                     class="ml-3 flex items-center text-sm font-medium text-gray-700 dark:text-gray-300"
                   >
-                    <i class="fas fa-shield-alt mr-2 text-gray-400"></i>
+                    <i class="fas fa-shield-alt mr-2 text-gray-400" />
                     启用签名验证
                   </span>
                 </label>
@@ -607,7 +617,7 @@
       >
         <div class="flex items-center justify-between">
           <div class="text-xs text-gray-500 dark:text-gray-400">
-            <i class="fas fa-asterisk mr-1 text-red-500"></i>
+            <i class="fas fa-asterisk mr-1 text-red-500" />
             必填项
           </div>
           <div class="flex space-x-3">
@@ -615,7 +625,7 @@
               class="group flex items-center rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-all hover:bg-gray-50 hover:shadow-md dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
               @click="closePlatformModal"
             >
-              <i class="fas fa-times mr-2 transition-transform group-hover:scale-110"></i>
+              <i class="fas fa-times mr-2 transition-transform group-hover:scale-110" />
               取消
             </button>
             <button
@@ -628,7 +638,7 @@
                 :class="
                   testingConnection ? 'fas fa-spinner fa-spin' : 'fas fa-vial group-hover:scale-110'
                 "
-              ></i>
+              />
               {{ testingConnection ? '测试中...' : '测试连接' }}
             </button>
             <button
@@ -641,7 +651,7 @@
                 :class="
                   savingPlatform ? 'fas fa-spinner fa-spin' : 'fas fa-save group-hover:scale-110'
                 "
-              ></i>
+              />
               {{ savingPlatform ? '保存中...' : editingPlatform ? '保存修改' : '添加平台' }}
             </button>
           </div>
@@ -728,7 +738,7 @@ onMounted(async () => {
     if (activeSection.value === 'webhook') {
       await loadWebhookConfig()
     }
-  } catch (error) {
+  } catch {
     showToast('加载设置失败', 'error')
   }
 })
@@ -771,7 +781,7 @@ const loadWebhookConfig = async () => {
     if (error.name === 'AbortError') return
     if (!isMounted.value) return
     showToast('获取webhook配置失败', 'error')
-    console.error(error)
+    // 错误已通过toast显示
   }
 }
 
@@ -789,7 +799,7 @@ const saveWebhookConfig = async () => {
     if (error.name === 'AbortError') return
     if (!isMounted.value) return
     showToast('保存配置失败', 'error')
-    console.error(error)
+    // 错误已通过toast显示
   }
 }
 
@@ -857,7 +867,7 @@ const savePlatform = async () => {
     if (error.name === 'AbortError') return
     if (!isMounted.value) return
     showToast(error.message || '操作失败', 'error')
-    console.error(error)
+    // 错误已通过toast显示
   } finally {
     if (isMounted.value) {
       savingPlatform.value = false
@@ -892,7 +902,7 @@ const deletePlatform = async (id) => {
     if (error.name === 'AbortError') return
     if (!isMounted.value) return
     showToast('删除失败', 'error')
-    console.error(error)
+    // 错误已通过toast显示
   }
 }
 
@@ -916,7 +926,7 @@ const togglePlatform = async (id) => {
     if (error.name === 'AbortError') return
     if (!isMounted.value) return
     showToast('操作失败', 'error')
-    console.error(error)
+    // 错误已通过toast显示
   }
 }
 
@@ -944,7 +954,7 @@ const testPlatform = async (platform) => {
     if (error.name === 'AbortError') return
     if (!isMounted.value) return
     showToast(error.error || error.message || '测试失败', 'error')
-    console.error(error)
+    // 错误已通过toast显示
   }
 }
 
@@ -974,7 +984,7 @@ const testPlatformForm = async () => {
     if (error.name === 'AbortError') return
     if (!isMounted.value) return
     showToast(error.error || error.message || '测试失败', 'error')
-    console.error(error)
+    // 错误已通过toast显示
   } finally {
     if (isMounted.value) {
       testingConnection.value = false
@@ -1001,7 +1011,7 @@ const sendTestNotification = async () => {
     if (error.name === 'AbortError') return
     if (!isMounted.value) return
     showToast('发送失败', 'error')
-    console.error(error)
+    // 错误已通过toast显示
   }
 }
 
@@ -1100,7 +1110,7 @@ const saveOemSettings = async () => {
     } else {
       showToast(result?.message || '保存失败', 'error')
     }
-  } catch (error) {
+  } catch {
     showToast('保存OEM设置失败', 'error')
   }
 }
@@ -1116,7 +1126,7 @@ const resetOemSettings = async () => {
     } else {
       showToast('重置失败', 'error')
     }
-  } catch (error) {
+  } catch {
     showToast('重置失败', 'error')
   }
 }
@@ -1137,7 +1147,7 @@ const handleIconUpload = async (event) => {
     // 转换为Base64
     const base64Data = await settingsStore.fileToBase64(file)
     oemSettings.value.siteIconData = base64Data
-  } catch (error) {
+  } catch {
     showToast('文件读取失败', 'error')
   }
 
@@ -1153,7 +1163,7 @@ const removeIcon = () => {
 
 // 处理图标加载错误
 const handleIconError = () => {
-  console.warn('Icon failed to load')
+  // 静默处理图标加载错误
 }
 
 // 格式化日期时间

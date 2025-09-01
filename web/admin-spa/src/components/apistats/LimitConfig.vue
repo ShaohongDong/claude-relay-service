@@ -21,7 +21,8 @@
                   statsData.limits.dailyCostLimit.toFixed(2)
                 }}
               </span>
-              <span v-else class="flex items-center gap-1">
+              <span v-else
+class="flex items-center gap-1">
                 ${{ statsData.limits.currentDailyCost.toFixed(4) }} / <i class="fas fa-infinity" />
               </span>
             </span>
@@ -36,8 +37,10 @@
               :style="{ width: getDailyCostProgress() + '%' }"
             />
           </div>
-          <div v-else class="h-2 w-full rounded-full bg-gray-200">
-            <div class="h-2 rounded-full bg-green-500" style="width: 0%" />
+          <div v-else
+class="h-2 w-full rounded-full bg-gray-200">
+            <div class="h-2 rounded-full bg-green-500"
+style="width: 0%" />
           </div>
         </div>
 
@@ -86,7 +89,8 @@
               <span v-if="statsData.limits.concurrencyLimit > 0">
                 {{ statsData.limits.concurrencyLimit }}
               </span>
-              <span v-else class="flex items-center gap-1">
+              <span v-else
+class="flex items-center gap-1">
                 <i class="fas fa-infinity text-gray-400" />
               </span>
             </span>
@@ -104,7 +108,8 @@
                 <i class="fas fa-exclamation-triangle mr-1 text-xs md:text-sm" />
                 限制 {{ statsData.restrictions.restrictedModels.length }} 个模型
               </span>
-              <span v-else class="text-green-600">
+              <span v-else
+class="text-green-600">
                 <i class="fas fa-check-circle mr-1 text-xs md:text-sm" />
                 允许所有模型
               </span>
@@ -123,7 +128,8 @@
                 <i class="fas fa-exclamation-triangle mr-1 text-xs md:text-sm" />
                 限制 {{ statsData.restrictions.allowedClients.length }} 个客户端
               </span>
-              <span v-else class="text-green-600">
+              <span v-else
+class="text-green-600">
                 <i class="fas fa-check-circle mr-1 text-xs md:text-sm" />
                 允许所有客户端
               </span>

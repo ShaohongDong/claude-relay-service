@@ -30,9 +30,6 @@ export const useSettingsStore = defineStore('settings', () => {
       }
 
       return result
-    } catch (error) {
-      console.error('Failed to load OEM settings:', error)
-      throw error
     } finally {
       loading.value = false
     }
@@ -51,9 +48,6 @@ export const useSettingsStore = defineStore('settings', () => {
       }
 
       return result
-    } catch (error) {
-      console.error('Failed to save OEM settings:', error)
-      throw error
     } finally {
       saving.value = false
     }

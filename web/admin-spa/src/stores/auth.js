@@ -78,7 +78,7 @@ export const useAuthStore = defineStore('auth', () => {
       if (!result.success) {
         logout()
       }
-    } catch (error) {
+    } catch {
       // token 无效，需要重新登录
       logout()
     }
@@ -105,8 +105,8 @@ export const useAuthStore = defineStore('auth', () => {
           document.title = `${result.data.siteName} - 管理后台`
         }
       }
-    } catch (error) {
-      console.error('加载OEM设置失败:', error)
+    } catch {
+      // 静默处理错误
     } finally {
       oemLoading.value = false
     }

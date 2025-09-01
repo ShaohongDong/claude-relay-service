@@ -1,5 +1,6 @@
 <template>
-  <div class="min-h-screen p-4 md:p-6" :class="isDarkMode ? 'gradient-bg-dark' : 'gradient-bg'">
+  <div class="min-h-screen p-4 md:p-6"
+:class="isDarkMode ? 'gradient-bg-dark' : 'gradient-bg'">
     <!-- 顶部导航 -->
     <div class="glass-strong mb-6 rounded-3xl p-4 shadow-xl md:mb-8 md:p-6">
       <div class="flex flex-col items-center justify-between gap-4 md:flex-row">
@@ -57,12 +58,14 @@
     </div>
 
     <!-- 统计内容 -->
-    <div v-if="currentTab === 'stats'" class="tab-content">
+    <div v-if="currentTab === 'stats'"
+class="tab-content">
       <!-- API Key 输入区域 -->
       <ApiKeyInput />
 
       <!-- 错误提示 -->
-      <div v-if="error" class="mb-6 md:mb-8">
+      <div v-if="error"
+class="mb-6 md:mb-8">
         <div
           class="rounded-xl border border-red-500/30 bg-red-500/20 p-3 text-sm text-red-800 backdrop-blur-sm dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-200 md:p-4 md:text-base"
         >
@@ -72,7 +75,8 @@
       </div>
 
       <!-- 统计数据展示区域 -->
-      <div v-if="statsData" class="fade-in">
+      <div v-if="statsData"
+class="fade-in">
         <div class="glass-strong rounded-3xl p-4 shadow-xl md:p-6">
           <!-- 时间范围选择器 -->
           <div class="mb-4 border-b border-gray-200 pb-4 dark:border-gray-700 md:mb-6 md:pb-6">
@@ -124,7 +128,8 @@
     </div>
 
     <!-- 教程内容 -->
-    <div v-if="currentTab === 'tutorial'" class="tab-content">
+    <div v-if="currentTab === 'tutorial'"
+class="tab-content">
       <div class="glass-strong rounded-3xl shadow-xl">
         <TutorialView />
       </div>
@@ -189,8 +194,6 @@ const handleKeyDown = (event) => {
 
 // 初始化
 onMounted(() => {
-  console.log('API Stats Page loaded')
-
   // 初始化主题（因为该页面不在 MainLayout 内）
   themeStore.initTheme()
 

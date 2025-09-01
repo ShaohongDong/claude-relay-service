@@ -108,7 +108,6 @@ export const useApiStatsStore = defineStore('apistats', () => {
         throw new Error(idResult.message || '获取 API Key ID 失败')
       }
     } catch (err) {
-      console.error('Query stats error:', err)
       error.value = err.message || '查询统计数据失败，请检查您的 API Key 是否正确'
       statsData.value = null
       modelStats.value = []
@@ -166,11 +165,9 @@ export const useApiStatsStore = defineStore('apistats', () => {
         } else {
           monthlyStats.value = summary
         }
-      } else {
-        console.warn(`Failed to load ${period} stats:`, result.message)
       }
-    } catch (err) {
-      console.error(`Load ${period} stats error:`, err)
+    } catch {
+      // 静默处理错误
     }
   }
 
@@ -188,8 +185,7 @@ export const useApiStatsStore = defineStore('apistats', () => {
       } else {
         throw new Error(result.message || '加载模型统计失败')
       }
-    } catch (err) {
-      console.error('Load model stats error:', err)
+    } catch {
       modelStats.value = []
     } finally {
       modelStatsLoading.value = false
@@ -240,7 +236,6 @@ export const useApiStatsStore = defineStore('apistats', () => {
         throw new Error(result.message || '查询失败')
       }
     } catch (err) {
-      console.error('Load stats with apiId error:', err)
       error.value = err.message || '查询统计数据失败'
       statsData.value = null
       modelStats.value = []
@@ -257,8 +252,7 @@ export const useApiStatsStore = defineStore('apistats', () => {
       if (result && result.success && result.data) {
         oemSettings.value = { ...oemSettings.value, ...result.data }
       }
-    } catch (err) {
-      console.error('Error loading OEM settings:', err)
+    } catch {
       // 失败时使用默认值
       oemSettings.value = {
         siteName: 'Claude Relay Service',

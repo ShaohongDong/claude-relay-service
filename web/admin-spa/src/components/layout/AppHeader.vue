@@ -77,7 +77,8 @@
                   >v{{ versionInfo.current || '...' }}</span
                 >
               </div>
-              <div v-if="versionInfo.hasUpdate" class="mt-2">
+              <div v-if="versionInfo.hasUpdate"
+class="mt-2">
                 <div class="mb-2 flex items-center justify-between text-sm">
                   <span class="font-medium text-green-600 dark:text-green-400">
                     <i class="fas fa-arrow-up mr-1" />有新版本
@@ -100,9 +101,11 @@
               >
                 <i class="fas fa-spinner fa-spin mr-1" />检查更新中...
               </div>
-              <div v-else class="mt-2 text-center">
+              <div v-else
+class="mt-2 text-center">
                 <!-- 已是最新版提醒 -->
-                <transition mode="out-in" name="fade">
+                <transition mode="out-in"
+name="fade">
                   <div
                     v-if="versionInfo.noUpdateMessage"
                     key="message"
@@ -132,7 +135,7 @@
               <span>修改账户信息</span>
             </button>
 
-            <hr class="my-2 border-gray-200 dark:border-gray-700" />
+            <hr class="my-2 border-gray-200 dark:border-gray-700">
 
             <button
               class="flex w-full items-center gap-3 px-4 py-3 text-left text-gray-700 transition-colors hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -255,8 +258,10 @@
             :disabled="changePasswordLoading"
             type="submit"
           >
-            <div v-if="changePasswordLoading" class="loading-spinner mr-2" />
-            <i v-else class="fas fa-save mr-2" />
+            <div v-if="changePasswordLoading"
+class="loading-spinner mr-2" />
+            <i v-else
+class="fas fa-save mr-2" />
             {{ changePasswordLoading ? '保存中...' : '保存修改' }}
           </button>
         </div>
@@ -349,9 +354,7 @@ const checkForUpdates = async () => {
         }, 3000)
       }
     }
-  } catch (error) {
-    console.error('Error checking for updates:', error)
-
+  } catch {
     // 尝试从localStorage读取缓存的版本信息
     const cached = localStorage.getItem('versionInfo')
     if (cached) {
@@ -418,7 +421,7 @@ const changePassword = async () => {
     } else {
       showToast(data.message || '修改失败', 'error')
     }
-  } catch (error) {
+  } catch {
     showToast('修改密码失败', 'error')
   } finally {
     changePasswordLoading.value = false

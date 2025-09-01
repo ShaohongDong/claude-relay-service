@@ -38,8 +38,10 @@
             :disabled="loading || !apiKey.trim()"
             @click="queryStats"
           >
-            <i v-if="loading" class="fas fa-spinner loading-spinner" />
-            <i v-else class="fas fa-search" />
+            <i v-if="loading"
+class="fas fa-spinner loading-spinner" />
+            <i v-else
+class="fas fa-search" />
             {{ loading ? '查询中...' : '查询统计' }}
           </button>
         </div>

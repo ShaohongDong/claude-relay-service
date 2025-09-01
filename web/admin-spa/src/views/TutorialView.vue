@@ -33,7 +33,8 @@
     </div>
 
     <!-- Windows 教程 -->
-    <div v-if="activeTutorialSystem === 'windows'" class="tutorial-content">
+    <div v-if="activeTutorialSystem === 'windows'"
+class="tutorial-content">
       <!-- 第一步：安装 Node.js -->
       <div class="mb-4 sm:mb-10 sm:mb-6">
         <h4
@@ -406,76 +407,6 @@
             </div>
           </div>
         </div>
-
-        <!-- Codex 环境变量设置 -->
-        <div class="mt-8">
-          <h5
-            class="mb-2 flex items-center text-base font-semibold text-gray-800 dark:text-gray-600 sm:mb-3 sm:text-lg"
-          >
-            <i class="fas fa-code mr-2 text-indigo-600" />
-            配置 Codex 环境变量
-          </h5>
-          <p class="mb-3 text-sm text-gray-700 dark:text-gray-300 sm:mb-4 sm:text-base">
-            如果你使用支持 OpenAI API 的工具（如 Codex），需要设置以下环境变量：
-          </p>
-
-          <div class="space-y-4">
-            <div class="rounded-lg border border-indigo-200 bg-white p-3 sm:p-4">
-              <h6 class="mb-2 text-sm font-medium text-gray-800 dark:text-gray-600 sm:text-base">
-                PowerShell 设置方法
-              </h6>
-              <p class="mb-3 text-sm text-gray-600">在 PowerShell 中运行以下命令：</p>
-              <div
-                class="overflow-x-auto rounded bg-gray-900 p-2 font-mono text-xs text-green-400 sm:p-3 sm:text-sm"
-              >
-                <div class="whitespace-nowrap text-gray-300">
-                  $env:OPENAI_BASE_URL = "{{ openaiBaseUrl }}"
-                </div>
-                <div class="whitespace-nowrap text-gray-300">
-                  $env:OPENAI_API_KEY = "你的API密钥"
-                </div>
-              </div>
-              <p class="mt-2 text-xs text-yellow-700">
-                💡 使用与 Claude Code 相同的 API 密钥即可，格式如 cr_xxxxxxxxxx。
-              </p>
-            </div>
-
-            <div class="rounded-lg border border-indigo-200 bg-white p-3 sm:p-4">
-              <h6 class="mb-2 text-sm font-medium text-gray-800 dark:text-gray-600 sm:text-base">
-                PowerShell 永久设置（用户级）
-              </h6>
-              <p class="mb-3 text-sm text-gray-600">在 PowerShell 中运行以下命令：</p>
-              <div
-                class="mb-3 overflow-x-auto rounded bg-gray-900 p-2 font-mono text-xs text-green-400 sm:p-3 sm:text-sm"
-              >
-                <div class="mb-2"># 设置用户级环境变量（永久生效）</div>
-                <div class="whitespace-nowrap text-gray-300">
-                  [System.Environment]::SetEnvironmentVariable("OPENAI_BASE_URL", "{{
-                    openaiBaseUrl
-                  }}", [System.EnvironmentVariableTarget]::User)
-                </div>
-                <div class="whitespace-nowrap text-gray-300">
-                  [System.Environment]::SetEnvironmentVariable("OPENAI_API_KEY", "你的API密钥",
-                  [System.EnvironmentVariableTarget]::User)
-                </div>
-              </div>
-              <p class="mt-2 text-xs text-blue-700">
-                💡 设置后需要重新打开 PowerShell 窗口才能生效。
-              </p>
-            </div>
-
-            <div class="rounded-lg border border-indigo-200 bg-indigo-50 p-3 sm:p-4">
-              <h6 class="mb-2 font-medium text-indigo-800">验证 Codex 环境变量</h6>
-              <p class="mb-3 text-sm text-indigo-700">在 PowerShell 中验证：</p>
-              <div
-                class="space-y-1 overflow-x-auto rounded bg-gray-900 p-2 font-mono text-xs text-green-400 sm:p-3 sm:text-sm"
-              >
-                <div class="whitespace-nowrap text-gray-300">echo $env:OPENAI_BASE_URL</div>
-                <div class="whitespace-nowrap text-gray-300">echo $env:OPENAI_API_KEY</div>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       <!-- 第四步：开始使用 -->
@@ -596,7 +527,8 @@
     </div>
 
     <!-- macOS 教程 -->
-    <div v-else-if="activeTutorialSystem === 'macos'" class="tutorial-content">
+    <div v-else-if="activeTutorialSystem === 'macos'"
+class="tutorial-content">
       <!-- 第一步：安装 Node.js -->
       <div class="mb-6 sm:mb-10">
         <h4
@@ -911,209 +843,134 @@
           </div>
         </div>
 
-        <!-- Codex 环境变量设置 -->
-        <div class="mt-8">
-          <h5
-            class="mb-2 flex items-center text-base font-semibold text-gray-800 dark:text-gray-600 sm:mb-3 sm:text-lg"
+        <!-- 第四步：开始使用 -->
+        <div class="mb-8">
+          <h4
+            class="mb-3 flex items-center text-lg font-semibold text-gray-800 dark:text-gray-300 sm:mb-4 sm:text-xl"
           >
-            <i class="fas fa-code mr-2 text-indigo-600" />
-            配置 Codex 环境变量
-          </h5>
-          <p class="mb-3 text-sm text-gray-700 dark:text-gray-300 sm:mb-4 sm:text-base">
-            如果你使用支持 OpenAI API 的工具（如 Codex），需要设置以下环境变量：
-          </p>
+            <span
+              class="mr-2 flex h-6 w-6 items-center justify-center rounded-full bg-yellow-500 text-xs font-bold text-white sm:mr-3 sm:h-8 sm:w-8 sm:text-sm"
+              >4</span
+            >
+            开始使用 Claude Code
+          </h4>
+          <div
+            class="rounded-xl border border-yellow-100 bg-gradient-to-r from-yellow-50 to-amber-50 p-4 sm:p-6"
+          >
+            <p class="mb-3 text-sm text-gray-700 dark:text-gray-300 sm:mb-4 sm:text-base">
+              现在你可以开始使用 Claude Code 了！
+            </p>
 
-          <div class="space-y-4">
-            <div class="rounded-lg border border-indigo-200 bg-white p-3 sm:p-4">
-              <h6 class="mb-2 text-sm font-medium text-gray-800 dark:text-gray-600 sm:text-base">
-                Terminal 设置方法
-              </h6>
-              <p class="mb-3 text-sm text-gray-600">在 Terminal 中运行以下命令：</p>
-              <div
-                class="overflow-x-auto rounded bg-gray-900 p-2 font-mono text-xs text-green-400 sm:p-3 sm:text-sm"
-              >
-                <div class="whitespace-nowrap text-gray-300">
-                  export OPENAI_BASE_URL="{{ openaiBaseUrl }}"
-                </div>
-                <div class="whitespace-nowrap text-gray-300">
-                  export OPENAI_API_KEY="你的API密钥"
+            <div class="space-y-4">
+              <div>
+                <h6 class="mb-2 text-sm font-medium text-gray-800 dark:text-gray-600 sm:text-base">
+                  启动 Claude Code
+                </h6>
+                <div
+                  class="overflow-x-auto rounded bg-gray-900 p-2 font-mono text-xs text-green-400 sm:p-3 sm:text-sm"
+                >
+                  <div class="whitespace-nowrap text-gray-300">claude</div>
                 </div>
               </div>
-              <p class="mt-2 text-xs text-yellow-700">
-                💡 使用与 Claude Code 相同的 API 密钥即可，格式如 cr_xxxxxxxxxx。
-              </p>
-            </div>
 
-            <div class="rounded-lg border border-indigo-200 bg-white p-3 sm:p-4">
-              <h6 class="mb-2 text-sm font-medium text-gray-800 dark:text-gray-600 sm:text-base">
-                永久设置方法
-              </h6>
-              <p class="mb-3 text-sm text-gray-600">添加到你的 shell 配置文件：</p>
-              <div
-                class="mb-3 overflow-x-auto rounded bg-gray-900 p-2 font-mono text-xs text-green-400 sm:p-3 sm:text-sm"
-              >
-                <div class="mb-2"># 对于 zsh (默认)</div>
-                <div class="whitespace-nowrap text-gray-300">
-                  echo 'export OPENAI_BASE_URL="{{ openaiBaseUrl }}"' >> ~/.zshrc
+              <div>
+                <h6 class="mb-2 text-sm font-medium text-gray-800 dark:text-gray-600 sm:text-base">
+                  在特定项目中使用
+                </h6>
+                <div
+                  class="overflow-x-auto rounded bg-gray-900 p-2 font-mono text-xs text-green-400 sm:p-3 sm:text-sm"
+                >
+                  <div class="mb-2"># 进入你的项目目录</div>
+                  <div class="whitespace-nowrap text-gray-300">cd /path/to/your/project</div>
+                  <div class="mb-2 mt-2"># 启动 Claude Code</div>
+                  <div class="whitespace-nowrap text-gray-300">claude</div>
                 </div>
-                <div class="whitespace-nowrap text-gray-300">
-                  echo 'export OPENAI_API_KEY="你的API密钥"' >> ~/.zshrc
-                </div>
-                <div class="whitespace-nowrap text-gray-300">source ~/.zshrc</div>
-              </div>
-              <div
-                class="overflow-x-auto rounded bg-gray-900 p-2 font-mono text-xs text-green-400 sm:p-3 sm:text-sm"
-              >
-                <div class="mb-2"># 对于 bash</div>
-                <div class="whitespace-nowrap text-gray-300">
-                  echo 'export OPENAI_BASE_URL="{{ openaiBaseUrl }}"' >> ~/.bash_profile
-                </div>
-                <div class="whitespace-nowrap text-gray-300">
-                  echo 'export OPENAI_API_KEY="你的API密钥"' >> ~/.bash_profile
-                </div>
-                <div class="whitespace-nowrap text-gray-300">source ~/.bash_profile</div>
-              </div>
-            </div>
-
-            <div class="rounded-lg border border-indigo-200 bg-indigo-50 p-3 sm:p-4">
-              <h6 class="mb-2 font-medium text-indigo-800">验证 Codex 环境变量</h6>
-              <p class="mb-3 text-sm text-indigo-700">在 Terminal 中验证：</p>
-              <div
-                class="space-y-1 overflow-x-auto rounded bg-gray-900 p-2 font-mono text-xs text-green-400 sm:p-3 sm:text-sm"
-              >
-                <div class="whitespace-nowrap text-gray-300">echo $OPENAI_BASE_URL</div>
-                <div class="whitespace-nowrap text-gray-300">echo $OPENAI_API_KEY</div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- 第四步：开始使用 -->
-      <div class="mb-8">
-        <h4
-          class="mb-3 flex items-center text-lg font-semibold text-gray-800 dark:text-gray-300 sm:mb-4 sm:text-xl"
-        >
-          <span
-            class="mr-2 flex h-6 w-6 items-center justify-center rounded-full bg-yellow-500 text-xs font-bold text-white sm:mr-3 sm:h-8 sm:w-8 sm:text-sm"
-            >4</span
+        <!-- macOS 故障排除 -->
+        <div class="mb-8">
+          <h4
+            class="mb-3 flex items-center text-lg font-semibold text-gray-800 dark:text-gray-300 sm:mb-4 sm:text-xl"
           >
-          开始使用 Claude Code
-        </h4>
-        <div
-          class="rounded-xl border border-yellow-100 bg-gradient-to-r from-yellow-50 to-amber-50 p-4 sm:p-6"
-        >
-          <p class="mb-3 text-sm text-gray-700 dark:text-gray-300 sm:mb-4 sm:text-base">
-            现在你可以开始使用 Claude Code 了！
-          </p>
-
+            <i class="fas fa-wrench mr-2 text-red-600 sm:mr-3" />
+            macOS 常见问题解决
+          </h4>
           <div class="space-y-4">
-            <div>
-              <h6 class="mb-2 text-sm font-medium text-gray-800 dark:text-gray-600 sm:text-base">
-                启动 Claude Code
-              </h6>
-              <div
-                class="overflow-x-auto rounded bg-gray-900 p-2 font-mono text-xs text-green-400 sm:p-3 sm:text-sm"
+            <details class="rounded-lg border border-gray-200 bg-gray-50">
+              <summary
+                class="cursor-pointer p-3 text-sm font-medium text-gray-800 hover:bg-gray-100 sm:p-4 sm:text-base"
               >
-                <div class="whitespace-nowrap text-gray-300">claude</div>
+                安装时提示权限错误
+              </summary>
+              <div class="px-3 pb-3 text-gray-600 sm:px-4 sm:pb-4">
+                <p class="mb-2">尝试以下解决方法：</p>
+                <ul class="list-inside list-disc space-y-1 text-sm">
+                  <li>
+                    使用 sudo 安装：<code class="rounded bg-gray-200 px-1 text-xs sm:text-sm"
+                      >sudo npm install -g @anthropic-ai/claude-code</code
+                    >
+                  </li>
+                  <li>
+                    或者配置 npm 使用用户目录：<code
+                      class="rounded bg-gray-200 px-1 text-xs sm:text-sm"
+                      >npm config set prefix ~/.npm-global</code
+                    >
+                  </li>
+                </ul>
               </div>
-            </div>
+            </details>
 
-            <div>
-              <h6 class="mb-2 text-sm font-medium text-gray-800 dark:text-gray-600 sm:text-base">
-                在特定项目中使用
-              </h6>
-              <div
-                class="overflow-x-auto rounded bg-gray-900 p-2 font-mono text-xs text-green-400 sm:p-3 sm:text-sm"
+            <details class="rounded-lg border border-gray-200 bg-gray-50">
+              <summary
+                class="cursor-pointer p-3 text-sm font-medium text-gray-800 hover:bg-gray-100 sm:p-4 sm:text-base"
               >
-                <div class="mb-2"># 进入你的项目目录</div>
-                <div class="whitespace-nowrap text-gray-300">cd /path/to/your/project</div>
-                <div class="mb-2 mt-2"># 启动 Claude Code</div>
-                <div class="whitespace-nowrap text-gray-300">claude</div>
+                macOS 安全设置阻止运行
+              </summary>
+              <div class="px-3 pb-3 text-gray-600 sm:px-4 sm:pb-4">
+                <p class="mb-2">如果系统阻止运行 Claude Code：</p>
+                <ul class="list-inside list-disc space-y-1 text-sm">
+                  <li>打开"系统偏好设置" → "安全性与隐私"</li>
+                  <li>点击"仍要打开"或"允许"</li>
+                  <li>
+                    或者在 Terminal 中运行：<code
+                      class="rounded bg-gray-200 px-1 text-xs sm:text-sm"
+                      >sudo spctl --master-disable</code
+                    >
+                  </li>
+                </ul>
               </div>
-            </div>
+            </details>
+
+            <details class="rounded-lg border border-gray-200 bg-gray-50">
+              <summary
+                class="cursor-pointer p-3 text-sm font-medium text-gray-800 hover:bg-gray-100 sm:p-4 sm:text-base"
+              >
+                环境变量不生效
+              </summary>
+              <div class="px-3 pb-3 text-gray-600 sm:px-4 sm:pb-4">
+                <p class="mb-2">检查以下几点：</p>
+                <ul class="list-inside list-disc space-y-1 text-sm">
+                  <li>确认修改了正确的配置文件（.zshrc 或 .bash_profile）</li>
+                  <li>重新启动 Terminal</li>
+                  <li>
+                    验证设置：<code class="rounded bg-gray-200 px-1 text-xs sm:text-sm"
+                      >echo $ANTHROPIC_BASE_URL</code
+                    >
+                  </li>
+                </ul>
+              </div>
+            </details>
           </div>
-        </div>
-      </div>
-
-      <!-- macOS 故障排除 -->
-      <div class="mb-8">
-        <h4
-          class="mb-3 flex items-center text-lg font-semibold text-gray-800 dark:text-gray-300 sm:mb-4 sm:text-xl"
-        >
-          <i class="fas fa-wrench mr-2 text-red-600 sm:mr-3" />
-          macOS 常见问题解决
-        </h4>
-        <div class="space-y-4">
-          <details class="rounded-lg border border-gray-200 bg-gray-50">
-            <summary
-              class="cursor-pointer p-3 text-sm font-medium text-gray-800 hover:bg-gray-100 sm:p-4 sm:text-base"
-            >
-              安装时提示权限错误
-            </summary>
-            <div class="px-3 pb-3 text-gray-600 sm:px-4 sm:pb-4">
-              <p class="mb-2">尝试以下解决方法：</p>
-              <ul class="list-inside list-disc space-y-1 text-sm">
-                <li>
-                  使用 sudo 安装：<code class="rounded bg-gray-200 px-1 text-xs sm:text-sm"
-                    >sudo npm install -g @anthropic-ai/claude-code</code
-                  >
-                </li>
-                <li>
-                  或者配置 npm 使用用户目录：<code
-                    class="rounded bg-gray-200 px-1 text-xs sm:text-sm"
-                    >npm config set prefix ~/.npm-global</code
-                  >
-                </li>
-              </ul>
-            </div>
-          </details>
-
-          <details class="rounded-lg border border-gray-200 bg-gray-50">
-            <summary
-              class="cursor-pointer p-3 text-sm font-medium text-gray-800 hover:bg-gray-100 sm:p-4 sm:text-base"
-            >
-              macOS 安全设置阻止运行
-            </summary>
-            <div class="px-3 pb-3 text-gray-600 sm:px-4 sm:pb-4">
-              <p class="mb-2">如果系统阻止运行 Claude Code：</p>
-              <ul class="list-inside list-disc space-y-1 text-sm">
-                <li>打开"系统偏好设置" → "安全性与隐私"</li>
-                <li>点击"仍要打开"或"允许"</li>
-                <li>
-                  或者在 Terminal 中运行：<code class="rounded bg-gray-200 px-1 text-xs sm:text-sm"
-                    >sudo spctl --master-disable</code
-                  >
-                </li>
-              </ul>
-            </div>
-          </details>
-
-          <details class="rounded-lg border border-gray-200 bg-gray-50">
-            <summary
-              class="cursor-pointer p-3 text-sm font-medium text-gray-800 hover:bg-gray-100 sm:p-4 sm:text-base"
-            >
-              环境变量不生效
-            </summary>
-            <div class="px-3 pb-3 text-gray-600 sm:px-4 sm:pb-4">
-              <p class="mb-2">检查以下几点：</p>
-              <ul class="list-inside list-disc space-y-1 text-sm">
-                <li>确认修改了正确的配置文件（.zshrc 或 .bash_profile）</li>
-                <li>重新启动 Terminal</li>
-                <li>
-                  验证设置：<code class="rounded bg-gray-200 px-1 text-xs sm:text-sm"
-                    >echo $ANTHROPIC_BASE_URL</code
-                  >
-                </li>
-              </ul>
-            </div>
-          </details>
         </div>
       </div>
     </div>
 
     <!-- Linux 教程 -->
-    <div v-else-if="activeTutorialSystem === 'linux'" class="tutorial-content">
+    <div v-else-if="activeTutorialSystem === 'linux'"
+class="tutorial-content">
       <!-- 第一步：安装 Node.js -->
       <div class="mb-6 sm:mb-10">
         <h4
@@ -1413,227 +1270,154 @@
           </div>
         </div>
 
-        <!-- Codex 环境变量设置 -->
-        <div class="mt-8">
-          <h5
-            class="mb-2 flex items-center text-base font-semibold text-gray-800 dark:text-gray-600 sm:mb-3 sm:text-lg"
+        <!-- 第四步：开始使用 -->
+        <div class="mb-8">
+          <h4
+            class="mb-3 flex items-center text-lg font-semibold text-gray-800 dark:text-gray-300 sm:mb-4 sm:text-xl"
           >
-            <i class="fas fa-code mr-2 text-indigo-600" />
-            配置 Codex 环境变量
-          </h5>
-          <p class="mb-3 text-sm text-gray-700 dark:text-gray-300 sm:mb-4 sm:text-base">
-            如果你使用支持 OpenAI API 的工具（如 Codex），需要设置以下环境变量：
-          </p>
+            <span
+              class="mr-2 flex h-6 w-6 items-center justify-center rounded-full bg-yellow-500 text-xs font-bold text-white sm:mr-3 sm:h-8 sm:w-8 sm:text-sm"
+              >4</span
+            >
+            开始使用 Claude Code
+          </h4>
+          <div
+            class="rounded-xl border border-yellow-100 bg-gradient-to-r from-yellow-50 to-amber-50 p-4 sm:p-6"
+          >
+            <p class="mb-3 text-sm text-gray-700 dark:text-gray-300 sm:mb-4 sm:text-base">
+              现在你可以开始使用 Claude Code 了！
+            </p>
 
-          <div class="space-y-4">
-            <div class="rounded-lg border border-indigo-200 bg-white p-3 sm:p-4">
-              <h6 class="mb-2 text-sm font-medium text-gray-800 dark:text-gray-600 sm:text-base">
-                终端设置方法
-              </h6>
-              <p class="mb-3 text-sm text-gray-600">在终端中运行以下命令：</p>
-              <div
-                class="overflow-x-auto rounded bg-gray-900 p-2 font-mono text-xs text-green-400 sm:p-3 sm:text-sm"
-              >
-                <div class="whitespace-nowrap text-gray-300">
-                  export OPENAI_BASE_URL="{{ openaiBaseUrl }}"
-                </div>
-                <div class="whitespace-nowrap text-gray-300">
-                  export OPENAI_API_KEY="你的API密钥"
+            <div class="space-y-4">
+              <div>
+                <h6 class="mb-2 text-sm font-medium text-gray-800 dark:text-gray-600 sm:text-base">
+                  启动 Claude Code
+                </h6>
+                <div
+                  class="overflow-x-auto rounded bg-gray-900 p-2 font-mono text-xs text-green-400 sm:p-3 sm:text-sm"
+                >
+                  <div class="whitespace-nowrap text-gray-300">claude</div>
                 </div>
               </div>
-              <p class="mt-2 text-xs text-yellow-700">
-                💡 使用与 Claude Code 相同的 API 密钥即可，格式如 cr_xxxxxxxxxx。
-              </p>
-            </div>
 
-            <div class="rounded-lg border border-indigo-200 bg-white p-3 sm:p-4">
-              <h6 class="mb-2 text-sm font-medium text-gray-800 dark:text-gray-600 sm:text-base">
-                永久设置方法
-              </h6>
-              <p class="mb-3 text-sm text-gray-600">添加到你的 shell 配置文件：</p>
-              <div
-                class="mb-3 overflow-x-auto rounded bg-gray-900 p-2 font-mono text-xs text-green-400 sm:p-3 sm:text-sm"
-              >
-                <div class="mb-2"># 对于 bash (默认)</div>
-                <div class="whitespace-nowrap text-gray-300">
-                  echo 'export OPENAI_BASE_URL="{{ openaiBaseUrl }}"' >> ~/.bashrc
+              <div>
+                <h6 class="mb-2 text-sm font-medium text-gray-800 dark:text-gray-600 sm:text-base">
+                  在特定项目中使用
+                </h6>
+                <div
+                  class="overflow-x-auto rounded bg-gray-900 p-2 font-mono text-xs text-green-400 sm:p-3 sm:text-sm"
+                >
+                  <div class="mb-2"># 进入你的项目目录</div>
+                  <div class="whitespace-nowrap text-gray-300">cd /path/to/your/project</div>
+                  <div class="mb-2 mt-2"># 启动 Claude Code</div>
+                  <div class="whitespace-nowrap text-gray-300">claude</div>
                 </div>
-                <div class="whitespace-nowrap text-gray-300">
-                  echo 'export OPENAI_API_KEY="你的API密钥"' >> ~/.bashrc
-                </div>
-                <div class="whitespace-nowrap text-gray-300">source ~/.bashrc</div>
-              </div>
-              <div
-                class="overflow-x-auto rounded bg-gray-900 p-2 font-mono text-xs text-green-400 sm:p-3 sm:text-sm"
-              >
-                <div class="mb-2"># 对于 zsh</div>
-                <div class="whitespace-nowrap text-gray-300">
-                  echo 'export OPENAI_BASE_URL="{{ openaiBaseUrl }}"' >> ~/.zshrc
-                </div>
-                <div class="whitespace-nowrap text-gray-300">
-                  echo 'export OPENAI_API_KEY="你的API密钥"' >> ~/.zshrc
-                </div>
-                <div class="whitespace-nowrap text-gray-300">source ~/.zshrc</div>
-              </div>
-            </div>
-
-            <div class="rounded-lg border border-indigo-200 bg-indigo-50 p-3 sm:p-4">
-              <h6 class="mb-2 font-medium text-indigo-800">验证 Codex 环境变量</h6>
-              <p class="mb-3 text-sm text-indigo-700">在终端中验证：</p>
-              <div
-                class="space-y-1 overflow-x-auto rounded bg-gray-900 p-2 font-mono text-xs text-green-400 sm:p-3 sm:text-sm"
-              >
-                <div class="whitespace-nowrap text-gray-300">echo $OPENAI_BASE_URL</div>
-                <div class="whitespace-nowrap text-gray-300">echo $OPENAI_API_KEY</div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- 第四步：开始使用 -->
-      <div class="mb-8">
-        <h4
-          class="mb-3 flex items-center text-lg font-semibold text-gray-800 dark:text-gray-300 sm:mb-4 sm:text-xl"
-        >
-          <span
-            class="mr-2 flex h-6 w-6 items-center justify-center rounded-full bg-yellow-500 text-xs font-bold text-white sm:mr-3 sm:h-8 sm:w-8 sm:text-sm"
-            >4</span
+        <!-- Linux 故障排除 -->
+        <div class="mb-8">
+          <h4
+            class="mb-3 flex items-center text-lg font-semibold text-gray-800 dark:text-gray-300 sm:mb-4 sm:text-xl"
           >
-          开始使用 Claude Code
-        </h4>
-        <div
-          class="rounded-xl border border-yellow-100 bg-gradient-to-r from-yellow-50 to-amber-50 p-4 sm:p-6"
-        >
-          <p class="mb-3 text-sm text-gray-700 dark:text-gray-300 sm:mb-4 sm:text-base">
-            现在你可以开始使用 Claude Code 了！
-          </p>
-
+            <i class="fas fa-wrench mr-2 text-red-600 sm:mr-3" />
+            Linux 常见问题解决
+          </h4>
           <div class="space-y-4">
-            <div>
-              <h6 class="mb-2 text-sm font-medium text-gray-800 dark:text-gray-600 sm:text-base">
-                启动 Claude Code
-              </h6>
-              <div
-                class="overflow-x-auto rounded bg-gray-900 p-2 font-mono text-xs text-green-400 sm:p-3 sm:text-sm"
+            <details class="rounded-lg border border-gray-200 bg-gray-50">
+              <summary
+                class="cursor-pointer p-3 text-sm font-medium text-gray-800 hover:bg-gray-100 sm:p-4 sm:text-base"
               >
-                <div class="whitespace-nowrap text-gray-300">claude</div>
+                安装时提示权限错误
+              </summary>
+              <div class="px-3 pb-3 text-gray-600 sm:px-4 sm:pb-4">
+                <p class="mb-2">尝试以下解决方法：</p>
+                <ul class="list-inside list-disc space-y-1 text-sm">
+                  <li>
+                    使用 sudo 安装：<code class="rounded bg-gray-200 px-1 text-xs sm:text-sm"
+                      >sudo npm install -g @anthropic-ai/claude-code</code
+                    >
+                  </li>
+                  <li>
+                    或者配置 npm 使用用户目录：<code
+                      class="rounded bg-gray-200 px-1 text-xs sm:text-sm"
+                      >npm config set prefix ~/.npm-global</code
+                    >
+                  </li>
+                  <li>
+                    然后添加到 PATH：<code class="rounded bg-gray-200 px-1 text-xs sm:text-sm"
+                      >export PATH=~/.npm-global/bin:$PATH</code
+                    >
+                  </li>
+                </ul>
               </div>
-            </div>
+            </details>
 
-            <div>
-              <h6 class="mb-2 text-sm font-medium text-gray-800 dark:text-gray-600 sm:text-base">
-                在特定项目中使用
-              </h6>
-              <div
-                class="overflow-x-auto rounded bg-gray-900 p-2 font-mono text-xs text-green-400 sm:p-3 sm:text-sm"
+            <details class="rounded-lg border border-gray-200 bg-gray-50">
+              <summary
+                class="cursor-pointer p-3 text-sm font-medium text-gray-800 hover:bg-gray-100 sm:p-4 sm:text-base"
               >
-                <div class="mb-2"># 进入你的项目目录</div>
-                <div class="whitespace-nowrap text-gray-300">cd /path/to/your/project</div>
-                <div class="mb-2 mt-2"># 启动 Claude Code</div>
-                <div class="whitespace-nowrap text-gray-300">claude</div>
+                缺少依赖库
+              </summary>
+              <div class="px-3 pb-3 text-gray-600 sm:px-4 sm:pb-4">
+                <p class="mb-2">某些 Linux 发行版需要安装额外依赖：</p>
+                <div
+                  class="overflow-x-auto rounded bg-gray-900 p-2 font-mono text-xs text-green-400 sm:p-3 sm:text-sm"
+                >
+                  <div class="mb-2"># Ubuntu/Debian</div>
+                  <div class="whitespace-nowrap text-gray-300">
+                    sudo apt install build-essential
+                  </div>
+                  <div class="mb-2 mt-2"># CentOS/RHEL</div>
+                  <div class="whitespace-nowrap text-gray-300">
+                    sudo dnf groupinstall "Development Tools"
+                  </div>
+                </div>
               </div>
-            </div>
+            </details>
+
+            <details class="rounded-lg border border-gray-200 bg-gray-50">
+              <summary
+                class="cursor-pointer p-3 text-sm font-medium text-gray-800 hover:bg-gray-100 sm:p-4 sm:text-base"
+              >
+                环境变量不生效
+              </summary>
+              <div class="px-3 pb-3 text-gray-600 sm:px-4 sm:pb-4">
+                <p class="mb-2">检查以下几点：</p>
+                <ul class="list-inside list-disc space-y-1 text-sm">
+                  <li>确认修改了正确的配置文件（.bashrc 或 .zshrc）</li>
+                  <li>
+                    重新启动终端或运行
+                    <code class="rounded bg-gray-200 px-1 text-xs sm:text-sm"
+                      >source ~/.bashrc</code
+                    >
+                  </li>
+                  <li>
+                    验证设置：<code class="rounded bg-gray-200 px-1 text-xs sm:text-sm"
+                      >echo $ANTHROPIC_BASE_URL</code
+                    >
+                  </li>
+                </ul>
+              </div>
+            </details>
           </div>
         </div>
       </div>
 
-      <!-- Linux 故障排除 -->
-      <div class="mb-8">
-        <h4
-          class="mb-3 flex items-center text-lg font-semibold text-gray-800 dark:text-gray-300 sm:mb-4 sm:text-xl"
-        >
-          <i class="fas fa-wrench mr-2 text-red-600 sm:mr-3" />
-          Linux 常见问题解决
-        </h4>
-        <div class="space-y-4">
-          <details class="rounded-lg border border-gray-200 bg-gray-50">
-            <summary
-              class="cursor-pointer p-3 text-sm font-medium text-gray-800 hover:bg-gray-100 sm:p-4 sm:text-base"
-            >
-              安装时提示权限错误
-            </summary>
-            <div class="px-3 pb-3 text-gray-600 sm:px-4 sm:pb-4">
-              <p class="mb-2">尝试以下解决方法：</p>
-              <ul class="list-inside list-disc space-y-1 text-sm">
-                <li>
-                  使用 sudo 安装：<code class="rounded bg-gray-200 px-1 text-xs sm:text-sm"
-                    >sudo npm install -g @anthropic-ai/claude-code</code
-                  >
-                </li>
-                <li>
-                  或者配置 npm 使用用户目录：<code
-                    class="rounded bg-gray-200 px-1 text-xs sm:text-sm"
-                    >npm config set prefix ~/.npm-global</code
-                  >
-                </li>
-                <li>
-                  然后添加到 PATH：<code class="rounded bg-gray-200 px-1 text-xs sm:text-sm"
-                    >export PATH=~/.npm-global/bin:$PATH</code
-                  >
-                </li>
-              </ul>
-            </div>
-          </details>
-
-          <details class="rounded-lg border border-gray-200 bg-gray-50">
-            <summary
-              class="cursor-pointer p-3 text-sm font-medium text-gray-800 hover:bg-gray-100 sm:p-4 sm:text-base"
-            >
-              缺少依赖库
-            </summary>
-            <div class="px-3 pb-3 text-gray-600 sm:px-4 sm:pb-4">
-              <p class="mb-2">某些 Linux 发行版需要安装额外依赖：</p>
-              <div
-                class="overflow-x-auto rounded bg-gray-900 p-2 font-mono text-xs text-green-400 sm:p-3 sm:text-sm"
-              >
-                <div class="mb-2"># Ubuntu/Debian</div>
-                <div class="whitespace-nowrap text-gray-300">sudo apt install build-essential</div>
-                <div class="mb-2 mt-2"># CentOS/RHEL</div>
-                <div class="whitespace-nowrap text-gray-300">
-                  sudo dnf groupinstall "Development Tools"
-                </div>
-              </div>
-            </div>
-          </details>
-
-          <details class="rounded-lg border border-gray-200 bg-gray-50">
-            <summary
-              class="cursor-pointer p-3 text-sm font-medium text-gray-800 hover:bg-gray-100 sm:p-4 sm:text-base"
-            >
-              环境变量不生效
-            </summary>
-            <div class="px-3 pb-3 text-gray-600 sm:px-4 sm:pb-4">
-              <p class="mb-2">检查以下几点：</p>
-              <ul class="list-inside list-disc space-y-1 text-sm">
-                <li>确认修改了正确的配置文件（.bashrc 或 .zshrc）</li>
-                <li>
-                  重新启动终端或运行
-                  <code class="rounded bg-gray-200 px-1 text-xs sm:text-sm">source ~/.bashrc</code>
-                </li>
-                <li>
-                  验证设置：<code class="rounded bg-gray-200 px-1 text-xs sm:text-sm"
-                    >echo $ANTHROPIC_BASE_URL</code
-                  >
-                </li>
-              </ul>
-            </div>
-          </details>
-        </div>
+      <!-- 结尾 -->
+      <div
+        class="rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 p-4 text-center text-white sm:p-6"
+      >
+        <h5 class="mb-2 text-lg font-semibold sm:text-xl">🎉 恭喜你！</h5>
+        <p class="mb-3 text-sm text-blue-100 sm:mb-4 sm:text-base">
+          你已经成功安装并配置了 Claude Code，现在可以开始享受 AI 编程助手带来的便利了。
+        </p>
+        <p class="text-xs text-blue-200 sm:text-sm">
+          如果在使用过程中遇到任何问题，可以查看官方文档或社区讨论获取帮助。
+        </p>
       </div>
-    </div>
-
-    <!-- 结尾 -->
-    <div
-      class="rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 p-4 text-center text-white sm:p-6"
-    >
-      <h5 class="mb-2 text-lg font-semibold sm:text-xl">🎉 恭喜你！</h5>
-      <p class="mb-3 text-sm text-blue-100 sm:mb-4 sm:text-base">
-        你已经成功安装并配置了 Claude Code，现在可以开始享受 AI 编程助手带来的便利了。
-      </p>
-      <p class="text-xs text-blue-200 sm:text-sm">
-        如果在使用过程中遇到任何问题，可以查看官方文档或社区讨论获取帮助。
-      </p>
     </div>
   </div>
 </template>
@@ -1684,7 +1468,6 @@ const getBaseUrlPrefix = () => {
       origin = currentUrl.substring(0, pathStart)
     } else {
       // 最后的降级方案，使用相对路径
-      console.warn('无法获取完整的 origin，将使用相对路径')
       return ''
     }
   }
@@ -1700,11 +1483,6 @@ const currentBaseUrl = computed(() => {
 // Gemini CLI 基础URL
 const geminiBaseUrl = computed(() => {
   return getBaseUrlPrefix() + '/gemini'
-})
-
-// OpenAI/Codex 基础URL
-const openaiBaseUrl = computed(() => {
-  return getBaseUrlPrefix() + '/openai'
 })
 </script>
 

@@ -15,7 +15,8 @@
     </div>
 
     <!-- 模型统计加载状态 -->
-    <div v-if="modelStatsLoading" class="py-6 text-center md:py-8">
+    <div v-if="modelStatsLoading"
+class="py-6 text-center md:py-8">
       <i
         class="fas fa-spinner loading-spinner mb-2 text-xl text-gray-600 dark:text-gray-400 md:text-2xl"
       />
@@ -23,8 +24,10 @@
     </div>
 
     <!-- 模型统计数据 -->
-    <div v-else-if="modelStats.length > 0" class="space-y-3 md:space-y-4">
-      <div v-for="(model, index) in modelStats" :key="index" class="model-usage-item">
+    <div v-else-if="modelStats.length > 0"
+class="space-y-3 md:space-y-4">
+      <div v-for="(model, index) in modelStats"
+:key="index" class="model-usage-item">
         <div class="mb-2 flex items-start justify-between md:mb-3">
           <div class="min-w-0 flex-1">
             <h4 class="break-all text-base font-bold text-gray-900 dark:text-gray-100 md:text-lg">
@@ -72,7 +75,8 @@
     </div>
 
     <!-- 无模型数据 -->
-    <div v-else class="py-6 text-center text-gray-500 dark:text-gray-400 md:py-8">
+    <div v-else
+class="py-6 text-center text-gray-500 dark:text-gray-400 md:py-8">
       <i class="fas fa-chart-pie mb-3 text-2xl md:text-3xl" />
       <p class="text-sm md:text-base">
         暂无{{ statsPeriod === 'daily' ? '今日' : '本月' }}模型使用数据

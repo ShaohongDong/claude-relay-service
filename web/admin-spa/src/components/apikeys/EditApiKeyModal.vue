@@ -365,15 +365,6 @@
                 />
                 <span class="text-sm text-gray-700 dark:text-gray-300">仅 Gemini</span>
               </label>
-              <label class="flex cursor-pointer items-center">
-                <input
-                  v-model="form.permissions"
-                  class="mr-2 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
-                  type="radio"
-                  value="openai"
-                />
-                <span class="text-sm text-gray-700 dark:text-gray-300">仅 OpenAI</span>
-              </label>
             </div>
             <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
               控制此 API Key 可以访问哪些服务
@@ -411,7 +402,7 @@
                   v-model="form.claudeAccountId"
                   :accounts="localAccounts.claude"
                   default-option-text="使用共享账号池"
-                  :disabled="form.permissions === 'gemini' || form.permissions === 'openai'"
+                  :disabled="form.permissions === 'gemini'"
                   :groups="localAccounts.claudeGroups"
                   placeholder="请选择Claude账号"
                   platform="claude"
@@ -425,38 +416,10 @@
                   v-model="form.geminiAccountId"
                   :accounts="localAccounts.gemini"
                   default-option-text="使用共享账号池"
-                  :disabled="form.permissions === 'claude' || form.permissions === 'openai'"
+                  :disabled="form.permissions === 'claude'"
                   :groups="localAccounts.geminiGroups"
                   placeholder="请选择Gemini账号"
                   platform="gemini"
-                />
-              </div>
-              <div>
-                <label class="mb-1 block text-sm font-medium text-gray-600 dark:text-gray-400"
-                  >OpenAI 专属账号</label
-                >
-                <AccountSelector
-                  v-model="form.openaiAccountId"
-                  :accounts="localAccounts.openai"
-                  default-option-text="使用共享账号池"
-                  :disabled="form.permissions === 'claude' || form.permissions === 'gemini'"
-                  :groups="localAccounts.openaiGroups"
-                  placeholder="请选择OpenAI账号"
-                  platform="openai"
-                />
-              </div>
-              <div>
-                <label class="mb-1 block text-sm font-medium text-gray-600 dark:text-gray-400"
-                  >Azure OpenAI 专属账号</label
-                >
-                <AccountSelector
-                  v-model="form.azureOpenaiAccountId"
-                  :accounts="localAccounts.azureOpenai"
-                  default-option-text="使用共享账号池"
-                  :disabled="form.permissions === 'claude' || form.permissions === 'gemini'"
-                  :groups="localAccounts.azureOpenaiGroups"
-                  placeholder="请选择Azure OpenAI账号"
-                  platform="azure_openai"
                 />
               </div>
             </div>
@@ -481,7 +444,8 @@
               </label>
             </div>
 
-            <div v-if="form.enableModelRestriction" class="space-y-3">
+            <div v-if="form.enableModelRestriction"
+class="space-y-3">
               <div>
                 <label class="mb-2 block text-sm font-medium text-gray-600 dark:text-gray-400"
                   >限制的模型列表</label
@@ -572,7 +536,8 @@
               </label>
             </div>
 
-            <div v-if="form.enableClientRestriction" class="space-y-3">
+            <div v-if="form.enableClientRestriction"
+class="space-y-3">
               <div>
                 <label class="mb-2 block text-sm font-medium text-gray-600 dark:text-gray-400"
                   >允许的客户端</label
@@ -581,7 +546,8 @@
                   勾选允许使用此API Key的客户端
                 </p>
                 <div class="space-y-2">
-                  <div v-for="client in supportedClients" :key="client.id" class="flex items-start">
+                  <div v-for="client in supportedClients"
+:key="client.id" class="flex items-start">
                     <input
                       :id="`edit_client_${client.id}`"
                       v-model="form.allowedClients"
@@ -589,7 +555,8 @@
                       type="checkbox"
                       :value="client.id"
                     />
-                    <label class="ml-2 flex-1 cursor-pointer" :for="`edit_client_${client.id}`">
+                    <label class="ml-2 flex-1 cursor-pointer"
+:for="`edit_client_${client.id}`">
                       <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{
                         client.name
                       }}</span>
@@ -616,8 +583,10 @@
               :disabled="loading"
               type="submit"
             >
-              <div v-if="loading" class="loading-spinner mr-2" />
-              <i v-else class="fas fa-save mr-2" />
+              <div v-if="loading"
+class="loading-spinner mr-2" />
+              <i v-else
+class="fas fa-save mr-2" />
               {{ loading ? '保存中...' : '保存修改' }}
             </button>
           </div>
@@ -656,10 +625,8 @@ const accountsLoading = ref(false)
 const localAccounts = ref({
   claude: [],
   gemini: [],
-  openai: [],
   claudeGroups: [],
-  geminiGroups: [],
-  openaiGroups: []
+  geminiGroups: []
 })
 
 // 支持的客户端列表
@@ -687,7 +654,6 @@ const form = reactive({
   permissions: 'all',
   claudeAccountId: '',
   geminiAccountId: '',
-  openaiAccountId: '',
   enableModelRestriction: false,
   restrictedModels: [],
   modelInput: '',
@@ -829,13 +795,6 @@ const updateApiKey = async () => {
       data.geminiAccountId = null
     }
 
-    // OpenAI账户绑定
-    if (form.openaiAccountId) {
-      data.openaiAccountId = form.openaiAccountId
-    } else {
-      data.openaiAccountId = null
-    }
-
     // 模型限制 - 始终提交这些字段
     data.enableModelRestriction = form.enableModelRestriction
     data.restrictedModels = form.restrictedModels
@@ -855,7 +814,7 @@ const updateApiKey = async () => {
     } else {
       showToast(result.message || '更新失败', 'error')
     }
-  } catch (error) {
+  } catch {
     showToast('更新失败', 'error')
   } finally {
     loading.value = false
@@ -866,11 +825,10 @@ const updateApiKey = async () => {
 const refreshAccounts = async () => {
   accountsLoading.value = true
   try {
-    const [claudeData, claudeConsoleData, geminiData, openaiData, groupsData] = await Promise.all([
+    const [claudeData, claudeConsoleData, geminiData, groupsData] = await Promise.all([
       apiClient.get('/admin/claude-accounts'),
       apiClient.get('/admin/claude-console-accounts'),
       apiClient.get('/admin/gemini-accounts'),
-      apiClient.get('/admin/openai-accounts'),
       apiClient.get('/admin/account-groups')
     ])
 
@@ -906,23 +864,15 @@ const refreshAccounts = async () => {
       }))
     }
 
-    if (openaiData.success) {
-      localAccounts.value.openai = (openaiData.data || []).map((account) => ({
-        ...account,
-        isDedicated: account.accountType === 'dedicated'
-      }))
-    }
-
     // 处理分组数据
     if (groupsData.success) {
       const allGroups = groupsData.data || []
       localAccounts.value.claudeGroups = allGroups.filter((g) => g.platform === 'claude')
       localAccounts.value.geminiGroups = allGroups.filter((g) => g.platform === 'gemini')
-      localAccounts.value.openaiGroups = allGroups.filter((g) => g.platform === 'openai')
     }
 
     showToast('账号列表已刷新', 'success')
-  } catch (error) {
+  } catch {
     showToast('刷新账号列表失败', 'error')
   } finally {
     accountsLoading.value = false
@@ -940,10 +890,8 @@ onMounted(async () => {
     localAccounts.value = {
       claude: props.accounts.claude || [],
       gemini: props.accounts.gemini || [],
-      openai: props.accounts.openai || [],
       claudeGroups: props.accounts.claudeGroups || [],
-      geminiGroups: props.accounts.geminiGroups || [],
-      openaiGroups: props.accounts.openaiGroups || []
+      geminiGroups: props.accounts.geminiGroups || []
     }
   }
 
@@ -956,7 +904,6 @@ onMounted(async () => {
   // 如果有历史tokenLimit但没有rateLimitCost，提示用户需要重新设置
   if (props.apiKey.tokenLimit > 0 && !props.apiKey.rateLimitCost) {
     // 可以根据需要添加提示，或者自动迁移（这里选择让用户手动设置）
-    console.log('检测到历史Token限制，请考虑设置费用限制')
   }
 
   form.rateLimitWindow = props.apiKey.rateLimitWindow || ''
@@ -972,7 +919,6 @@ onMounted(async () => {
     form.claudeAccountId = props.apiKey.claudeAccountId || ''
   }
   form.geminiAccountId = props.apiKey.geminiAccountId || ''
-  form.openaiAccountId = props.apiKey.openaiAccountId || ''
   form.restrictedModels = props.apiKey.restrictedModels || []
   form.allowedClients = props.apiKey.allowedClients || []
   form.tags = props.apiKey.tags || []

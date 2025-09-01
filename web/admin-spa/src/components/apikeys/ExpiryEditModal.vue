@@ -1,6 +1,7 @@
 <template>
   <Teleport to="body">
-    <div v-if="show" class="modal fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div v-if="show"
+class="modal fixed inset-0 z-50 flex items-center justify-center p-4">
       <!-- 背景遮罩 -->
       <div
         class="fixed inset-0 bg-gray-900 bg-opacity-50 backdrop-blur-sm"
@@ -109,7 +110,8 @@
           </div>
 
           <!-- 自定义日期选择 -->
-          <div v-if="localForm.expireDuration === 'custom'" class="animate-fadeIn">
+          <div v-if="localForm.expireDuration === 'custom'"
+class="animate-fadeIn">
             <label class="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-300"
               >选择日期和时间</label
             >
@@ -174,8 +176,10 @@
               :disabled="saving || localForm.expiresAt === apiKey.expiresAt"
               @click="handleSave"
             >
-              <div v-if="saving" class="loading-spinner mr-2" />
-              <i v-else class="fas fa-save mr-2" />
+              <div v-if="saving"
+class="loading-spinner mr-2" />
+              <i v-else
+class="fas fa-save mr-2" />
               {{ saving ? '保存中...' : '保存更改' }}
             </button>
           </div>

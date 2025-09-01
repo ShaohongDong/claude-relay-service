@@ -34,7 +34,8 @@
                 {{ dashboardData.totalAccounts }}
               </p>
               <!-- 各平台账户数量展示 -->
-              <div v-if="dashboardData.accountsByPlatform" class="flex items-center gap-2">
+              <div v-if="dashboardData.accountsByPlatform"
+class="flex items-center gap-2">
                 <!-- Claude账户 -->
                 <div
                   v-if="
@@ -77,51 +78,12 @@
                     dashboardData.accountsByPlatform.gemini.total
                   }}</span>
                 </div>
-                <div
-                  v-if="
-                    dashboardData.accountsByPlatform.azure_openai &&
-                    dashboardData.accountsByPlatform.azure_openai.total > 0
-                  "
-                  class="inline-flex items-center gap-0.5"
-                >
-                  <i class="fab fa-microsoft text-xs text-blue-600" />
-                  <span class="text-xs font-medium text-gray-700 dark:text-gray-300">{{
-                    dashboardData.accountsByPlatform.azure_openai.total
-                  }}</span>
-                </div>
-                <!-- OpenAI账户 -->
-                <div
-                  v-if="
-                    dashboardData.accountsByPlatform.openai &&
-                    dashboardData.accountsByPlatform.openai.total > 0
-                  "
-                  class="inline-flex items-center gap-0.5"
-                  :title="`OpenAI: ${dashboardData.accountsByPlatform.openai.total} 个 (正常: ${dashboardData.accountsByPlatform.openai.normal})`"
-                >
-                  <i class="fas fa-openai text-xs text-gray-100" />
-                  <span class="text-xs font-medium text-gray-700 dark:text-gray-300">{{
-                    dashboardData.accountsByPlatform.openai.total
-                  }}</span>
-                </div>
-                <!-- Azure OpenAI账户 -->
-                <div
-                  v-if="
-                    dashboardData.accountsByPlatform.azure_openai &&
-                    dashboardData.accountsByPlatform.azure_openai.total > 0
-                  "
-                  class="inline-flex items-center gap-0.5"
-                  :title="`Azure OpenAI: ${dashboardData.accountsByPlatform.azure_openai.total} 个 (正常: ${dashboardData.accountsByPlatform.azure_openai.normal})`"
-                >
-                  <i class="fab fa-microsoft text-xs text-blue-600" />
-                  <span class="text-xs font-medium text-gray-700 dark:text-gray-300">{{
-                    dashboardData.accountsByPlatform.azure_openai.total
-                  }}</span>
-                </div>
               </div>
             </div>
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
               正常: {{ dashboardData.normalAccounts || 0 }}
-              <span v-if="dashboardData.abnormalAccounts > 0" class="text-red-600">
+              <span v-if="dashboardData.abnormalAccounts > 0"
+class="text-red-600">
                 | 异常: {{ dashboardData.abnormalAccounts }}
               </span>
               <span
@@ -130,7 +92,8 @@
               >
                 | 停止调度: {{ dashboardData.pausedAccounts }}
               </span>
-              <span v-if="dashboardData.rateLimitedAccounts > 0" class="text-yellow-600">
+              <span v-if="dashboardData.rateLimitedAccounts > 0"
+class="text-yellow-600">
                 | 限流: {{ dashboardData.rateLimitedAccounts }}
               </span>
             </p>
@@ -219,13 +182,15 @@
                     formatNumber(dashboardData.todayOutputTokens || 0)
                   }}</span></span
                 >
-                <span v-if="(dashboardData.todayCacheCreateTokens || 0) > 0" class="text-purple-600"
+                <span
+v-if="(dashboardData.todayCacheCreateTokens || 0) > 0" class="text-purple-600"
                   >缓存创建:
                   <span class="font-medium">{{
                     formatNumber(dashboardData.todayCacheCreateTokens || 0)
                   }}</span></span
                 >
-                <span v-if="(dashboardData.todayCacheReadTokens || 0) > 0" class="text-purple-600"
+                <span
+v-if="(dashboardData.todayCacheReadTokens || 0) > 0" class="text-purple-600"
                   >缓存读取:
                   <span class="font-medium">{{
                     formatNumber(dashboardData.todayCacheReadTokens || 0)
@@ -275,13 +240,15 @@
                     formatNumber(dashboardData.totalOutputTokens || 0)
                   }}</span></span
                 >
-                <span v-if="(dashboardData.totalCacheCreateTokens || 0) > 0" class="text-purple-600"
+                <span
+v-if="(dashboardData.totalCacheCreateTokens || 0) > 0" class="text-purple-600"
                   >缓存创建:
                   <span class="font-medium">{{
                     formatNumber(dashboardData.totalCacheCreateTokens || 0)
                   }}</span></span
                 >
-                <span v-if="(dashboardData.totalCacheReadTokens || 0) > 0" class="text-purple-600"
+                <span
+v-if="(dashboardData.totalCacheReadTokens || 0) > 0" class="text-purple-600"
                   >缓存读取:
                   <span class="font-medium">{{
                     formatNumber(dashboardData.totalCacheReadTokens || 0)
@@ -308,7 +275,8 @@
             </p>
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
               每分钟请求数
-              <span v-if="dashboardData.isHistoricalMetrics" class="text-yellow-600">
+              <span v-if="dashboardData.isHistoricalMetrics"
+class="text-yellow-600">
                 <i class="fas fa-exclamation-circle" /> 历史数据
               </span>
             </p>
@@ -331,7 +299,8 @@
             </p>
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
               每分钟Token数
-              <span v-if="dashboardData.isHistoricalMetrics" class="text-yellow-600">
+              <span v-if="dashboardData.isHistoricalMetrics"
+class="text-yellow-600">
                 <i class="fas fa-exclamation-circle" /> 历史数据
               </span>
             </p>
@@ -412,7 +381,8 @@
               value-format="YYYY-MM-DD HH:mm:ss"
               @change="onCustomDateRangeChange"
             />
-            <span v-if="trendGranularity === 'hour'" class="text-xs text-orange-600">
+            <span v-if="trendGranularity === 'hour'"
+class="text-xs text-orange-600">
               <i class="fas fa-info-circle" /> 最多24小时
             </span>
           </div>
@@ -422,7 +392,8 @@
             <!-- 自动刷新控制 -->
             <div class="flex items-center rounded-lg bg-gray-100 px-3 py-1 dark:bg-gray-700">
               <label class="relative inline-flex cursor-pointer items-center">
-                <input v-model="autoRefreshEnabled" class="peer sr-only" type="checkbox" />
+                <input
+v-model="autoRefreshEnabled" class="peer sr-only" type="checkbox" />
                 <!-- 更小的开关 -->
                 <div
                   class="peer relative h-5 w-9 rounded-full bg-gray-300 transition-all duration-200 after:absolute after:left-[2px] after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow-sm after:transition-transform after:duration-200 after:content-[''] peer-checked:bg-blue-500 peer-checked:after:translate-x-4 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 dark:bg-gray-600 dark:after:bg-gray-300 dark:peer-focus:ring-blue-600"
@@ -463,7 +434,8 @@
           <h4 class="mb-4 text-base font-semibold text-gray-800 dark:text-gray-200 sm:text-lg">
             Token使用分布
           </h4>
-          <div class="relative" style="height: 250px">
+          <div class="relative"
+style="height: 250px">
             <canvas ref="modelUsageChart" />
           </div>
         </div>
@@ -473,10 +445,12 @@
           <h4 class="mb-4 text-base font-semibold text-gray-800 dark:text-gray-200 sm:text-lg">
             详细统计数据
           </h4>
-          <div v-if="dashboardModelStats.length === 0" class="py-8 text-center">
+          <div v-if="dashboardModelStats.length === 0"
+class="py-8 text-center">
             <p class="text-sm text-gray-500 sm:text-base">暂无模型使用数据</p>
           </div>
-          <div v-else class="max-h-[250px] overflow-auto sm:max-h-[300px]">
+          <div v-else
+class="max-h-[250px] overflow-auto sm:max-h-[300px]">
             <table class="min-w-full">
               <thead class="sticky top-0 bg-gray-50 dark:bg-gray-700">
                 <tr>
@@ -514,7 +488,8 @@
                   class="hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
                   <td class="px-2 py-2 text-xs text-gray-900 dark:text-gray-100 sm:px-4 sm:text-sm">
-                    <span class="block max-w-[100px] truncate sm:max-w-none" :title="stat.model">
+                    <span class="block max-w-[100px] truncate sm:max-w-none"
+:title="stat.model">
                       {{ stat.model }}
                     </span>
                   </td>
@@ -553,7 +528,8 @@
     <!-- Token使用趋势图 -->
     <div class="mb-4 sm:mb-6 md:mb-8">
       <div class="card p-4 sm:p-6">
-        <div class="sm:h-[300px]" style="height: 250px">
+        <div class="sm:h-[300px]"
+style="height: 250px">
           <canvas ref="usageTrendChart" />
         </div>
       </div>
@@ -600,7 +576,8 @@
           </span>
           <span v-else> 共 {{ apiKeysTrendData.totalApiKeys }} 个 API Key </span>
         </div>
-        <div class="sm:h-[350px]" style="height: 300px">
+        <div class="sm:h-[350px]"
+style="height: 300px">
           <canvas ref="apiKeysUsageTrendChart" />
         </div>
       </div>

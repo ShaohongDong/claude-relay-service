@@ -12,14 +12,16 @@
             <i :class="getIconClass(toast.type)" />
           </div>
           <div class="toast-body">
-            <div v-if="toast.title" class="toast-title">
+            <div v-if="toast.title"
+class="toast-title">
               {{ toast.title }}
             </div>
             <div class="toast-message">
               {{ toast.message }}
             </div>
           </div>
-          <button class="toast-close" @click.stop="removeToast(toast.id)">
+          <button class="toast-close"
+@click.stop="removeToast(toast.id)">
             <i class="fas fa-times" />
           </button>
         </div>

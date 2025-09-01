@@ -1,6 +1,7 @@
 <template>
   <Teleport to="body">
-    <div v-if="show" class="modal fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
+    <div v-if="show"
+class="modal fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
       <div
         class="modal-content custom-scrollbar mx-auto max-h-[90vh] w-full max-w-4xl overflow-y-auto p-4 sm:p-6 md:p-8"
       >
@@ -23,14 +24,16 @@
 
         <!-- 添加分组按钮 -->
         <div class="mb-6">
-          <button class="btn btn-primary px-4 py-2" @click="showCreateForm = true">
+          <button class="btn btn-primary px-4 py-2"
+@click="showCreateForm = true">
             <i class="fas fa-plus mr-2" />
             创建新分组
           </button>
         </div>
 
         <!-- 创建分组表单 -->
-        <div v-if="showCreateForm" class="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
+        <div v-if="showCreateForm"
+class="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
           <h4 class="mb-4 text-lg font-semibold text-gray-900">创建新分组</h4>
           <div class="space-y-4">
             <div>
@@ -47,16 +50,14 @@
               <label class="mb-2 block text-sm font-semibold text-gray-700">平台类型 *</label>
               <div class="flex gap-4">
                 <label class="flex cursor-pointer items-center">
-                  <input v-model="createForm.platform" class="mr-2" type="radio" value="claude" />
+                  <input
+v-model="createForm.platform" class="mr-2" type="radio" value="claude" />
                   <span class="text-sm text-gray-700">Claude</span>
                 </label>
                 <label class="flex cursor-pointer items-center">
-                  <input v-model="createForm.platform" class="mr-2" type="radio" value="gemini" />
+                  <input
+v-model="createForm.platform" class="mr-2" type="radio" value="gemini" />
                   <span class="text-sm text-gray-700">Gemini</span>
-                </label>
-                <label class="flex cursor-pointer items-center">
-                  <input v-model="createForm.platform" class="mr-2" type="radio" value="openai" />
-                  <span class="text-sm text-gray-700">OpenAI</span>
                 </label>
               </div>
             </div>
@@ -77,27 +78,32 @@
                 :disabled="!createForm.name || !createForm.platform || creating"
                 @click="createGroup"
               >
-                <div v-if="creating" class="loading-spinner mr-2" />
+                <div v-if="creating"
+class="loading-spinner mr-2" />
                 {{ creating ? '创建中...' : '创建' }}
               </button>
-              <button class="btn btn-secondary px-4 py-2" @click="cancelCreate">取消</button>
+              <button
+class="btn btn-secondary px-4 py-2" @click="cancelCreate">取消</button>
             </div>
           </div>
         </div>
 
         <!-- 分组列表 -->
         <div class="space-y-4">
-          <div v-if="loading" class="py-8 text-center">
+          <div v-if="loading"
+class="py-8 text-center">
             <div class="loading-spinner-lg mx-auto mb-4" />
             <p class="text-gray-500">加载中...</p>
           </div>
 
-          <div v-else-if="groups.length === 0" class="rounded-lg bg-gray-50 py-8 text-center">
+          <div v-else-if="groups.length === 0"
+class="rounded-lg bg-gray-50 py-8 text-center">
             <i class="fas fa-layer-group mb-4 text-4xl text-gray-300" />
             <p class="text-gray-500">暂无分组</p>
           </div>
 
-          <div v-else class="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div v-else
+class="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div
               v-for="group in groups"
               :key="group.id"
@@ -123,13 +129,7 @@
                           : 'bg-gray-100 text-gray-700'
                     ]"
                   >
-                    {{
-                      group.platform === 'claude'
-                        ? 'Claude'
-                        : group.platform === 'gemini'
-                          ? 'Gemini'
-                          : 'OpenAI'
-                    }}
+                    {{ group.platform === 'claude' ? 'Claude' : 'Gemini' }}
                   </span>
                 </div>
               </div>
@@ -177,7 +177,8 @@
       <div class="modal-content w-full max-w-lg p-4 sm:p-6">
         <div class="mb-4 flex items-center justify-between">
           <h3 class="text-lg font-bold text-gray-900">编辑分组</h3>
-          <button class="text-gray-400 transition-colors hover:text-gray-600" @click="cancelEdit">
+          <button class="text-gray-400 transition-colors hover:text-gray-600"
+@click="cancelEdit">
             <i class="fas fa-times" />
           </button>
         </div>
@@ -196,13 +197,7 @@
           <div>
             <label class="mb-2 block text-sm font-semibold text-gray-700">平台类型</label>
             <div class="rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-600">
-              {{
-                editForm.platform === 'claude'
-                  ? 'Claude'
-                  : editForm.platform === 'gemini'
-                    ? 'Gemini'
-                    : 'OpenAI'
-              }}
+              {{ editForm.platform === 'claude' ? 'Claude' : 'Gemini' }}
               <span class="ml-2 text-xs text-gray-500">(不可修改)</span>
             </div>
           </div>
@@ -223,10 +218,12 @@
               :disabled="!editForm.name || updating"
               @click="updateGroup"
             >
-              <div v-if="updating" class="loading-spinner mr-2" />
+              <div v-if="updating"
+class="loading-spinner mr-2" />
               {{ updating ? '更新中...' : '更新' }}
             </button>
-            <button class="btn btn-secondary flex-1 px-4 py-2" @click="cancelEdit">取消</button>
+            <button
+class="btn btn-secondary flex-1 px-4 py-2" @click="cancelEdit">取消</button>
           </div>
         </div>
       </div>
@@ -277,7 +274,7 @@ const loadGroups = async () => {
   try {
     const response = await apiClient.get('/admin/account-groups')
     groups.value = response.data || []
-  } catch (error) {
+  } catch {
     showToast('加载分组列表失败', 'error')
   } finally {
     loading.value = false

@@ -1,6 +1,7 @@
 <template>
   <Teleport to="body">
-    <div v-if="show" class="modal fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
+    <div v-if="show"
+class="modal fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
       <div
         class="modal-content custom-scrollbar mx-auto max-h-[90vh] w-full max-w-2xl overflow-y-auto p-4 sm:p-6 md:p-8"
       >
@@ -96,44 +97,16 @@
                   />
                   <span class="text-sm text-gray-700 dark:text-gray-300">Gemini</span>
                 </label>
-                <label class="flex cursor-pointer items-center">
-                  <input
-                    v-model="form.platform"
-                    class="mr-2 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
-                    type="radio"
-                    value="openai"
-                  />
-                  <span class="text-sm text-gray-700 dark:text-gray-300">OpenAI</span>
-                </label>
-                <label class="flex cursor-pointer items-center">
-                  <input
-                    v-model="form.platform"
-                    class="mr-2 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
-                    type="radio"
-                    value="azure_openai"
-                  />
-                  <span class="text-sm text-gray-700 dark:text-gray-300">Azure OpenAI</span>
-                </label>
-                <label class="flex cursor-pointer items-center">
-                  <input
-                    v-model="form.platform"
-                    class="mr-2 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
-                    type="radio"
-                  />
-                </label>
               </div>
             </div>
 
-            <div
-              v-if="
-                !isEdit && form.platform !== 'claude-console' && form.platform !== 'azure_openai'
-              "
-            >
+            <div v-if="!isEdit && form.platform !== 'claude-console'">
               <label class="mb-3 block text-sm font-semibold text-gray-700 dark:text-gray-300"
                 >添加方式</label
               >
               <div class="flex flex-wrap gap-4">
-                <label v-if="form.platform === 'claude'" class="flex cursor-pointer items-center">
+                <label v-if="form.platform === 'claude'"
+class="flex cursor-pointer items-center">
                   <input
                     v-model="form.addType"
                     class="mr-2 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
@@ -177,7 +150,8 @@
                 required
                 type="text"
               />
-              <p v-if="errors.name" class="mt-1 text-xs text-red-500">
+              <p v-if="errors.name"
+class="mt-1 text-xs text-red-500">
                 {{ errors.name }}
               </p>
             </div>
@@ -245,7 +219,8 @@
                   required
                 >
                   <option value="">请选择分组</option>
-                  <option v-for="group in filteredGroups" :key="group.id" :value="group.id">
+                  <option v-for="group in filteredGroups"
+:key="group.id" :value="group.id">
                     {{ group.name }} ({{ group.memberCount || 0 }} 个成员)
                   </option>
                   <option value="__new__">+ 新建分组</option>
@@ -255,7 +230,8 @@
                   type="button"
                   @click="refreshGroups"
                 >
-                  <i class="fas fa-sync-alt" :class="{ 'animate-spin': loadingGroups }" />
+                  <i class="fas fa-sync-alt"
+:class="{ 'animate-spin': loadingGroups }" />
                 </button>
               </div>
             </div>
@@ -322,7 +298,8 @@
                 required
                 type="text"
               />
-              <p v-if="errors.accessKeyId" class="mt-1 text-xs text-red-500">
+              <p v-if="errors.accessKeyId"
+class="mt-1 text-xs text-red-500">
                 {{ errors.accessKeyId }}
               </p>
             </div>
@@ -339,7 +316,8 @@
                 required
                 type="password"
               />
-              <p v-if="errors.secretAccessKey" class="mt-1 text-xs text-red-500">
+              <p v-if="errors.secretAccessKey"
+class="mt-1 text-xs text-red-500">
                 {{ errors.secretAccessKey }}
               </p>
             </div>
@@ -356,7 +334,8 @@
                 required
                 type="text"
               />
-              <p v-if="errors.region" class="mt-1 text-xs text-red-500">
+              <p v-if="errors.region"
+class="mt-1 text-xs text-red-500">
                 {{ errors.region }}
               </p>
               <div class="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-3">
@@ -437,106 +416,6 @@
             </div>
           </div>
 
-          <!-- Azure OpenAI 特定字段 -->
-          <div v-if="form.platform === 'azure_openai' && !isEdit" class="space-y-4">
-            <div>
-              <label class="mb-3 block text-sm font-semibold text-gray-700 dark:text-gray-300"
-                >Azure Endpoint *</label
-              >
-              <input
-                v-model="form.azureEndpoint"
-                class="form-input w-full dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:placeholder-gray-400"
-                :class="{ 'border-red-500': errors.azureEndpoint }"
-                placeholder="https://your-resource.openai.azure.com"
-                required
-                type="url"
-              />
-              <p v-if="errors.azureEndpoint" class="mt-1 text-xs text-red-500">
-                {{ errors.azureEndpoint }}
-              </p>
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Azure OpenAI 资源的终结点 URL，格式：https://your-resource.openai.azure.com
-              </p>
-            </div>
-
-            <div>
-              <label class="mb-3 block text-sm font-semibold text-gray-700 dark:text-gray-300"
-                >API 版本</label
-              >
-              <input
-                v-model="form.apiVersion"
-                class="form-input w-full dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:placeholder-gray-400"
-                placeholder="2024-02-01"
-                type="text"
-              />
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Azure OpenAI API 版本，默认使用最新稳定版本 2024-02-01
-              </p>
-            </div>
-
-            <div>
-              <label class="mb-3 block text-sm font-semibold text-gray-700 dark:text-gray-300"
-                >部署名称 *</label
-              >
-              <input
-                v-model="form.deploymentName"
-                class="form-input w-full dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:placeholder-gray-400"
-                :class="{ 'border-red-500': errors.deploymentName }"
-                placeholder="gpt-4"
-                required
-                type="text"
-              />
-              <p v-if="errors.deploymentName" class="mt-1 text-xs text-red-500">
-                {{ errors.deploymentName }}
-              </p>
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                在 Azure OpenAI Studio 中创建的部署名称
-              </p>
-            </div>
-
-            <div>
-              <label class="mb-3 block text-sm font-semibold text-gray-700 dark:text-gray-300"
-                >API Key *</label
-              >
-              <input
-                v-model="form.apiKey"
-                class="form-input w-full dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:placeholder-gray-400"
-                :class="{ 'border-red-500': errors.apiKey }"
-                placeholder="请输入 Azure OpenAI API Key"
-                required
-                type="password"
-              />
-              <p v-if="errors.apiKey" class="mt-1 text-xs text-red-500">
-                {{ errors.apiKey }}
-              </p>
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                从 Azure 门户获取的 API 密钥
-              </p>
-            </div>
-
-            <div>
-              <label class="mb-3 block text-sm font-semibold text-gray-700 dark:text-gray-300"
-                >支持的模型</label
-              >
-              <div class="flex flex-wrap gap-2">
-                <label
-                  v-for="model in ['gpt-4', 'gpt-4-turbo', 'gpt-35-turbo', 'gpt-35-turbo-16k']"
-                  :key="model"
-                  class="flex cursor-pointer items-center"
-                >
-                  <input
-                    v-model="form.supportedModels"
-                    class="mr-2 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
-                    type="checkbox"
-                    :value="model"
-                  />
-                  <span class="text-sm text-gray-700 dark:text-gray-300">{{ model }}</span>
-                </label>
-              </div>
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">选择此部署支持的模型类型</p>
-            </div>
-          </div>
-
           <div>
             <label class="mb-3 block text-sm font-semibold text-gray-700 dark:text-gray-300"
               >限流机制</label
@@ -574,7 +453,8 @@
         </div>
 
         <!-- Claude Console 特定字段 -->
-        <div v-if="form.platform === 'claude-console' && !isEdit" class="space-y-4">
+        <div v-if="form.platform === 'claude-console' && !isEdit"
+class="space-y-4">
           <div>
             <label class="mb-3 block text-sm font-semibold text-gray-700 dark:text-gray-300"
               >API URL *</label
@@ -587,7 +467,8 @@
               required
               type="text"
             />
-            <p v-if="errors.apiUrl" class="mt-1 text-xs text-red-500">
+            <p v-if="errors.apiUrl"
+class="mt-1 text-xs text-red-500">
               {{ errors.apiUrl }}
             </p>
           </div>
@@ -604,7 +485,8 @@
               required
               type="password"
             />
-            <p v-if="errors.apiKey" class="mt-1 text-xs text-red-500">
+            <p v-if="errors.apiKey"
+class="mt-1 text-xs text-red-500">
               {{ errors.apiKey }}
             </p>
           </div>
@@ -779,7 +661,8 @@
         </div>
 
         <!-- Claude 5小时限制自动停止调度选项 -->
-        <div v-if="form.platform === 'claude'" class="mt-4">
+        <div v-if="form.platform === 'claude'"
+class="mt-4">
           <label class="flex items-start">
             <input
               v-model="form.autoStopOnWarning"
@@ -817,11 +700,7 @@
 
         <!-- 手动输入 Token 字段 -->
         <div
-          v-if="
-            form.addType === 'manual' &&
-            form.platform !== 'claude-console' &&
-            form.platform !== 'azure_openai'
-          "
+          v-if="form.addType === 'manual' && form.platform !== 'claude-console'"
           class="space-y-4 rounded-lg border border-blue-200 bg-blue-50 p-4"
         >
           <div class="mb-4 flex items-start gap-3">
@@ -844,13 +723,6 @@
                 class="mb-2 text-sm text-blue-800 dark:text-blue-300"
               >
                 请输入有效的 Gemini Access Token。如果您有 Refresh
-                Token，建议也一并填写以支持自动刷新。
-              </p>
-              <p
-                v-else-if="form.platform === 'openai'"
-                class="mb-2 text-sm text-blue-800 dark:text-blue-300"
-              >
-                请输入有效的 OpenAI Access Token。如果您有 Refresh
                 Token，建议也一并填写以支持自动刷新。
               </p>
               <div
@@ -880,39 +752,11 @@
                   >
                   文件中的凭证。
                 </p>
-                <p
-                  v-else-if="form.platform === 'openai'"
-                  class="text-xs text-blue-800 dark:text-blue-300"
-                >
-                  请从已登录 OpenAI 账户的机器上获取认证凭证， 或通过 OAuth 授权流程获取 Access
-                  Token。
-                </p>
               </div>
               <p class="text-xs text-blue-600 dark:text-blue-400">
                 💡 如果未填写 Refresh Token，Token 过期后需要手动更新。
               </p>
             </div>
-          </div>
-
-          <!-- OpenAI 平台需要 ID Token -->
-          <div v-if="form.platform === 'openai'">
-            <label class="mb-3 block text-sm font-semibold text-gray-700 dark:text-gray-300"
-              >ID Token *</label
-            >
-            <textarea
-              v-model="form.idToken"
-              class="form-input w-full resize-none font-mono text-xs dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:placeholder-gray-400"
-              :class="{ 'border-red-500': errors.idToken }"
-              placeholder="请输入 ID Token (JWT 格式)..."
-              required
-              rows="4"
-            />
-            <p v-if="errors.idToken" class="mt-1 text-xs text-red-500">
-              {{ errors.idToken }}
-            </p>
-            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-              ID Token 是 OpenAI OAuth 认证返回的 JWT token，包含用户信息和组织信息
-            </p>
           </div>
 
           <div>
@@ -927,7 +771,8 @@
               required
               rows="4"
             />
-            <p v-if="errors.accessToken" class="mt-1 text-xs text-red-500">
+            <p v-if="errors.accessToken"
+class="mt-1 text-xs text-red-500">
               {{ errors.accessToken }}
             </p>
           </div>
@@ -959,8 +804,7 @@
           <button
             v-if="
               (form.addType === 'oauth' || form.addType === 'setup-token') &&
-              form.platform !== 'claude-console' &&
-              form.platform !== 'azure_openai'
+              form.platform !== 'claude-console'
             "
             class="btn btn-primary flex-1 px-6 py-3 font-semibold"
             :disabled="loading"
@@ -976,7 +820,8 @@
             type="button"
             @click="createAccount"
           >
-            <div v-if="loading" class="loading-spinner mr-2" />
+            <div v-if="loading"
+class="loading-spinner mr-2" />
             {{ loading ? '创建中...' : '创建' }}
           </button>
         </div>
@@ -993,7 +838,8 @@
     />
 
     <!-- 步骤2: Setup Token授权 -->
-    <div v-if="oauthStep === 2 && form.addType === 'setup-token'" class="space-y-6">
+    <div v-if="oauthStep === 2 && form.addType === 'setup-token'"
+class="space-y-6">
       <!-- Claude Setup Token流程 -->
       <div v-if="form.platform === 'claude'">
         <div
@@ -1034,11 +880,14 @@
                         :disabled="setupTokenLoading"
                         @click="generateSetupTokenAuthUrl"
                       >
-                        <i v-if="!setupTokenLoading" class="fas fa-link mr-2" />
-                        <div v-else class="loading-spinner mr-2" />
+                        <i v-if="!setupTokenLoading"
+class="fas fa-link mr-2" />
+                        <div v-else
+class="loading-spinner mr-2" />
                         {{ setupTokenLoading ? '生成中...' : '生成 Setup Token 授权链接' }}
                       </button>
-                      <div v-else class="space-y-3">
+                      <div v-else
+class="space-y-3">
                         <div class="flex items-center gap-2">
                           <input
                             class="form-input flex-1 bg-gray-50 font-mono text-xs dark:bg-gray-700"
@@ -1158,14 +1007,16 @@
           type="button"
           @click="exchangeSetupTokenCode"
         >
-          <div v-if="setupTokenExchanging" class="loading-spinner mr-2" />
+          <div v-if="setupTokenExchanging"
+class="loading-spinner mr-2" />
           {{ setupTokenExchanging ? '验证中...' : '完成授权' }}
         </button>
       </div>
     </div>
 
     <!-- 编辑模式 -->
-    <div v-if="isEdit" class="space-y-6">
+    <div v-if="isEdit"
+class="space-y-6">
       <!-- 基本信息 -->
       <div>
         <label class="mb-3 block text-sm font-semibold text-gray-700 dark:text-gray-300"
@@ -1242,7 +1093,8 @@
             required
           >
             <option value="">请选择分组</option>
-            <option v-for="group in filteredGroups" :key="group.id" :value="group.id">
+            <option v-for="group in filteredGroups"
+:key="group.id" :value="group.id">
               {{ group.name }} ({{ group.memberCount || 0 }} 个成员)
             </option>
             <option value="__new__">+ 新建分组</option>
@@ -1252,7 +1104,8 @@
             type="button"
             @click="refreshGroups"
           >
-            <i class="fas fa-sync-alt" :class="{ 'animate-spin': loadingGroups }" />
+            <i class="fas fa-sync-alt"
+:class="{ 'animate-spin': loadingGroups }" />
           </button>
         </div>
       </div>
@@ -1305,7 +1158,8 @@
       </div>
 
       <!-- Claude 5小时限制自动停止调度选项（编辑模式） -->
-      <div v-if="form.platform === 'claude'" class="mt-4">
+      <div v-if="form.platform === 'claude'"
+class="mt-4">
         <label class="flex items-start">
           <input
             v-model="form.autoStopOnWarning"
@@ -1342,7 +1196,8 @@
       </div>
 
       <!-- Claude Console 特定字段（编辑模式）-->
-      <div v-if="form.platform === 'claude-console'" class="space-y-4">
+      <div v-if="form.platform === 'claude-console'"
+class="space-y-4">
         <div>
           <label class="mb-3 block text-sm font-semibold text-gray-700">API URL</label>
           <input
@@ -1555,7 +1410,8 @@
           type="button"
           @click="updateAccount"
         >
-          <div v-if="loading" class="loading-spinner mr-2" />
+          <div v-if="loading"
+class="loading-spinner mr-2" />
           {{ loading ? '更新中...' : '更新' }}
         </button>
       </div>
@@ -1647,7 +1503,7 @@ const form = ref({
   platform: props.account?.platform || 'claude',
   addType: (() => {
     const platform = props.account?.platform || 'claude'
-    if (platform === 'gemini' || platform === 'openai') return 'oauth'
+    if (platform === 'gemini') return 'oauth'
     if (platform === 'claude') return 'setup-token'
     return 'manual'
   })(),
@@ -1828,7 +1684,7 @@ const copySetupTokenAuthUrl = async () => {
     setTimeout(() => {
       setupTokenCopied.value = false
     }, 2000)
-  } catch (error) {
+  } catch {
     // 降级方案 - 使用 textarea 替代 input，禁用 ESLint 警告
     const textarea = document.createElement('textarea')
     textarea.value = setupTokenAuthUrl.value
@@ -1838,7 +1694,6 @@ const copySetupTokenAuthUrl = async () => {
     textarea.select()
 
     try {
-      // eslint-disable-next-line
       const successful = document.execCommand('copy')
       if (successful) {
         setupTokenCopied.value = true
@@ -1846,7 +1701,7 @@ const copySetupTokenAuthUrl = async () => {
       } else {
         showToast('复制失败，请手动复制', 'error')
       }
-    } catch (err) {
+    } catch {
       showToast('复制失败，请手动复制', 'error')
     }
 
@@ -1930,17 +1785,11 @@ const handleOAuthSuccess = async (tokenInfo) => {
       }
       // 添加 Gemini 优先级
       data.priority = form.value.priority || 50
-    } else if (form.value.platform === 'openai') {
-      data.openaiOauth = tokenInfo.tokens || tokenInfo
-      data.accountInfo = tokenInfo.accountInfo
-      data.priority = form.value.priority || 50
     }
 
     let result
     if (form.value.platform === 'claude') {
       result = await accountsStore.createClaudeAccount(data)
-    } else if (form.value.platform === 'openai') {
-      result = await accountsStore.createOpenAIAccount(data)
     } else {
       result = await accountsStore.createGeminiAccount(data)
     }
@@ -1994,14 +1843,6 @@ const createAccount = async () => {
     // 手动模式验证
     if (!form.value.accessToken || form.value.accessToken.trim() === '') {
       errors.value.accessToken = '请填写 Access Token'
-      hasError = true
-    }
-    // OpenAI 平台需要验证 ID Token
-    if (
-      form.value.platform === 'openai' &&
-      (!form.value.idToken || form.value.idToken.trim() === '')
-    ) {
-      errors.value.idToken = '请填写 ID Token'
       hasError = true
     }
   }
@@ -2078,57 +1919,6 @@ const createAccount = async () => {
 
       // 添加 Gemini 优先级
       data.priority = form.value.priority || 50
-    } else if (form.value.platform === 'openai') {
-      // OpenAI手动模式需要构建openaiOauth对象
-      const expiresInMs = form.value.refreshToken
-        ? 10 * 60 * 1000 // 10分钟
-        : 365 * 24 * 60 * 60 * 1000 // 1年
-
-      data.openaiOauth = {
-        idToken: form.value.idToken, // 使用用户输入的 ID Token
-        accessToken: form.value.accessToken,
-        refreshToken: form.value.refreshToken || '',
-        expires_in: Math.floor(expiresInMs / 1000) // 转换为秒
-      }
-
-      // 手动模式下，尝试从 ID Token 解析用户信息
-      let accountInfo = {
-        accountId: '',
-        chatgptUserId: '',
-        organizationId: '',
-        organizationRole: '',
-        organizationTitle: '',
-        planType: '',
-        email: '',
-        emailVerified: false
-      }
-
-      // 尝试解析 ID Token (JWT)
-      if (form.value.idToken) {
-        try {
-          const idTokenParts = form.value.idToken.split('.')
-          if (idTokenParts.length === 3) {
-            const payload = JSON.parse(atob(idTokenParts[1]))
-            const authClaims = payload['https://api.openai.com/auth'] || {}
-
-            accountInfo = {
-              accountId: authClaims.accountId || '',
-              chatgptUserId: authClaims.chatgptUserId || '',
-              organizationId: authClaims.organizationId || '',
-              organizationRole: authClaims.organizationRole || '',
-              organizationTitle: authClaims.organizationTitle || '',
-              planType: authClaims.planType || '',
-              email: payload.email || '',
-              emailVerified: payload.email_verified || false
-            }
-          }
-        } catch (e) {
-          console.warn('Failed to parse ID Token:', e)
-        }
-      }
-
-      data.accountInfo = accountInfo
-      data.priority = form.value.priority || 50
     } else if (form.value.platform === 'claude-console') {
       // Claude Console 账户特定数据
       data.apiUrl = form.value.apiUrl
@@ -2156,8 +1946,6 @@ const createAccount = async () => {
       result = await accountsStore.createClaudeAccount(data)
     } else if (form.value.platform === 'claude-console') {
       result = await accountsStore.createClaudeConsoleAccount(data)
-    } else if (form.value.platform === 'openai') {
-      result = await accountsStore.createOpenAIAccount(data)
     } else {
       result = await accountsStore.createGeminiAccount(data)
     }
@@ -2251,18 +2039,6 @@ const updateAccount = async () => {
           token_type: 'Bearer',
           expiry_date: Date.now() + expiresInMs
         }
-      } else if (props.account.platform === 'openai') {
-        // OpenAI需要构建openaiOauth对象
-        const expiresInMs = form.value.refreshToken
-          ? 10 * 60 * 1000 // 10分钟
-          : 365 * 24 * 60 * 60 * 1000 // 1年
-
-        data.openaiOauth = {
-          idToken: form.value.idToken || '', // 更新时使用用户输入的 ID Token
-          accessToken: form.value.accessToken || '',
-          refreshToken: form.value.refreshToken || '',
-          expires_in: Math.floor(expiresInMs / 1000) // 转换为秒
-        }
       }
     }
 
@@ -2281,11 +2057,6 @@ const updateAccount = async () => {
         hasClaudePro: form.value.subscriptionType === 'claude_pro',
         manuallySet: true // 标记为手动设置
       }
-    }
-
-    // OpenAI 账号优先级更新
-    if (props.account.platform === 'openai') {
-      data.priority = form.value.priority || 50
     }
 
     // Gemini 账号优先级更新
@@ -2332,8 +2103,6 @@ const updateAccount = async () => {
       await accountsStore.updateClaudeAccount(props.account.id, data)
     } else if (props.account.platform === 'claude-console') {
       await accountsStore.updateClaudeConsoleAccount(props.account.id, data)
-    } else if (props.account.platform === 'openai') {
-      await accountsStore.updateOpenAIAccount(props.account.id, data)
     } else {
       await accountsStore.updateGeminiAccount(props.account.id, data)
     }
@@ -2403,7 +2172,7 @@ const loadGroups = async () => {
   try {
     const response = await apiClient.get('/admin/account-groups')
     groups.value = response.data || []
-  } catch (error) {
+  } catch {
     showToast('加载分组列表失败', 'error')
     groups.value = []
   } finally {
@@ -2432,9 +2201,6 @@ watch(
       form.value.addType = 'setup-token'
     } else if (newPlatform === 'gemini') {
       // 切换到 Gemini 时，使用 OAuth 作为默认方式
-      form.value.addType = 'oauth'
-    } else if (newPlatform === 'openai') {
-      // 切换到 OpenAI 时，使用 OAuth 作为默认方式
       form.value.addType = 'oauth'
     }
 
@@ -2469,14 +2235,12 @@ watch(setupTokenAuthCode, (newValue) => {
           // 成功提取授权码
           setupTokenAuthCode.value = code
           showToast('成功提取授权码！', 'success')
-          console.log('Successfully extracted authorization code from URL')
         } else {
           // URL 中没有 code 参数
           showToast('URL 中未找到授权码参数，请检查链接是否正确', 'error')
         }
-      } catch (error) {
+      } catch {
         // URL 解析失败
-        console.error('Failed to parse URL:', error)
         showToast('链接格式错误，请检查是否为完整的 URL', 'error')
       }
     } else {

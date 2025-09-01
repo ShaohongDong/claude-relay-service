@@ -117,14 +117,6 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   const authStore = useAuthStore()
 
-  console.log('路由导航:', {
-    to: to.path,
-    from: from.path,
-    fullPath: to.fullPath,
-    requiresAuth: to.meta.requiresAuth,
-    isAuthenticated: authStore.isAuthenticated
-  })
-
   // 防止重定向循环：如果已经在目标路径，直接放行
   if (to.path === from.path && to.fullPath === from.fullPath) {
     return next()

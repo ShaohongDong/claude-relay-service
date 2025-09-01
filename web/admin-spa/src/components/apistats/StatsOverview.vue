@@ -46,7 +46,8 @@
           <span class="mt-1 flex-shrink-0 text-sm text-gray-600 dark:text-gray-400 md:text-base"
             >过期时间</span
           >
-          <div v-if="statsData.expiresAt" class="text-right">
+          <div v-if="statsData.expiresAt"
+class="text-right">
             <div
               v-if="isApiKeyExpired(statsData.expiresAt)"
               class="text-sm font-medium text-red-600 md:text-base"
@@ -68,7 +69,8 @@
               {{ formatExpireDate(statsData.expiresAt) }}
             </div>
           </div>
-          <div v-else class="text-sm font-medium text-gray-400 dark:text-gray-500 md:text-base">
+          <div v-else
+class="text-sm font-medium text-gray-400 dark:text-gray-500 md:text-base">
             <i class="fas fa-infinity mr-1 text-xs md:text-sm" />
             永不过期
           </div>
@@ -142,7 +144,7 @@ const formatDate = (dateString) => {
   try {
     const date = dayjs(dateString)
     return date.format('YYYY年MM月DD日 HH:mm')
-  } catch (error) {
+  } catch {
     return '格式错误'
   }
 }

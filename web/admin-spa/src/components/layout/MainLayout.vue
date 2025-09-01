@@ -9,7 +9,8 @@
       style="z-index: 1; min-height: calc(100vh - 120px)"
     >
       <!-- 标签栏 -->
-      <TabBar :active-tab="activeTab" @tab-change="handleTabChange" />
+      <TabBar :active-tab="activeTab"
+@tab-change="handleTabChange" />
 
       <!-- 内容区域 -->
       <div class="tab-content">
@@ -110,7 +111,6 @@ const handleTabChange = async (tabKey) => {
   } catch (err) {
     // 如果路由切换失败，恢复activeTab状态
     if (err.name !== 'NavigationDuplicated') {
-      console.error('路由切换失败:', err)
       // 恢复到当前路由对应的tab
       initActiveTab()
     }

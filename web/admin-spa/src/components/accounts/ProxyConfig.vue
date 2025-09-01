@@ -85,7 +85,8 @@
           </label>
         </div>
 
-        <div v-if="showAuth" class="grid grid-cols-2 gap-4">
+        <div v-if="showAuth"
+class="grid grid-cols-2 gap-4">
           <div>
             <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
               >用户名</label

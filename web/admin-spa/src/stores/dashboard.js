@@ -18,9 +18,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     accountsByPlatform: {
       claude: { total: 0, normal: 0, abnormal: 0, paused: 0, rateLimited: 0 },
       'claude-console': { total: 0, normal: 0, abnormal: 0, paused: 0, rateLimited: 0 },
-      gemini: { total: 0, normal: 0, abnormal: 0, paused: 0, rateLimited: 0 },
-      openai: { total: 0, normal: 0, abnormal: 0, paused: 0, rateLimited: 0 },
-      azure_openai: { total: 0, normal: 0, abnormal: 0, paused: 0, rateLimited: 0 }
+      gemini: { total: 0, normal: 0, abnormal: 0, paused: 0, rateLimited: 0 }
     },
     todayRequests: 0,
     totalRequests: 0,
@@ -174,9 +172,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
           accountsByPlatform: overview.accountsByPlatform || {
             claude: { total: 0, normal: 0, abnormal: 0, paused: 0, rateLimited: 0 },
             'claude-console': { total: 0, normal: 0, abnormal: 0, paused: 0, rateLimited: 0 },
-            gemini: { total: 0, normal: 0, abnormal: 0, paused: 0, rateLimited: 0 },
-            openai: { total: 0, normal: 0, abnormal: 0, paused: 0, rateLimited: 0 },
-            azure_openai: { total: 0, normal: 0, abnormal: 0, paused: 0, rateLimited: 0 }
+            gemini: { total: 0, normal: 0, abnormal: 0, paused: 0, rateLimited: 0 }
           },
           todayRequests: recentActivity.requestsToday || 0,
           totalRequests: overview.totalRequestsUsed || 0,
@@ -215,8 +211,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
           }
         }
       }
-    } catch (error) {
-      console.error('加载仪表板数据失败:', error)
+    } catch {
+      // 静默处理错误
     } finally {
       loading.value = false
     }
@@ -303,8 +299,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
       if (response.success) {
         trendData.value = response.data
       }
-    } catch (error) {
-      console.error('加载使用趋势失败:', error)
+    } catch {
+      // 静默处理错误
     }
   }
 
@@ -394,8 +390,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
       if (response.success) {
         dashboardModelStats.value = response.data
       }
-    } catch (error) {
-      console.error('加载模型统计失败:', error)
+    } catch {
+      // 静默处理错误
     }
   }
 
@@ -496,8 +492,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
           totalApiKeys: response.totalApiKeys || 0
         }
       }
-    } catch (error) {
-      console.error('加载API Keys趋势失败:', error)
+    } catch {
+      // 静默处理错误
     }
   }
 

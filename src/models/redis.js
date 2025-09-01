@@ -925,30 +925,6 @@ class RedisClient {
     const key = `claude:account:${accountId}`
     return await this.client.del(key)
   }
-  async setOpenAiAccount(accountId, accountData) {
-    const key = `openai:account:${accountId}`
-    await this.client.hset(key, accountData)
-  }
-  async getOpenAiAccount(accountId) {
-    const key = `openai:account:${accountId}`
-    return await this.client.hgetall(key)
-  }
-  async deleteOpenAiAccount(accountId) {
-    const key = `openai:account:${accountId}`
-    return await this.client.del(key)
-  }
-
-  async getAllOpenAIAccounts() {
-    const keys = await this.client.keys('openai:account:*')
-    const accounts = []
-    for (const key of keys) {
-      const accountData = await this.client.hgetall(key)
-      if (accountData && Object.keys(accountData).length > 0) {
-        accounts.push({ id: key.replace('openai:account:', ''), ...accountData })
-      }
-    }
-    return accounts
-  }
 
   // 🔐 会话管理（用于管理员登录等）
   async setSession(sessionId, sessionData, ttl = 86400) {

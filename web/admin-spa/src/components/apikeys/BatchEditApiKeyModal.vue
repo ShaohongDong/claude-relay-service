@@ -52,25 +52,30 @@
               <!-- 标签操作模式选择 -->
               <div class="flex flex-wrap gap-4">
                 <label class="flex cursor-pointer items-center">
-                  <input v-model="tagOperation" class="mr-2" type="radio" value="replace" />
+                  <input
+v-model="tagOperation" class="mr-2" type="radio" value="replace" />
                   <span class="text-sm text-gray-700 dark:text-gray-300">替换标签</span>
                 </label>
                 <label class="flex cursor-pointer items-center">
-                  <input v-model="tagOperation" class="mr-2" type="radio" value="add" />
+                  <input
+v-model="tagOperation" class="mr-2" type="radio" value="add" />
                   <span class="text-sm text-gray-700 dark:text-gray-300">添加标签</span>
                 </label>
                 <label class="flex cursor-pointer items-center">
-                  <input v-model="tagOperation" class="mr-2" type="radio" value="remove" />
+                  <input
+v-model="tagOperation" class="mr-2" type="radio" value="remove" />
                   <span class="text-sm text-gray-700 dark:text-gray-300">移除标签</span>
                 </label>
                 <label class="flex cursor-pointer items-center">
-                  <input v-model="tagOperation" class="mr-2" type="radio" value="none" />
+                  <input
+v-model="tagOperation" class="mr-2" type="radio" value="none" />
                   <span class="text-sm text-gray-700 dark:text-gray-300">不修改标签</span>
                 </label>
               </div>
 
               <!-- 标签编辑区域 -->
-              <div v-if="tagOperation !== 'none'" class="space-y-3">
+              <div v-if="tagOperation !== 'none'"
+class="space-y-3">
                 <!-- 已选择的标签 -->
                 <div v-if="form.tags.length > 0">
                   <div class="mb-2 text-xs font-medium text-gray-600 dark:text-gray-400">
@@ -236,15 +241,18 @@
               <label class="text-sm font-semibold text-gray-700 dark:text-gray-300">激活状态</label>
               <div class="flex gap-4">
                 <label class="flex cursor-pointer items-center">
-                  <input v-model="form.isActive" class="mr-2" type="radio" :value="true" />
+                  <input
+v-model="form.isActive" class="mr-2" type="radio" :value="true" />
                   <span class="text-sm text-gray-700 dark:text-gray-300">激活</span>
                 </label>
                 <label class="flex cursor-pointer items-center">
-                  <input v-model="form.isActive" class="mr-2" type="radio" :value="false" />
+                  <input
+v-model="form.isActive" class="mr-2" type="radio" :value="false" />
                   <span class="text-sm text-gray-700 dark:text-gray-300">禁用</span>
                 </label>
                 <label class="flex cursor-pointer items-center">
-                  <input v-model="form.isActive" class="mr-2" type="radio" :value="null" />
+                  <input
+v-model="form.isActive" class="mr-2" type="radio" :value="null" />
                   <span class="text-sm text-gray-700 dark:text-gray-300">不修改</span>
                 </label>
               </div>
@@ -258,24 +266,24 @@
             >
             <div class="flex flex-wrap gap-4">
               <label class="flex cursor-pointer items-center">
-                <input v-model="form.permissions" class="mr-2" type="radio" value="" />
+                <input
+v-model="form.permissions" class="mr-2" type="radio" value="" />
                 <span class="text-sm text-gray-700">不修改</span>
               </label>
               <label class="flex cursor-pointer items-center">
-                <input v-model="form.permissions" class="mr-2" type="radio" value="all" />
+                <input
+v-model="form.permissions" class="mr-2" type="radio" value="all" />
                 <span class="text-sm text-gray-700">全部服务</span>
               </label>
               <label class="flex cursor-pointer items-center">
-                <input v-model="form.permissions" class="mr-2" type="radio" value="claude" />
+                <input
+v-model="form.permissions" class="mr-2" type="radio" value="claude" />
                 <span class="text-sm text-gray-700">仅 Claude</span>
               </label>
               <label class="flex cursor-pointer items-center">
-                <input v-model="form.permissions" class="mr-2" type="radio" value="gemini" />
+                <input
+v-model="form.permissions" class="mr-2" type="radio" value="gemini" />
                 <span class="text-sm text-gray-700">仅 Gemini</span>
-              </label>
-              <label class="flex cursor-pointer items-center">
-                <input v-model="form.permissions" class="mr-2" type="radio" value="openai" />
-                <span class="text-sm text-gray-700">仅 OpenAI</span>
               </label>
             </div>
           </div>
@@ -311,11 +319,12 @@
                 <select
                   v-model="form.claudeAccountId"
                   class="form-input w-full dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-                  :disabled="form.permissions === 'gemini' || form.permissions === 'openai'"
+                  :disabled="form.permissions === 'gemini'"
                 >
                   <option value="">不修改</option>
                   <option value="SHARED_POOL">使用共享账号池</option>
-                  <optgroup v-if="localAccounts.claudeGroups.length > 0" label="账号分组">
+                  <optgroup v-if="localAccounts.claudeGroups.length > 0"
+label="账号分组">
                     <option
                       v-for="group in localAccounts.claudeGroups"
                       :key="group.id"
@@ -324,7 +333,8 @@
                       分组 - {{ group.name }}
                     </option>
                   </optgroup>
-                  <optgroup v-if="localAccounts.claude.length > 0" label="专属账号">
+                  <optgroup v-if="localAccounts.claude.length > 0"
+label="专属账号">
                     <option
                       v-for="account in localAccounts.claude"
                       :key="account.id"
@@ -346,11 +356,12 @@
                 <select
                   v-model="form.geminiAccountId"
                   class="form-input w-full dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-                  :disabled="form.permissions === 'claude' || form.permissions === 'openai'"
+                  :disabled="form.permissions === 'claude'"
                 >
                   <option value="">不修改</option>
                   <option value="SHARED_POOL">使用共享账号池</option>
-                  <optgroup v-if="localAccounts.geminiGroups.length > 0" label="账号分组">
+                  <optgroup v-if="localAccounts.geminiGroups.length > 0"
+label="账号分组">
                     <option
                       v-for="group in localAccounts.geminiGroups"
                       :key="group.id"
@@ -359,40 +370,10 @@
                       分组 - {{ group.name }}
                     </option>
                   </optgroup>
-                  <optgroup v-if="localAccounts.gemini.length > 0" label="专属账号">
+                  <optgroup v-if="localAccounts.gemini.length > 0"
+label="专属账号">
                     <option
                       v-for="account in localAccounts.gemini"
-                      :key="account.id"
-                      :value="account.id"
-                    >
-                      {{ account.name }}
-                    </option>
-                  </optgroup>
-                </select>
-              </div>
-              <div>
-                <label class="mb-1 block text-sm font-medium text-gray-600 dark:text-gray-400"
-                  >OpenAI 专属账号</label
-                >
-                <select
-                  v-model="form.openaiAccountId"
-                  class="form-input w-full dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-                  :disabled="form.permissions === 'claude' || form.permissions === 'gemini'"
-                >
-                  <option value="">不修改</option>
-                  <option value="SHARED_POOL">使用共享账号池</option>
-                  <optgroup v-if="localAccounts.openaiGroups.length > 0" label="账号分组">
-                    <option
-                      v-for="group in localAccounts.openaiGroups"
-                      :key="group.id"
-                      :value="`group:${group.id}`"
-                    >
-                      分组 - {{ group.name }}
-                    </option>
-                  </optgroup>
-                  <optgroup v-if="localAccounts.openai.length > 0" label="专属账号">
-                    <option
-                      v-for="account in localAccounts.openai"
                       :key="account.id"
                       :value="account.id"
                     >
@@ -408,11 +389,12 @@
                 <select
                   v-model="form.claudeAccount"
                   class="form-input w-full dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-                  :disabled="form.permissions === 'gemini' || form.permissions === 'openai'"
+                  :disabled="form.permissions === 'gemini'"
                 >
                   <option value="">不修改</option>
                   <option value="SHARED_POOL">使用共享账号池</option>
-                  <optgroup v-if="localAccounts.claudeGroups.length > 0" label="账号分组">
+                  <optgroup v-if="localAccounts.claudeGroups.length > 0"
+label="账号分组">
                     <option
                       v-for="group in localAccounts.claudeGroups"
                       :key="group.id"
@@ -421,7 +403,8 @@
                       分组 - {{ group.name }}
                     </option>
                   </optgroup>
-                  <optgroup v-if="localAccounts.claude.length > 0" label="专属账号">
+                  <optgroup v-if="localAccounts.claude.length > 0"
+label="专属账号">
                     <option
                       v-for="account in localAccounts.claude"
                       :key="account.id"
@@ -448,8 +431,10 @@
               :disabled="loading"
               type="submit"
             >
-              <div v-if="loading" class="loading-spinner mr-2" />
-              <i v-else class="fas fa-save mr-2" />
+              <div v-if="loading"
+class="loading-spinner mr-2" />
+              <i v-else
+class="fas fa-save mr-2" />
               {{ loading ? '保存中...' : '批量保存' }}
             </button>
           </div>
@@ -471,7 +456,8 @@ const props = defineProps({
     required: true
   },
   accounts: {
-    type: Object
+    type: Object,
+    default: () => ({})
   }
 })
 
@@ -483,10 +469,8 @@ const accountsLoading = ref(false)
 const localAccounts = ref({
   claude: [],
   gemini: [],
-  openai: [],
   claudeGroups: [],
-  geminiGroups: [],
-  openaiGroups: []
+  geminiGroups: []
 })
 
 // 标签相关
@@ -511,7 +495,6 @@ const form = reactive({
   permissions: '', // 空字符串表示不修改
   claudeAccountId: '',
   geminiAccountId: '',
-  openaiAccountId: '',
   tags: [],
   isActive: null // null表示不修改
 })
@@ -541,11 +524,10 @@ const removeTag = (index) => {
 const refreshAccounts = async () => {
   accountsLoading.value = true
   try {
-    const [claudeData, claudeConsoleData, geminiData, openaiData, groupsData] = await Promise.all([
+    const [claudeData, claudeConsoleData, geminiData, groupsData] = await Promise.all([
       apiClient.get('/admin/claude-accounts'),
       apiClient.get('/admin/claude-console-accounts'),
       apiClient.get('/admin/gemini-accounts'),
-      apiClient.get('/admin/openai-accounts'),
       apiClient.get('/admin/account-groups')
     ])
 
@@ -581,23 +563,15 @@ const refreshAccounts = async () => {
       }))
     }
 
-    if (openaiData.success) {
-      localAccounts.value.openai = (openaiData.data || []).map((account) => ({
-        ...account,
-        isDedicated: account.accountType === 'dedicated'
-      }))
-    }
-
     // 处理分组数据
     if (groupsData.success) {
       const allGroups = groupsData.data || []
       localAccounts.value.claudeGroups = allGroups.filter((g) => g.platform === 'claude')
       localAccounts.value.geminiGroups = allGroups.filter((g) => g.platform === 'gemini')
-      localAccounts.value.openaiGroups = allGroups.filter((g) => g.platform === 'openai')
     }
 
     showToast('账号列表已刷新', 'success')
-  } catch (error) {
+  } catch {
     showToast('刷新账号列表失败', 'error')
   } finally {
     accountsLoading.value = false
@@ -659,14 +633,6 @@ const batchUpdateApiKeys = async () => {
       }
     }
 
-    if (form.openaiAccountId !== '') {
-      if (form.openaiAccountId === 'SHARED_POOL') {
-        updates.openaiAccountId = null
-      } else {
-        updates.openaiAccountId = form.openaiAccountId
-      }
-    }
-
     // 激活状态
     if (form.isActive !== null) {
       updates.isActive = form.isActive
@@ -702,9 +668,8 @@ const batchUpdateApiKeys = async () => {
     } else {
       showToast(result.message || '批量编辑失败', 'error')
     }
-  } catch (error) {
+  } catch {
     showToast('批量编辑失败', 'error')
-    console.error('批量编辑 API Keys 失败:', error)
   } finally {
     loading.value = false
   }
@@ -719,10 +684,8 @@ onMounted(async () => {
     localAccounts.value = {
       claude: props.accounts.claude || [],
       gemini: props.accounts.gemini || [],
-      openai: props.accounts.openai || [],
       claudeGroups: props.accounts.claudeGroups || [],
-      geminiGroups: props.accounts.geminiGroups || [],
-      openaiGroups: props.accounts.openaiGroups || []
+      geminiGroups: props.accounts.geminiGroups || []
     }
   }
 })

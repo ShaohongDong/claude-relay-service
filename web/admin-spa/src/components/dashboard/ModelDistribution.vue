@@ -6,7 +6,8 @@
         模型使用分布
       </h2>
 
-      <el-radio-group v-model="modelPeriod" size="small" @change="handlePeriodChange">
+      <el-radio-group v-model="modelPeriod"
+size="small" @change="handlePeriodChange">
         <el-radio-button label="daily"> 今日 </el-radio-button>
         <el-radio-button label="total"> 累计 </el-radio-button>
       </el-radio-group>
@@ -20,9 +21,11 @@
       <p>暂无模型使用数据</p>
     </div>
 
-    <div v-else class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+    <div v-else
+class="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <!-- 饼图 -->
-      <div class="relative" style="height: 300px">
+      <div class="relative"
+style="height: 300px">
         <canvas ref="chartCanvas" />
       </div>
 
@@ -34,7 +37,8 @@
           class="flex items-center justify-between rounded-lg bg-gray-50 p-3"
         >
           <div class="flex items-center gap-3">
-            <div class="h-4 w-4 rounded" :style="`background-color: ${getColor(index)}`" />
+            <div class="h-4 w-4 rounded"
+:style="`background-color: ${getColor(index)}`" />
             <span class="font-medium text-gray-700">{{ stat.model }}</span>
           </div>
           <div class="text-right">

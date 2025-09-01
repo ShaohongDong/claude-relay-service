@@ -268,19 +268,14 @@ npm run setup  # 自动生成密钥并创建管理员账户
 ### CLI 工具使用示例
 
 ```bash
-# 创建新的 API Key
-npm run cli keys create -- --name "MyApp" --limit 1000
+# 管理员账户操作
+npm run cli admin
+
+# API Key 管理操作
+npm run cli keys
 
 # 查看系统状态
 npm run cli status
-
-# 管理 Claude 账户
-npm run cli accounts list
-npm run cli accounts refresh <accountId>
-
-# 管理员操作
-npm run cli admin create -- --username admin2
-npm run cli admin reset-password -- --username admin
 
 # 数据完整性检查
 node scripts/data-integrity-check.js     # 检查系统数据完整性和安全配置

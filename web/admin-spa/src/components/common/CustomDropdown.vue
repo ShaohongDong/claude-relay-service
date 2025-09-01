@@ -7,7 +7,8 @@
       :class="[isOpen && 'border-blue-400 shadow-md']"
       @click="toggleDropdown"
     >
-      <i v-if="icon" :class="['fas', icon, 'text-sm', iconColor]"></i>
+      <i
+v-if="icon" :class="['fas', icon, 'text-sm', iconColor]" />
       <span
         class="select-none whitespace-nowrap text-sm font-medium text-gray-700 dark:text-gray-200"
       >
@@ -18,7 +19,7 @@
           'fas fa-chevron-down ml-auto text-xs text-gray-400 transition-transform duration-200 dark:text-gray-500',
           isOpen && 'rotate-180'
         ]"
-      ></i>
+      />
     </div>
 
     <!-- 下拉选项 - 使用 Teleport 将其移动到 body -->
@@ -49,12 +50,13 @@
               ]"
               @click="selectOption(option)"
             >
-              <i v-if="option.icon" :class="['fas', option.icon, 'text-xs']"></i>
+              <i
+v-if="option.icon" :class="['fas', option.icon, 'text-xs']" />
               <span>{{ option.label }}</span>
               <i
                 v-if="option.value === modelValue"
                 class="fas fa-check ml-auto pl-3 text-xs text-blue-600"
-              ></i>
+              />
             </div>
           </div>
         </div>

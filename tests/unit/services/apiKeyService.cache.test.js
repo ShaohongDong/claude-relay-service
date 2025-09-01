@@ -33,8 +33,6 @@ describe('ApiKeyService 缓存功能测试', () => {
     claudeAccountId: '',
     claudeConsoleAccountId: '',
     geminiAccountId: '',
-    openaiAccountId: '',
-    azureOpenaiAccountId: '',
     permissions: 'all',
     tokenLimit: '1000000',
     concurrencyLimit: '0',

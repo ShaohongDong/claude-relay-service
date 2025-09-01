@@ -25,13 +25,11 @@ export const useClientsStore = defineStore('clients', {
           this.supportedClients = response.data || []
         } else {
           this.error = response.message || '加载支持的客户端失败'
-          console.error('Failed to load supported clients:', this.error)
         }
 
         return this.supportedClients
       } catch (error) {
         this.error = error.message || '加载支持的客户端失败'
-        console.error('Error loading supported clients:', error)
         return []
       } finally {
         this.loading = false

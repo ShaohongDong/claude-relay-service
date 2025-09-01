@@ -18,10 +18,6 @@ const adminRoutes = require('./routes/admin')
 const webRoutes = require('./routes/web')
 const apiStatsRoutes = require('./routes/apiStats')
 const geminiRoutes = require('./routes/geminiRoutes')
-const openaiGeminiRoutes = require('./routes/openaiGeminiRoutes')
-const openaiClaudeRoutes = require('./routes/openaiClaudeRoutes')
-const openaiRoutes = require('./routes/openaiRoutes')
-const azureOpenaiRoutes = require('./routes/azureOpenaiRoutes')
 const webhookRoutes = require('./routes/webhook')
 
 // Import middleware
@@ -240,10 +236,6 @@ class Application {
       this.app.use('/web', webRoutes)
       this.app.use('/apiStats', apiStatsRoutes)
       this.app.use('/gemini', geminiRoutes)
-      this.app.use('/openai/gemini', openaiGeminiRoutes)
-      this.app.use('/openai/claude', openaiClaudeRoutes)
-      this.app.use('/openai', openaiRoutes)
-      this.app.use('/azure', azureOpenaiRoutes)
       this.app.use('/admin/webhook', webhookRoutes)
 
       // 🏠 根路径重定向到新版管理界面

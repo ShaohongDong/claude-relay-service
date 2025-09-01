@@ -1,6 +1,7 @@
 <template>
   <Teleport to="body">
-    <div v-if="show" class="modal fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div v-if="show"
+class="modal fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
         class="modal-content mx-auto w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-800"
       >

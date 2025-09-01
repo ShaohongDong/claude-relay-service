@@ -1,5 +1,6 @@
 <template>
-  <div ref="triggerRef" class="relative">
+  <div ref="triggerRef"
+class="relative">
     <!-- 选择器主体 -->
     <div
       class="form-input flex w-full cursor-pointer items-center justify-between dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"

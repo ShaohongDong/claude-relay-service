@@ -7,7 +7,8 @@
         :value="activeTab"
         @change="$emit('tab-change', $event.target.value)"
       >
-        <option v-for="tab in tabs" :key="tab.key" :value="tab.key">
+        <option v-for="tab in tabs"
+:key="tab.key" :value="tab.key">
           {{ tab.name }}
         </option>
       </select>

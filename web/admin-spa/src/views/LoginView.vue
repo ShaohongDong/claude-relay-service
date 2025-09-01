@@ -21,9 +21,11 @@
               :src="authStore.oemSettings.siteIconData || authStore.oemSettings.siteIcon"
               @error="(e) => (e.target.style.display = 'none')"
             />
-            <i v-else class="fas fa-cloud text-2xl text-gray-700 sm:text-3xl" />
+            <i v-else
+class="fas fa-cloud text-2xl text-gray-700 sm:text-3xl" />
           </template>
-          <div v-else class="h-10 w-10 animate-pulse rounded bg-gray-300/50 sm:h-12 sm:w-12" />
+          <div v-else
+class="h-10 w-10 animate-pulse rounded bg-gray-300/50 sm:h-12 sm:w-12" />
         </div>
         <template v-if="!oemLoading && authStore.oemSettings.siteName">
           <h1 class="header-title mb-2 text-2xl font-bold text-white sm:text-3xl">
@@ -37,7 +39,8 @@
         <p class="text-base text-gray-600 dark:text-gray-400 sm:text-lg">管理后台</p>
       </div>
 
-      <form class="space-y-4 sm:space-y-6" @submit.prevent="handleLogin">
+      <form class="space-y-4 sm:space-y-6"
+@submit.prevent="handleLogin">
         <div>
           <label class="mb-2 block text-sm font-semibold text-gray-900 dark:text-gray-100 sm:mb-3"
             >用户名</label
@@ -69,8 +72,10 @@
           :disabled="authStore.loginLoading"
           type="submit"
         >
-          <i v-if="!authStore.loginLoading" class="fas fa-sign-in-alt mr-2" />
-          <div v-if="authStore.loginLoading" class="loading-spinner mr-2" />
+          <i v-if="!authStore.loginLoading"
+class="fas fa-sign-in-alt mr-2" />
+          <div v-if="authStore.loginLoading"
+class="loading-spinner mr-2" />
           {{ authStore.loginLoading ? '登录中...' : '登录' }}
         </button>
       </form>
