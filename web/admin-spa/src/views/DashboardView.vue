@@ -77,18 +77,16 @@
                     dashboardData.accountsByPlatform.gemini.total
                   }}</span>
                 </div>
-                <!-- Bedrock账户 -->
                 <div
                   v-if="
-                    dashboardData.accountsByPlatform.bedrock &&
-                    dashboardData.accountsByPlatform.bedrock.total > 0
+                    dashboardData.accountsByPlatform.azure_openai &&
+                    dashboardData.accountsByPlatform.azure_openai.total > 0
                   "
                   class="inline-flex items-center gap-0.5"
-                  :title="`Bedrock: ${dashboardData.accountsByPlatform.bedrock.total} 个 (正常: ${dashboardData.accountsByPlatform.bedrock.normal})`"
                 >
-                  <i class="fab fa-aws text-xs text-orange-600" />
+                  <i class="fab fa-microsoft text-xs text-blue-600" />
                   <span class="text-xs font-medium text-gray-700 dark:text-gray-300">{{
-                    dashboardData.accountsByPlatform.bedrock.total
+                    dashboardData.accountsByPlatform.azure_openai.total
                   }}</span>
                 </div>
                 <!-- OpenAI账户 -->

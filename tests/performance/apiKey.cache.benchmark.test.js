@@ -34,7 +34,6 @@ describe('ApiKeyService 缓存性能基准测试', () => {
     geminiAccountId: '',
     openaiAccountId: '',
     azureOpenaiAccountId: '',
-    bedrockAccountId: '',
     permissions: 'all',
     tokenLimit: '1000000',
     concurrencyLimit: '0',

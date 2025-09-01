@@ -265,7 +265,6 @@ class PricingService {
       return this.pricingData[modelName]
     }
 
-    // 对于Bedrock区域前缀模型（如 us.anthropic.claude-sonnet-4-20250514-v1:0），
     // 尝试去掉区域前缀进行匹配
     if (modelName.includes('.anthropic.') || modelName.includes('.claude')) {
       // 提取不带区域前缀的模型名
@@ -289,14 +288,12 @@ class PricingService {
       }
     }
 
-    // 对于Bedrock模型，尝试更智能的匹配
     if (modelName.includes('anthropic.claude')) {
       // 提取核心模型名部分（去掉区域和前缀）
       const coreModel = modelName.replace(/^(us|eu|apac)\./, '').replace('anthropic.', '')
 
       for (const [key, value] of Object.entries(this.pricingData)) {
         if (key.includes(coreModel) || key.replace('anthropic.', '').includes(coreModel)) {
-          logger.debug(`💰 Found pricing for ${modelName} using Bedrock core model match: ${key}`)
           return value
         }
       }

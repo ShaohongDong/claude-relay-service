@@ -517,8 +517,7 @@ class Application {
       // 注册各个服务的缓存实例
       const services = [
         { name: 'claudeAccount', service: require('./services/claudeAccountService') },
-        { name: 'claudeConsole', service: require('./services/claudeConsoleAccountService') },
-        { name: 'bedrockAccount', service: require('./services/bedrockAccountService') }
+        { name: 'claudeConsole', service: require('./services/claudeConsoleAccountService') }
       ]
 
       // 注册已加载的服务缓存

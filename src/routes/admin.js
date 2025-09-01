@@ -2,7 +2,6 @@ const express = require('express')
 const apiKeyService = require('../services/apiKeyService')
 const claudeAccountService = require('../services/claudeAccountService')
 const claudeConsoleAccountService = require('../services/claudeConsoleAccountService')
-const bedrockAccountService = require('../services/bedrockAccountService')
 const geminiAccountService = require('../services/geminiAccountService')
 const openaiAccountService = require('../services/openaiAccountService')
 const azureOpenaiAccountService = require('../services/azureOpenaiAccountService')
@@ -392,7 +391,6 @@ router.post('/api-keys', authenticateAdmin, async (req, res) => {
       claudeConsoleAccountId,
       geminiAccountId,
       openaiAccountId,
-      bedrockAccountId,
       permissions,
       concurrencyLimit,
       rateLimitWindow,
@@ -491,7 +489,6 @@ router.post('/api-keys', authenticateAdmin, async (req, res) => {
       claudeConsoleAccountId,
       geminiAccountId,
       openaiAccountId,
-      bedrockAccountId,
       permissions,
       concurrencyLimit,
       rateLimitWindow,
@@ -723,9 +720,6 @@ router.put('/api-keys/batch', authenticateAdmin, async (req, res) => {
         if (updates.openaiAccountId !== undefined) {
           finalUpdates.openaiAccountId = updates.openaiAccountId
         }
-        if (updates.bedrockAccountId !== undefined) {
-          finalUpdates.bedrockAccountId = updates.bedrockAccountId
-        }
 
         // 处理标签操作
         if (updates.tags !== undefined) {
@@ -810,7 +804,6 @@ router.put('/api-keys/:keyId', authenticateAdmin, async (req, res) => {
       claudeConsoleAccountId,
       geminiAccountId,
       openaiAccountId,
-      bedrockAccountId,
       permissions,
       enableModelRestriction,
       restrictedModels,
@@ -881,11 +874,6 @@ router.put('/api-keys/:keyId', authenticateAdmin, async (req, res) => {
     if (openaiAccountId !== undefined) {
       // 空字符串表示解绑，null或空字符串都设置为空字符串
       updates.openaiAccountId = openaiAccountId || ''
-    }
-
-    if (bedrockAccountId !== undefined) {
-      // 空字符串表示解绑，null或空字符串都设置为空字符串
-      updates.bedrockAccountId = bedrockAccountId || ''
     }
 
     if (permissions !== undefined) {
@@ -2180,335 +2168,6 @@ router.put(
   }
 )
 
-// ☁️ Bedrock 账户管理
-
-// 获取所有Bedrock账户
-router.get('/bedrock-accounts', authenticateAdmin, async (req, res) => {
-  try {
-    const { platform, groupId } = req.query
-    const result = await bedrockAccountService.getAllAccounts()
-    if (!result.success) {
-      return res
-        .status(500)
-        .json({ error: 'Failed to get Bedrock accounts', message: result.error })
-    }
-
-    let accounts = result.data
-
-    // 根据查询参数进行筛选
-    if (platform && platform !== 'all' && platform !== 'bedrock') {
-      // 如果指定了其他平台，返回空数组
-      accounts = []
-    }
-
-    // 如果指定了分组筛选
-    if (groupId && groupId !== 'all') {
-      if (groupId === 'ungrouped') {
-        // 筛选未分组账户
-        accounts = accounts.filter(
-          (account) => !account.groupInfos || account.groupInfos.length === 0
-        )
-      } else {
-        // 筛选特定分组的账户
-        accounts = accounts.filter(
-          (account) =>
-            account.groupInfos && account.groupInfos.some((group) => group.id === groupId)
-        )
-      }
-    }
-
-    // 为每个账户添加使用统计信息
-    const accountsWithStats = await Promise.all(
-      accounts.map(async (account) => {
-        try {
-          const usageStats = await redis.getAccountUsageStats(account.id)
-          const groupInfos = await accountGroupService.getAccountGroup(account.id)
-
-          return {
-            ...account,
-            groupInfos,
-            usage: {
-              daily: usageStats.daily,
-              total: usageStats.total,
-              averages: usageStats.averages
-            }
-          }
-        } catch (statsError) {
-          logger.warn(
-            `⚠️ Failed to get usage stats for Bedrock account ${account.id}:`,
-            statsError.message
-          )
-          try {
-            const groupInfos = await accountGroupService.getAccountGroup(account.id)
-            return {
-              ...account,
-              groupInfos,
-              usage: {
-                daily: { tokens: 0, requests: 0, allTokens: 0 },
-                total: { tokens: 0, requests: 0, allTokens: 0 },
-                averages: { rpm: 0, tpm: 0 }
-              }
-            }
-          } catch (groupError) {
-            logger.warn(
-              `⚠️ Failed to get group info for account ${account.id}:`,
-              groupError.message
-            )
-            return {
-              ...account,
-              groupInfos: [],
-              usage: {
-                daily: { tokens: 0, requests: 0, allTokens: 0 },
-                total: { tokens: 0, requests: 0, allTokens: 0 },
-                averages: { rpm: 0, tpm: 0 }
-              }
-            }
-          }
-        }
-      })
-    )
-
-    return res.json({ success: true, data: accountsWithStats })
-  } catch (error) {
-    logger.error('❌ Failed to get Bedrock accounts:', error)
-    return res.status(500).json({ error: 'Failed to get Bedrock accounts', message: error.message })
-  }
-})
-
-// 创建新的Bedrock账户
-router.post('/bedrock-accounts', authenticateAdmin, async (req, res) => {
-  try {
-    const {
-      name,
-      description,
-      region,
-      awsCredentials,
-      defaultModel,
-      priority,
-      accountType,
-      credentialType
-    } = req.body
-
-    if (!name) {
-      return res.status(400).json({ error: 'Name is required' })
-    }
-
-    // 验证priority的有效性（1-100）
-    if (priority !== undefined && (priority < 1 || priority > 100)) {
-      return res.status(400).json({ error: 'Priority must be between 1 and 100' })
-    }
-
-    // 验证accountType的有效性
-    if (accountType && !['shared', 'dedicated'].includes(accountType)) {
-      return res
-        .status(400)
-        .json({ error: 'Invalid account type. Must be "shared" or "dedicated"' })
-    }
-
-    // 验证credentialType的有效性
-    if (credentialType && !['default', 'access_key', 'bearer_token'].includes(credentialType)) {
-      return res.status(400).json({
-        error: 'Invalid credential type. Must be "default", "access_key", or "bearer_token"'
-      })
-    }
-
-    const result = await bedrockAccountService.createAccount({
-      name,
-      description: description || '',
-      region: region || 'us-east-1',
-      awsCredentials,
-      defaultModel,
-      priority: priority || 50,
-      accountType: accountType || 'shared',
-      credentialType: credentialType || 'default'
-    })
-
-    if (!result.success) {
-      return res
-        .status(500)
-        .json({ error: 'Failed to create Bedrock account', message: result.error })
-    }
-
-    logger.success(`☁️ Admin created Bedrock account: ${name}`)
-    return res.json({ success: true, data: result.data })
-  } catch (error) {
-    logger.error('❌ Failed to create Bedrock account:', error)
-    return res
-      .status(500)
-      .json({ error: 'Failed to create Bedrock account', message: error.message })
-  }
-})
-
-// 更新Bedrock账户
-router.put('/bedrock-accounts/:accountId', authenticateAdmin, async (req, res) => {
-  try {
-    const { accountId } = req.params
-    const updates = req.body
-
-    // 验证priority的有效性（1-100）
-    if (updates.priority !== undefined && (updates.priority < 1 || updates.priority > 100)) {
-      return res.status(400).json({ error: 'Priority must be between 1 and 100' })
-    }
-
-    // 验证accountType的有效性
-    if (updates.accountType && !['shared', 'dedicated'].includes(updates.accountType)) {
-      return res
-        .status(400)
-        .json({ error: 'Invalid account type. Must be "shared" or "dedicated"' })
-    }
-
-    // 验证credentialType的有效性
-    if (
-      updates.credentialType &&
-      !['default', 'access_key', 'bearer_token'].includes(updates.credentialType)
-    ) {
-      return res.status(400).json({
-        error: 'Invalid credential type. Must be "default", "access_key", or "bearer_token"'
-      })
-    }
-
-    const result = await bedrockAccountService.updateAccount(accountId, updates)
-
-    if (!result.success) {
-      return res
-        .status(500)
-        .json({ error: 'Failed to update Bedrock account', message: result.error })
-    }
-
-    logger.success(`📝 Admin updated Bedrock account: ${accountId}`)
-    return res.json({ success: true, message: 'Bedrock account updated successfully' })
-  } catch (error) {
-    logger.error('❌ Failed to update Bedrock account:', error)
-    return res
-      .status(500)
-      .json({ error: 'Failed to update Bedrock account', message: error.message })
-  }
-})
-
-// 删除Bedrock账户
-router.delete('/bedrock-accounts/:accountId', authenticateAdmin, async (req, res) => {
-  try {
-    const { accountId } = req.params
-
-    const result = await bedrockAccountService.deleteAccount(accountId)
-
-    if (!result.success) {
-      return res
-        .status(500)
-        .json({ error: 'Failed to delete Bedrock account', message: result.error })
-    }
-
-    logger.success(`🗑️ Admin deleted Bedrock account: ${accountId}`)
-    return res.json({ success: true, message: 'Bedrock account deleted successfully' })
-  } catch (error) {
-    logger.error('❌ Failed to delete Bedrock account:', error)
-    return res
-      .status(500)
-      .json({ error: 'Failed to delete Bedrock account', message: error.message })
-  }
-})
-
-// 切换Bedrock账户状态
-router.put('/bedrock-accounts/:accountId/toggle', authenticateAdmin, async (req, res) => {
-  try {
-    const { accountId } = req.params
-
-    const accountResult = await bedrockAccountService.getAccount(accountId)
-    if (!accountResult.success) {
-      return res.status(404).json({ error: 'Account not found' })
-    }
-
-    const newStatus = !accountResult.data.isActive
-    const updateResult = await bedrockAccountService.updateAccount(accountId, {
-      isActive: newStatus
-    })
-
-    if (!updateResult.success) {
-      return res
-        .status(500)
-        .json({ error: 'Failed to toggle account status', message: updateResult.error })
-    }
-
-    logger.success(
-      `🔄 Admin toggled Bedrock account status: ${accountId} -> ${newStatus ? 'active' : 'inactive'}`
-    )
-    return res.json({ success: true, isActive: newStatus })
-  } catch (error) {
-    logger.error('❌ Failed to toggle Bedrock account status:', error)
-    return res
-      .status(500)
-      .json({ error: 'Failed to toggle account status', message: error.message })
-  }
-})
-
-// 切换Bedrock账户调度状态
-router.put(
-  '/bedrock-accounts/:accountId/toggle-schedulable',
-  authenticateAdmin,
-  async (req, res) => {
-    try {
-      const { accountId } = req.params
-
-      const accountResult = await bedrockAccountService.getAccount(accountId)
-      if (!accountResult.success) {
-        return res.status(404).json({ error: 'Account not found' })
-      }
-
-      const newSchedulable = !accountResult.data.schedulable
-      const updateResult = await bedrockAccountService.updateAccount(accountId, {
-        schedulable: newSchedulable
-      })
-
-      if (!updateResult.success) {
-        return res
-          .status(500)
-          .json({ error: 'Failed to toggle schedulable status', message: updateResult.error })
-      }
-
-      // 如果账号被禁用，发送webhook通知
-      if (!newSchedulable) {
-        await webhookNotifier.sendAccountAnomalyNotification({
-          accountId: accountResult.data.id,
-          accountName: accountResult.data.name || 'Bedrock Account',
-          platform: 'bedrock',
-          status: 'disabled',
-          errorCode: 'BEDROCK_MANUALLY_DISABLED',
-          reason: '账号已被管理员手动禁用调度',
-          timestamp: new Date().toISOString()
-        })
-      }
-
-      logger.success(
-        `🔄 Admin toggled Bedrock account schedulable status: ${accountId} -> ${newSchedulable ? 'schedulable' : 'not schedulable'}`
-      )
-      return res.json({ success: true, schedulable: newSchedulable })
-    } catch (error) {
-      logger.error('❌ Failed to toggle Bedrock account schedulable status:', error)
-      return res
-        .status(500)
-        .json({ error: 'Failed to toggle schedulable status', message: error.message })
-    }
-  }
-)
-
-// 测试Bedrock账户连接
-router.post('/bedrock-accounts/:accountId/test', authenticateAdmin, async (req, res) => {
-  try {
-    const { accountId } = req.params
-
-    const result = await bedrockAccountService.testAccount(accountId)
-
-    if (!result.success) {
-      return res.status(500).json({ error: 'Account test failed', message: result.error })
-    }
-
-    logger.success(`🧪 Admin tested Bedrock account: ${accountId} - ${result.data.status}`)
-    return res.json({ success: true, data: result.data })
-  } catch (error) {
-    logger.error('❌ Failed to test Bedrock account:', error)
-    return res.status(500).json({ error: 'Failed to test Bedrock account', message: error.message })
-  }
-})
 
 // 🤖 Gemini 账户管理
 
@@ -2985,7 +2644,6 @@ router.get('/dashboard', authenticateAdmin, async (req, res) => {
       claudeAccounts,
       claudeConsoleAccounts,
       geminiAccounts,
-      bedrockAccountsResult,
       openaiAccounts,
       todayStats,
       systemAverages,
@@ -2996,15 +2654,11 @@ router.get('/dashboard', authenticateAdmin, async (req, res) => {
       claudeAccountService.getAllAccounts(),
       claudeConsoleAccountService.getAllAccounts(),
       geminiAccountService.getAllAccounts(),
-      bedrockAccountService.getAllAccounts(),
       redis.getAllOpenAIAccounts(),
       redis.getTodayStats(),
       redis.getSystemAverages(),
       redis.getRealtimeSystemMetrics()
     ])
-
-    // 处理Bedrock账户数据
-    const bedrockAccounts = bedrockAccountsResult.success ? bedrockAccountsResult.data : []
 
     // 计算使用统计（统一使用allTokens）
     const totalTokensUsed = apiKeys.reduce(
@@ -3112,29 +2766,6 @@ router.get('/dashboard', authenticateAdmin, async (req, res) => {
         (acc.rateLimitStatus && acc.rateLimitStatus.isRateLimited)
     ).length
 
-    // Bedrock账户统计
-    const normalBedrockAccounts = bedrockAccounts.filter(
-      (acc) =>
-        acc.isActive &&
-        acc.status !== 'blocked' &&
-        acc.status !== 'unauthorized' &&
-        acc.schedulable !== false &&
-        !(acc.rateLimitStatus && acc.rateLimitStatus.isRateLimited)
-    ).length
-    const abnormalBedrockAccounts = bedrockAccounts.filter(
-      (acc) => !acc.isActive || acc.status === 'blocked' || acc.status === 'unauthorized'
-    ).length
-    const pausedBedrockAccounts = bedrockAccounts.filter(
-      (acc) =>
-        acc.schedulable === false &&
-        acc.isActive &&
-        acc.status !== 'blocked' &&
-        acc.status !== 'unauthorized'
-    ).length
-    const rateLimitedBedrockAccounts = bedrockAccounts.filter(
-      (acc) => acc.rateLimitStatus && acc.rateLimitStatus.isRateLimited
-    ).length
-
     // OpenAI账户统计
     // 注意：OpenAI账户的isActive和schedulable是字符串类型，默认值为'true'
     const normalOpenAIAccounts = openaiAccounts.filter(
@@ -3177,31 +2808,26 @@ router.get('/dashboard', authenticateAdmin, async (req, res) => {
           claudeAccounts.length +
           claudeConsoleAccounts.length +
           geminiAccounts.length +
-          bedrockAccounts.length +
           openaiAccounts.length,
         normalAccounts:
           normalClaudeAccounts +
           normalClaudeConsoleAccounts +
           normalGeminiAccounts +
-          normalBedrockAccounts +
           normalOpenAIAccounts,
         abnormalAccounts:
           abnormalClaudeAccounts +
           abnormalClaudeConsoleAccounts +
           abnormalGeminiAccounts +
-          abnormalBedrockAccounts +
           abnormalOpenAIAccounts,
         pausedAccounts:
           pausedClaudeAccounts +
           pausedClaudeConsoleAccounts +
           pausedGeminiAccounts +
-          pausedBedrockAccounts +
           pausedOpenAIAccounts,
         rateLimitedAccounts:
           rateLimitedClaudeAccounts +
           rateLimitedClaudeConsoleAccounts +
           rateLimitedGeminiAccounts +
-          rateLimitedBedrockAccounts +
           rateLimitedOpenAIAccounts,
         // 各平台详细统计
         accountsByPlatform: {
@@ -3226,13 +2852,6 @@ router.get('/dashboard', authenticateAdmin, async (req, res) => {
             paused: pausedGeminiAccounts,
             rateLimited: rateLimitedGeminiAccounts
           },
-          bedrock: {
-            total: bedrockAccounts.length,
-            normal: normalBedrockAccounts,
-            abnormal: abnormalBedrockAccounts,
-            paused: pausedBedrockAccounts,
-            rateLimited: rateLimitedBedrockAccounts
-          },
           openai: {
             total: openaiAccounts.length,
             normal: normalOpenAIAccounts,
@@ -3246,7 +2865,6 @@ router.get('/dashboard', authenticateAdmin, async (req, res) => {
           normalClaudeAccounts +
           normalClaudeConsoleAccounts +
           normalGeminiAccounts +
-          normalBedrockAccounts +
           normalOpenAIAccounts,
         totalClaudeAccounts: claudeAccounts.length + claudeConsoleAccounts.length,
         activeClaudeAccounts: normalClaudeAccounts + normalClaudeConsoleAccounts,
@@ -3386,15 +3004,6 @@ router.get('/model-stats', authenticateAdmin, async (req, res) => {
         return model
       }
 
-      // 对于Bedrock模型，去掉区域前缀进行统一
-      if (model.includes('.anthropic.') || model.includes('.claude')) {
-        // 匹配所有AWS区域格式：region.anthropic.model-name-v1:0 -> claude-model-name
-        // 支持所有AWS区域格式，如：us-east-1, eu-west-1, ap-southeast-1, ca-central-1等
-        let normalized = model.replace(/^[a-z0-9-]+\./, '') // 去掉任何区域前缀（更通用）
-        normalized = normalized.replace('anthropic.', '') // 去掉anthropic前缀
-        normalized = normalized.replace(/-v\d+:\d+$/, '') // 去掉版本后缀（如-v1:0, -v2:1等）
-        return normalized
-      }
 
       // 对于其他模型，去掉常见的版本后缀
       return model.replace(/-v\d+:\d+$|:latest$/, '')
@@ -4295,15 +3904,6 @@ router.get('/usage-costs', authenticateAdmin, async (req, res) => {
         return model
       }
 
-      // 对于Bedrock模型，去掉区域前缀进行统一
-      if (model.includes('.anthropic.') || model.includes('.claude')) {
-        // 匹配所有AWS区域格式：region.anthropic.model-name-v1:0 -> claude-model-name
-        // 支持所有AWS区域格式，如：us-east-1, eu-west-1, ap-southeast-1, ca-central-1等
-        let normalized = model.replace(/^[a-z0-9-]+\./, '') // 去掉任何区域前缀（更通用）
-        normalized = normalized.replace('anthropic.', '') // 去掉anthropic前缀
-        normalized = normalized.replace(/-v\d+:\d+$/, '') // 去掉版本后缀（如-v1:0, -v2:1等）
-        return normalized
-      }
 
       // 对于其他模型，去掉常见的版本后缀
       return model.replace(/-v\d+:\d+$|:latest$/, '')

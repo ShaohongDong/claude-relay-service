@@ -402,19 +402,28 @@
                 </select>
               </div>
               <div>
-                <label class="mb-1 block text-sm font-medium text-gray-600 dark:text-gray-400"
-                  >Bedrock 专属账号</label
-                >
+                <label class="mb-1 block text-sm font-medium text-gray-600 dark:text-gray-400">
+                  Claude 专属账号
+                </label>
                 <select
-                  v-model="form.bedrockAccountId"
+                  v-model="form.claudeAccount"
                   class="form-input w-full dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
                   :disabled="form.permissions === 'gemini' || form.permissions === 'openai'"
                 >
                   <option value="">不修改</option>
                   <option value="SHARED_POOL">使用共享账号池</option>
-                  <optgroup v-if="localAccounts.bedrock.length > 0" label="专属账号">
+                  <optgroup v-if="localAccounts.claudeGroups.length > 0" label="账号分组">
                     <option
-                      v-for="account in localAccounts.bedrock"
+                      v-for="group in localAccounts.claudeGroups"
+                      :key="group.id"
+                      :value="`group:${group.id}`"
+                    >
+                      分组 - {{ group.name }}
+                    </option>
+                  </optgroup>
+                  <optgroup v-if="localAccounts.claude.length > 0" label="专属账号">
+                    <option
+                      v-for="account in localAccounts.claude"
                       :key="account.id"
                       :value="account.id"
                     >
@@ -462,8 +471,7 @@ const props = defineProps({
     required: true
   },
   accounts: {
-    type: Object,
-    default: () => ({ claude: [], gemini: [], openai: [], bedrock: [] })
+    type: Object
   }
 })
 
@@ -476,7 +484,6 @@ const localAccounts = ref({
   claude: [],
   gemini: [],
   openai: [],
-  bedrock: [],
   claudeGroups: [],
   geminiGroups: [],
   openaiGroups: []
@@ -505,7 +512,6 @@ const form = reactive({
   claudeAccountId: '',
   geminiAccountId: '',
   openaiAccountId: '',
-  bedrockAccountId: '',
   tags: [],
   isActive: null // null表示不修改
 })
@@ -535,15 +541,13 @@ const removeTag = (index) => {
 const refreshAccounts = async () => {
   accountsLoading.value = true
   try {
-    const [claudeData, claudeConsoleData, geminiData, openaiData, bedrockData, groupsData] =
-      await Promise.all([
-        apiClient.get('/admin/claude-accounts'),
-        apiClient.get('/admin/claude-console-accounts'),
-        apiClient.get('/admin/gemini-accounts'),
-        apiClient.get('/admin/openai-accounts'),
-        apiClient.get('/admin/bedrock-accounts'),
-        apiClient.get('/admin/account-groups')
-      ])
+    const [claudeData, claudeConsoleData, geminiData, openaiData, groupsData] = await Promise.all([
+      apiClient.get('/admin/claude-accounts'),
+      apiClient.get('/admin/claude-console-accounts'),
+      apiClient.get('/admin/gemini-accounts'),
+      apiClient.get('/admin/openai-accounts'),
+      apiClient.get('/admin/account-groups')
+    ])
 
     // 合并Claude OAuth账户和Claude Console账户
     const claudeAccounts = []
@@ -579,13 +583,6 @@ const refreshAccounts = async () => {
 
     if (openaiData.success) {
       localAccounts.value.openai = (openaiData.data || []).map((account) => ({
-        ...account,
-        isDedicated: account.accountType === 'dedicated'
-      }))
-    }
-
-    if (bedrockData.success) {
-      localAccounts.value.bedrock = (bedrockData.data || []).map((account) => ({
         ...account,
         isDedicated: account.accountType === 'dedicated'
       }))
@@ -670,14 +667,6 @@ const batchUpdateApiKeys = async () => {
       }
     }
 
-    if (form.bedrockAccountId !== '') {
-      if (form.bedrockAccountId === 'SHARED_POOL') {
-        updates.bedrockAccountId = null
-      } else {
-        updates.bedrockAccountId = form.bedrockAccountId
-      }
-    }
-
     // 激活状态
     if (form.isActive !== null) {
       updates.isActive = form.isActive
@@ -731,7 +720,6 @@ onMounted(async () => {
       claude: props.accounts.claude || [],
       gemini: props.accounts.gemini || [],
       openai: props.accounts.openai || [],
-      bedrock: props.accounts.bedrock || [],
       claudeGroups: props.accounts.claudeGroups || [],
       geminiGroups: props.accounts.geminiGroups || [],
       openaiGroups: props.accounts.openaiGroups || []

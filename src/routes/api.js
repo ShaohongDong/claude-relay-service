@@ -1,8 +1,6 @@
 const express = require('express')
 const claudeRelayService = require('../services/claudeRelayService')
 const claudeConsoleRelayService = require('../services/claudeConsoleRelayService')
-const bedrockRelayService = require('../services/bedrockRelayService')
-const bedrockAccountService = require('../services/bedrockAccountService')
 const unifiedClaudeScheduler = require('../services/unifiedClaudeScheduler')
 const apiKeyService = require('../services/apiKeyService')
 const pricingService = require('../services/pricingService')
@@ -289,71 +287,6 @@ async function handleMessagesRequest(req, res) {
           },
           accountId
         )
-      } else if (accountType === 'bedrock') {
-        // Bedrock账号使用Bedrock转发服务
-        try {
-          const bedrockAccountResult = await bedrockAccountService.getAccount(accountId)
-          if (!bedrockAccountResult.success) {
-            throw new Error('Failed to get Bedrock account details')
-          }
-
-          const result = await bedrockRelayService.handleStreamRequest(
-            req.body,
-            bedrockAccountResult.data,
-            res
-          )
-
-          // 记录Bedrock使用统计
-          if (result.usage) {
-            const inputTokens = result.usage.input_tokens || 0
-            const outputTokens = result.usage.output_tokens || 0
-
-            apiKeyService
-              .recordUsage(req.apiKey.id, inputTokens, outputTokens, 0, 0, result.model, accountId)
-              .catch((error) => {
-                logger.error('❌ Failed to record Bedrock stream usage:', error)
-              })
-
-            // 更新时间窗口内的token计数和费用
-            if (req.rateLimitInfo) {
-              const totalTokens = inputTokens + outputTokens
-
-              // 更新Token计数（向后兼容）
-              redis
-                .getClient()
-                .incrby(req.rateLimitInfo.tokenCountKey, totalTokens)
-                .catch((error) => {
-                  logger.error('❌ Failed to update rate limit token count:', error)
-                })
-              logger.api(`📊 Updated rate limit token count: +${totalTokens} tokens`)
-
-              // 计算并更新费用计数（新功能）
-              if (req.rateLimitInfo.costCountKey) {
-                const costInfo = pricingService.calculateCost(result.usage, result.model)
-                if (costInfo.totalCost > 0) {
-                  redis
-                    .getClient()
-                    .incrbyfloat(req.rateLimitInfo.costCountKey, costInfo.totalCost)
-                    .catch((error) => {
-                      logger.error('❌ Failed to update rate limit cost count:', error)
-                    })
-                  logger.api(`💰 Updated rate limit cost count: +$${costInfo.totalCost.toFixed(6)}`)
-                }
-              }
-            }
-
-            usageDataCaptured = true
-            logger.api(
-              `📊 Bedrock stream usage recorded - Model: ${result.model}, Input: ${inputTokens}, Output: ${outputTokens}, Total: ${inputTokens + outputTokens} tokens`
-            )
-          }
-        } catch (error) {
-          logger.error('❌ Bedrock stream request failed:', error)
-          if (!res.headersSent) {
-            return res.status(500).json({ error: 'Bedrock service error', message: error.message })
-          }
-          return undefined
-        }
       }
 
       // 流式请求完成后 - 如果没有捕获到usage数据，记录警告但不进行估算
@@ -410,43 +343,6 @@ async function handleMessagesRequest(req, res) {
           req.headers,
           accountId
         )
-      } else if (accountType === 'bedrock') {
-        // Bedrock账号使用Bedrock转发服务
-        try {
-          const bedrockAccountResult = await bedrockAccountService.getAccount(accountId)
-          if (!bedrockAccountResult.success) {
-            throw new Error('Failed to get Bedrock account details')
-          }
-
-          const result = await bedrockRelayService.handleNonStreamRequest(
-            req.body,
-            bedrockAccountResult.data,
-            req.headers
-          )
-
-          // 构建标准响应格式
-          response = {
-            statusCode: result.success ? 200 : 500,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(result.success ? result.data : { error: result.error }),
-            accountId
-          }
-
-          // 如果成功，添加使用统计到响应数据中
-          if (result.success && result.usage) {
-            const responseData = JSON.parse(response.body)
-            responseData.usage = result.usage
-            response.body = JSON.stringify(responseData)
-          }
-        } catch (error) {
-          logger.error('❌ Bedrock non-stream request failed:', error)
-          response = {
-            statusCode: 500,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ error: 'Bedrock service error', message: error.message }),
-            accountId
-          }
-        }
       }
 
       logger.info('📡 Claude API response received', {
@@ -801,14 +697,6 @@ router.post('/v1/messages/count_tokens', authenticateApiKey, async (req, res) =>
           customPath: '/v1/messages/count_tokens' // 指定count_tokens路径
         }
       )
-    } else {
-      // Bedrock不支持count_tokens
-      return res.status(501).json({
-        error: {
-          type: 'not_supported',
-          message: 'Token counting is not supported for Bedrock accounts'
-        }
-      })
     }
 
     // 直接返回响应，不记录token使用量

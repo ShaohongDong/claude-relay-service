@@ -315,15 +315,6 @@
                     <span class="text-xs font-medium text-purple-700">API Key</span>
                   </div>
                   <div
-                    v-else-if="account.platform === 'bedrock'"
-                    class="flex items-center gap-1.5 rounded-lg border border-orange-200 bg-gradient-to-r from-orange-100 to-red-100 px-2.5 py-1"
-                  >
-                    <i class="fab fa-aws text-xs text-orange-700" />
-                    <span class="text-xs font-semibold text-orange-800">Bedrock</span>
-                    <span class="mx-1 h-4 w-px bg-orange-300" />
-                    <span class="text-xs font-medium text-orange-700">AWS</span>
-                  </div>
-                  <div
                     v-else-if="account.platform === 'openai'"
                     class="flex items-center gap-1.5 rounded-lg border border-gray-700 bg-gray-100 bg-gradient-to-r from-gray-100 to-gray-100 px-2.5 py-1"
                   >
@@ -456,7 +447,6 @@
                   v-if="
                     account.platform === 'claude' ||
                     account.platform === 'claude-console' ||
-                    account.platform === 'bedrock' ||
                     account.platform === 'gemini' ||
                     account.platform === 'openai'
                   "
@@ -665,7 +655,7 @@
                   'flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg',
                   account.platform === 'claude'
                     ? 'bg-gradient-to-br from-purple-500 to-purple-600'
-                    : account.platform === 'bedrock'
+                    : account.platform === 'claude-console'
                       ? 'bg-gradient-to-br from-orange-500 to-red-600'
                       : account.platform === 'azure_openai'
                         ? 'bg-gradient-to-br from-blue-500 to-cyan-600'
@@ -679,7 +669,7 @@
                     'text-sm text-white',
                     account.platform === 'claude'
                       ? 'fas fa-brain'
-                      : account.platform === 'bedrock'
+                      : account.platform === 'claude-console'
                         ? 'fab fa-aws'
                         : account.platform === 'azure_openai'
                           ? 'fab fa-microsoft'
@@ -950,8 +940,7 @@ const platformOptions = ref([
   { value: 'claude-console', label: 'Claude Console', icon: 'fa-terminal' },
   { value: 'gemini', label: 'Gemini', icon: 'fa-google' },
   { value: 'openai', label: 'OpenAi', icon: 'fa-openai' },
-  { value: 'azure_openai', label: 'Azure OpenAI', icon: 'fab fa-microsoft' },
-  { value: 'bedrock', label: 'Bedrock', icon: 'fab fa-aws' }
+  { value: 'azure_openai', label: 'Azure OpenAI', icon: 'fab fa-microsoft' }
 ])
 
 const groupOptions = computed(() => {
@@ -1041,7 +1030,6 @@ const loadAccounts = async (forceReload = false) => {
       requests.push(
         apiClient.get('/admin/claude-accounts', { params }),
         apiClient.get('/admin/claude-console-accounts', { params }),
-        apiClient.get('/admin/bedrock-accounts', { params }),
         apiClient.get('/admin/gemini-accounts', { params }),
         apiClient.get('/admin/openai-accounts', { params }),
         apiClient.get('/admin/azure-openai-accounts', { params })
@@ -1053,7 +1041,6 @@ const loadAccounts = async (forceReload = false) => {
           requests.push(
             apiClient.get('/admin/claude-accounts', { params }),
             Promise.resolve({ success: true, data: [] }), // claude-console 占位
-            Promise.resolve({ success: true, data: [] }), // bedrock 占位
             Promise.resolve({ success: true, data: [] }), // gemini 占位
             Promise.resolve({ success: true, data: [] }), // openai 占位
             Promise.resolve({ success: true, data: [] }) // azure-openai 占位
@@ -1063,17 +1050,6 @@ const loadAccounts = async (forceReload = false) => {
           requests.push(
             Promise.resolve({ success: true, data: [] }), // claude 占位
             apiClient.get('/admin/claude-console-accounts', { params }),
-            Promise.resolve({ success: true, data: [] }), // bedrock 占位
-            Promise.resolve({ success: true, data: [] }), // gemini 占位
-            Promise.resolve({ success: true, data: [] }), // openai 占位
-            Promise.resolve({ success: true, data: [] }) // azure-openai 占位
-          )
-          break
-        case 'bedrock':
-          requests.push(
-            Promise.resolve({ success: true, data: [] }), // claude 占位
-            Promise.resolve({ success: true, data: [] }), // claude-console 占位
-            apiClient.get('/admin/bedrock-accounts', { params }),
             Promise.resolve({ success: true, data: [] }), // gemini 占位
             Promise.resolve({ success: true, data: [] }), // openai 占位
             Promise.resolve({ success: true, data: [] }) // azure-openai 占位
@@ -1083,7 +1059,6 @@ const loadAccounts = async (forceReload = false) => {
           requests.push(
             Promise.resolve({ success: true, data: [] }), // claude 占位
             Promise.resolve({ success: true, data: [] }), // claude-console 占位
-            Promise.resolve({ success: true, data: [] }), // bedrock 占位
             apiClient.get('/admin/gemini-accounts', { params }),
             Promise.resolve({ success: true, data: [] }), // openai 占位
             Promise.resolve({ success: true, data: [] }) // azure-openai 占位
@@ -1093,7 +1068,6 @@ const loadAccounts = async (forceReload = false) => {
           requests.push(
             Promise.resolve({ success: true, data: [] }), // claude 占位
             Promise.resolve({ success: true, data: [] }), // claude-console 占位
-            Promise.resolve({ success: true, data: [] }), // bedrock 占位
             Promise.resolve({ success: true, data: [] }), // gemini 占位
             apiClient.get('/admin/openai-accounts', { params }),
             Promise.resolve({ success: true, data: [] }) // azure-openai 占位
@@ -1103,7 +1077,6 @@ const loadAccounts = async (forceReload = false) => {
           requests.push(
             Promise.resolve({ success: true, data: [] }), // claude 占位
             Promise.resolve({ success: true, data: [] }), // claude-console 占位
-            Promise.resolve({ success: true, data: [] }), // bedrock 占位
             Promise.resolve({ success: true, data: [] }), // gemini 占位
             Promise.resolve({ success: true, data: [] }), // openai 占位
             apiClient.get('/admin/azure-openai-accounts', { params })
@@ -1118,7 +1091,7 @@ const loadAccounts = async (forceReload = false) => {
     // 后端账户API已经包含分组信息，不需要单独加载分组成员关系
     // await loadGroupMembers(forceReload)
 
-    const [claudeData, claudeConsoleData, bedrockData, geminiData, openaiData, azureOpenaiData] =
+    const [claudeData, claudeConsoleData, geminiData, openaiData, azureOpenaiData] =
       await Promise.all(requests)
 
     const allAccounts = []
@@ -1142,15 +1115,6 @@ const loadAccounts = async (forceReload = false) => {
         return { ...acc, platform: 'claude-console', boundApiKeysCount: 0 }
       })
       allAccounts.push(...claudeConsoleAccounts)
-    }
-
-    if (bedrockData.success) {
-      const bedrockAccounts = (bedrockData.data || []).map((acc) => {
-        // Bedrock账户暂时不支持直接绑定
-        // 后端已经包含了groupInfos，直接使用
-        return { ...acc, platform: 'bedrock', boundApiKeysCount: 0 }
-      })
-      allAccounts.push(...bedrockAccounts)
     }
 
     if (geminiData.success) {
@@ -1382,8 +1346,6 @@ const deleteAccount = async (account) => {
       endpoint = `/admin/claude-accounts/${account.id}`
     } else if (account.platform === 'claude-console') {
       endpoint = `/admin/claude-console-accounts/${account.id}`
-    } else if (account.platform === 'bedrock') {
-      endpoint = `/admin/bedrock-accounts/${account.id}`
     } else if (account.platform === 'openai') {
       endpoint = `/admin/openai-accounts/${account.id}`
     } else if (account.platform === 'azure_openai') {
@@ -1454,8 +1416,6 @@ const toggleSchedulable = async (account) => {
       endpoint = `/admin/claude-accounts/${account.id}/toggle-schedulable`
     } else if (account.platform === 'claude-console') {
       endpoint = `/admin/claude-console-accounts/${account.id}/toggle-schedulable`
-    } else if (account.platform === 'bedrock') {
-      endpoint = `/admin/bedrock-accounts/${account.id}/toggle-schedulable`
     } else if (account.platform === 'gemini') {
       endpoint = `/admin/gemini-accounts/${account.id}/toggle-schedulable`
     } else if (account.platform === 'openai') {

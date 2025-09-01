@@ -45,18 +45,6 @@ const config = {
       'claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14'
   },
 
-  // ☁️ Bedrock API配置
-  bedrock: {
-    enabled: process.env.CLAUDE_CODE_USE_BEDROCK === '1',
-    defaultRegion: process.env.AWS_REGION || 'us-east-1',
-    smallFastModelRegion: process.env.ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION,
-    defaultModel: process.env.ANTHROPIC_MODEL || 'us.anthropic.claude-sonnet-4-20250514-v1:0',
-    smallFastModel:
-      process.env.ANTHROPIC_SMALL_FAST_MODEL || 'us.anthropic.claude-3-5-haiku-20241022-v1:0',
-    maxOutputTokens: parseInt(process.env.CLAUDE_CODE_MAX_OUTPUT_TOKENS) || 4096,
-    maxThinkingTokens: parseInt(process.env.MAX_THINKING_TOKENS) || 1024,
-    enablePromptCaching: process.env.DISABLE_PROMPT_CACHING !== '1'
-  },
 
   // 🌐 代理配置
   proxy: {

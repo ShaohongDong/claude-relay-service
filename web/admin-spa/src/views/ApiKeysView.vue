@@ -329,26 +329,13 @@
                             {{ getOpenAIBindingInfo(key) }}
                           </span>
                         </div>
-                        <!-- Bedrock 绑定 -->
-                        <div v-if="key.bedrockAccountId" class="flex items-center gap-1 text-xs">
-                          <span
-                            class="inline-flex items-center rounded bg-orange-100 px-1.5 py-0.5 text-orange-700"
-                          >
-                            <i class="fas fa-cloud mr-1 text-[10px]" />
-                            Bedrock
-                          </span>
-                          <span class="truncate text-gray-600">
-                            {{ getBedrockBindingInfo(key) }}
-                          </span>
-                        </div>
                         <!-- 无绑定时显示共享池 -->
                         <div
                           v-if="
                             !key.claudeAccountId &&
                             !key.claudeConsoleAccountId &&
                             !key.geminiAccountId &&
-                            !key.openaiAccountId &&
-                            !key.bedrockAccountId
+                            !key.openaiAccountId
                           "
                           class="text-xs text-gray-500"
                         >
@@ -926,353 +913,344 @@
                 {{ getOpenAIBindingInfo(key) }}
               </span>
             </div>
-            <!-- Bedrock 绑定 -->
-            <div v-if="key.bedrockAccountId" class="flex flex-wrap items-center gap-1 text-xs">
-              <span
-                class="inline-flex items-center rounded bg-orange-100 px-2 py-0.5 text-orange-700"
-              >
-                <i class="fas fa-cloud mr-1" />
-                Bedrock
-              </span>
-              <span class="text-gray-600">
-                {{ getBedrockBindingInfo(key) }}
-              </span>
-            </div>
-            <!-- 无绑定时显示共享池 -->
-            <div
-              v-if="
-                !key.claudeAccountId &&
-                !key.claudeConsoleAccountId &&
-                !key.geminiAccountId &&
-                !key.openaiAccountId &&
-                !key.bedrockAccountId
-              "
-              class="text-xs text-gray-500"
-            >
-              <i class="fas fa-share-alt mr-1" />
-              使用共享池
-            </div>
-          </div>
-
-          <!-- 统计信息 -->
-          <div class="mb-3 space-y-2">
-            <!-- 今日使用 -->
-            <div class="rounded-lg bg-gray-50 p-3">
-              <div class="mb-2 flex items-center justify-between">
-                <span class="text-xs text-gray-600">今日使用</span>
-                <button
-                  class="text-xs text-blue-600 hover:text-blue-800"
-                  @click="showUsageDetails(key)"
-                >
-                  <i class="fas fa-chart-line mr-1" />详情
-                </button>
-              </div>
-              <div class="grid grid-cols-2 gap-3">
-                <div>
-                  <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                    {{ formatNumber(key.usage?.daily?.requests || 0) }} 次
-                  </p>
-                  <p class="text-xs text-gray-500 dark:text-gray-400">请求</p>
-                </div>
-                <div>
-                  <p class="text-sm font-semibold text-green-600">
-                    ${{ (key.dailyCost || 0).toFixed(4) }}
-                  </p>
-                  <p class="text-xs text-gray-500 dark:text-gray-400">费用</p>
-                </div>
-              </div>
-              <div class="mt-2 flex items-center justify-between">
-                <span class="text-xs text-gray-600 dark:text-gray-400">最后使用</span>
-                <span class="text-xs font-medium text-gray-700 dark:text-gray-300">{{
-                  formatLastUsed(key.lastUsedAt)
-                }}</span>
-              </div>
-            </div>
-
-            <!-- 限制进度 -->
-            <div v-if="key.dailyCostLimit > 0" class="space-y-1">
-              <div class="flex items-center justify-between text-xs">
-                <span class="text-gray-500">每日费用限额</span>
-                <span class="text-gray-700">
-                  ${{ (key.dailyCost || 0).toFixed(2) }} / ${{ key.dailyCostLimit.toFixed(2) }}
-                </span>
-              </div>
-              <div class="h-2 w-full rounded-full bg-gray-200">
-                <div
-                  class="h-2 rounded-full transition-all duration-300"
-                  :class="getDailyCostProgressColor(key)"
-                  :style="{ width: getDailyCostProgress(key) + '%' }"
-                />
-              </div>
-            </div>
-
-            <!-- 移动端时间窗口限制 -->
-            <WindowCountdown
-              v-if="
-                key.rateLimitWindow > 0 &&
-                (key.rateLimitRequests > 0 || key.tokenLimit > 0 || key.rateLimitCost > 0)
-              "
-              :cost-limit="key.rateLimitCost"
-              :current-cost="key.currentWindowCost"
-              :current-requests="key.currentWindowRequests"
-              :current-tokens="key.currentWindowTokens"
-              :rate-limit-window="key.rateLimitWindow"
-              :request-limit="key.rateLimitRequests"
-              :show-progress="true"
-              :show-tooltip="false"
-              :token-limit="key.tokenLimit"
-              :window-end-time="key.windowEndTime"
-              :window-remaining-seconds="key.windowRemainingSeconds"
-              :window-start-time="key.windowStartTime"
-            />
-          </div>
-
-          <!-- 时间信息 -->
-          <div class="mb-3 text-xs text-gray-500">
-            <div class="mb-1 flex justify-between">
-              <span>创建时间</span>
-              <span>{{ formatDate(key.createdAt) }}</span>
-            </div>
-            <div class="flex items-center justify-between">
-              <span>过期时间</span>
-              <div class="flex items-center gap-1">
-                <span
-                  :class="
-                    isApiKeyExpiringSoon(key.expiresAt) ? 'font-semibold text-orange-600' : ''
-                  "
-                >
-                  {{ key.expiresAt ? formatDate(key.expiresAt) : '永不过期' }}
-                </span>
-                <button
-                  class="inline-flex h-5 w-5 items-center justify-center rounded text-gray-300 transition-all duration-200 hover:bg-blue-50 hover:text-blue-500"
-                  title="编辑过期时间"
-                  @click.stop="startEditExpiry(key)"
-                >
-                  <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                    ></path>
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- 标签 -->
-          <div v-if="key.tags && key.tags.length > 0" class="mb-3 flex flex-wrap gap-1">
             <span
-              v-for="tag in key.tags"
-              :key="tag"
-              class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800"
+              class="inline-flex items-center rounded bg-orange-100 px-2 py-0.5 text-orange-700"
             >
-              {{ tag }}
+              <i class="fas fa-cloud mr-1" />
             </span>
+            <span class="text-gray-600"> </span>
           </div>
-
-          <!-- 操作按钮 -->
-          <div class="mt-3 flex gap-2 border-t border-gray-100 pt-3">
-            <button
-              class="flex flex-1 items-center justify-center gap-1 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-600 transition-colors hover:bg-blue-100"
-              @click="showUsageDetails(key)"
-            >
-              <i class="fas fa-chart-line" />
-              查看详情
-            </button>
-            <button
-              class="flex-1 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600 transition-colors hover:bg-gray-100"
-              @click="openEditApiKeyModal(key)"
-            >
-              <i class="fas fa-edit mr-1" />
-              编辑
-            </button>
-            <button
-              v-if="
-                key.expiresAt &&
-                (isApiKeyExpired(key.expiresAt) || isApiKeyExpiringSoon(key.expiresAt))
-              "
-              class="flex-1 rounded-lg bg-orange-50 px-3 py-2 text-xs text-orange-600 transition-colors hover:bg-orange-100"
-              @click="openRenewApiKeyModal(key)"
-            >
-              <i class="fas fa-clock mr-1" />
-              续期
-            </button>
-            <button
-              :class="[
-                key.isActive
-                  ? 'bg-orange-50 text-orange-600 hover:bg-orange-100'
-                  : 'bg-green-50 text-green-600 hover:bg-green-100',
-                'rounded-lg px-3 py-2 text-xs transition-colors'
-              ]"
-              @click="toggleApiKeyStatus(key)"
-            >
-              <i :class="['fas', key.isActive ? 'fa-ban' : 'fa-check-circle', 'mr-1']" />
-              {{ key.isActive ? '禁用' : '激活' }}
-            </button>
-            <button
-              class="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600 transition-colors hover:bg-red-100"
-              @click="deleteApiKey(key.id)"
-            >
-              <i class="fas fa-trash" />
-            </button>
+          <!-- 无绑定时显示共享池 -->
+          <div
+            v-if="
+              !key.claudeAccountId &&
+              !key.claudeConsoleAccountId &&
+              !key.geminiAccountId &&
+              !key.openaiAccountId
+            "
+            class="text-xs text-gray-500"
+          >
+            <i class="fas fa-share-alt mr-1" />
+            使用共享池
           </div>
         </div>
-      </div>
 
-      <!-- 分页组件 -->
-      <div
-        v-if="sortedApiKeys.length > 0"
-        class="mt-4 flex flex-col items-center justify-between gap-4 sm:mt-6 sm:flex-row"
-      >
-        <div class="flex w-full flex-col items-center gap-3 sm:w-auto sm:flex-row">
-          <span class="text-xs text-gray-600 dark:text-gray-400 sm:text-sm">
-            共 {{ sortedApiKeys.length }} 条记录
+        <!-- 统计信息 -->
+        <div class="mb-3 space-y-2">
+          <!-- 今日使用 -->
+          <div class="rounded-lg bg-gray-50 p-3">
+            <div class="mb-2 flex items-center justify-between">
+              <span class="text-xs text-gray-600">今日使用</span>
+              <button
+                class="text-xs text-blue-600 hover:text-blue-800"
+                @click="showUsageDetails(key)"
+              >
+                <i class="fas fa-chart-line mr-1" />详情
+              </button>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  {{ formatNumber(key.usage?.daily?.requests || 0) }} 次
+                </p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">请求</p>
+              </div>
+              <div>
+                <p class="text-sm font-semibold text-green-600">
+                  ${{ (key.dailyCost || 0).toFixed(4) }}
+                </p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">费用</p>
+              </div>
+            </div>
+            <div class="mt-2 flex items-center justify-between">
+              <span class="text-xs text-gray-600 dark:text-gray-400">最后使用</span>
+              <span class="text-xs font-medium text-gray-700 dark:text-gray-300">{{
+                formatLastUsed(key.lastUsedAt)
+              }}</span>
+            </div>
+          </div>
+
+          <!-- 限制进度 -->
+          <div v-if="key.dailyCostLimit > 0" class="space-y-1">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-gray-500">每日费用限额</span>
+              <span class="text-gray-700">
+                ${{ (key.dailyCost || 0).toFixed(2) }} / ${{ key.dailyCostLimit.toFixed(2) }}
+              </span>
+            </div>
+            <div class="h-2 w-full rounded-full bg-gray-200">
+              <div
+                class="h-2 rounded-full transition-all duration-300"
+                :class="getDailyCostProgressColor(key)"
+                :style="{ width: getDailyCostProgress(key) + '%' }"
+              />
+            </div>
+          </div>
+
+          <!-- 移动端时间窗口限制 -->
+          <WindowCountdown
+            v-if="
+              key.rateLimitWindow > 0 &&
+              (key.rateLimitRequests > 0 || key.tokenLimit > 0 || key.rateLimitCost > 0)
+            "
+            :cost-limit="key.rateLimitCost"
+            :current-cost="key.currentWindowCost"
+            :current-requests="key.currentWindowRequests"
+            :current-tokens="key.currentWindowTokens"
+            :rate-limit-window="key.rateLimitWindow"
+            :request-limit="key.rateLimitRequests"
+            :show-progress="true"
+            :show-tooltip="false"
+            :token-limit="key.tokenLimit"
+            :window-end-time="key.windowEndTime"
+            :window-remaining-seconds="key.windowRemainingSeconds"
+            :window-start-time="key.windowStartTime"
+          />
+        </div>
+
+        <!-- 时间信息 -->
+        <div class="mb-3 text-xs text-gray-500">
+          <div class="mb-1 flex justify-between">
+            <span>创建时间</span>
+            <span>{{ formatDate(key.createdAt) }}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span>过期时间</span>
+            <div class="flex items-center gap-1">
+              <span
+                :class="isApiKeyExpiringSoon(key.expiresAt) ? 'font-semibold text-orange-600' : ''"
+              >
+                {{ key.expiresAt ? formatDate(key.expiresAt) : '永不过期' }}
+              </span>
+              <button
+                class="inline-flex h-5 w-5 items-center justify-center rounded text-gray-300 transition-all duration-200 hover:bg-blue-50 hover:text-blue-500"
+                title="编辑过期时间"
+                @click.stop="startEditExpiry(key)"
+              >
+                <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                  ></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 标签 -->
+        <div v-if="key.tags && key.tags.length > 0" class="mb-3 flex flex-wrap gap-1">
+          <span
+            v-for="tag in key.tags"
+            :key="tag"
+            class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800"
+          >
+            {{ tag }}
           </span>
-          <div class="flex items-center gap-2">
-            <span class="text-xs text-gray-600 dark:text-gray-400 sm:text-sm">每页显示</span>
-            <select
-              v-model="pageSize"
-              class="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 transition-colors hover:border-gray-300 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-gray-500 sm:text-sm"
-              @change="currentPage = 1"
-            >
-              <option v-for="size in pageSizeOptions" :key="size" :value="size">
-                {{ size }}
-              </option>
-            </select>
-            <span class="text-xs text-gray-600 dark:text-gray-400 sm:text-sm">条</span>
-          </div>
         </div>
 
-        <div class="flex items-center gap-2">
-          <!-- 上一页 -->
+        <!-- 操作按钮 -->
+        <div class="mt-3 flex gap-2 border-t border-gray-100 pt-3">
           <button
-            class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 sm:py-1 sm:text-sm"
-            :disabled="currentPage === 1"
-            @click="currentPage--"
+            class="flex flex-1 items-center justify-center gap-1 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-600 transition-colors hover:bg-blue-100"
+            @click="showUsageDetails(key)"
           >
-            <i class="fas fa-chevron-left" />
+            <i class="fas fa-chart-line" />
+            查看详情
           </button>
-
-          <!-- 页码 -->
-          <div class="flex items-center gap-1">
-            <!-- 第一页 -->
-            <button
-              v-if="currentPage > 3"
-              class="hidden rounded-md border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 sm:block"
-              @click="currentPage = 1"
-            >
-              1
-            </button>
-            <span
-              v-if="currentPage > 4"
-              class="hidden px-2 text-gray-500 dark:text-gray-400 sm:inline"
-              >...</span
-            >
-
-            <!-- 中间页码 -->
-            <button
-              v-for="page in pageNumbers"
-              :key="page"
-              :class="[
-                'rounded-md px-2 py-1 text-xs font-medium sm:px-3 sm:text-sm',
-                page === currentPage
-                  ? 'bg-blue-600 text-white'
-                  : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-              ]"
-              @click="currentPage = page"
-            >
-              {{ page }}
-            </button>
-
-            <!-- 最后一页 -->
-            <span
-              v-if="currentPage < totalPages - 3"
-              class="hidden px-2 text-gray-500 dark:text-gray-400 sm:inline"
-              >...</span
-            >
-            <button
-              v-if="totalPages > 1 && currentPage < totalPages - 2"
-              class="hidden rounded-md border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 sm:block"
-              @click="currentPage = totalPages"
-            >
-              {{ totalPages }}
-            </button>
-          </div>
-
-          <!-- 下一页 -->
           <button
-            class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 sm:py-1 sm:text-sm"
-            :disabled="currentPage === totalPages || totalPages === 0"
-            @click="currentPage++"
+            class="flex-1 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600 transition-colors hover:bg-gray-100"
+            @click="openEditApiKeyModal(key)"
           >
-            <i class="fas fa-chevron-right" />
+            <i class="fas fa-edit mr-1" />
+            编辑
+          </button>
+          <button
+            v-if="
+              key.expiresAt &&
+              (isApiKeyExpired(key.expiresAt) || isApiKeyExpiringSoon(key.expiresAt))
+            "
+            class="flex-1 rounded-lg bg-orange-50 px-3 py-2 text-xs text-orange-600 transition-colors hover:bg-orange-100"
+            @click="openRenewApiKeyModal(key)"
+          >
+            <i class="fas fa-clock mr-1" />
+            续期
+          </button>
+          <button
+            :class="[
+              key.isActive
+                ? 'bg-orange-50 text-orange-600 hover:bg-orange-100'
+                : 'bg-green-50 text-green-600 hover:bg-green-100',
+              'rounded-lg px-3 py-2 text-xs transition-colors'
+            ]"
+            @click="toggleApiKeyStatus(key)"
+          >
+            <i :class="['fas', key.isActive ? 'fa-ban' : 'fa-check-circle', 'mr-1']" />
+            {{ key.isActive ? '禁用' : '激活' }}
+          </button>
+          <button
+            class="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600 transition-colors hover:bg-red-100"
+            @click="deleteApiKey(key.id)"
+          >
+            <i class="fas fa-trash" />
           </button>
         </div>
       </div>
     </div>
 
-    <!-- 模态框组件 -->
-    <CreateApiKeyModal
-      v-if="showCreateApiKeyModal"
-      :accounts="accounts"
-      @batch-success="handleBatchCreateSuccess"
-      @close="showCreateApiKeyModal = false"
-      @success="handleCreateSuccess"
-    />
+    <!-- 分页组件 -->
+    <div
+      v-if="sortedApiKeys.length > 0"
+      class="mt-4 flex flex-col items-center justify-between gap-4 sm:mt-6 sm:flex-row"
+    >
+      <div class="flex w-full flex-col items-center gap-3 sm:w-auto sm:flex-row">
+        <span class="text-xs text-gray-600 dark:text-gray-400 sm:text-sm">
+          共 {{ sortedApiKeys.length }} 条记录
+        </span>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-gray-600 dark:text-gray-400 sm:text-sm">每页显示</span>
+          <select
+            v-model="pageSize"
+            class="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 transition-colors hover:border-gray-300 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-gray-500 sm:text-sm"
+            @change="currentPage = 1"
+          >
+            <option v-for="size in pageSizeOptions" :key="size" :value="size">
+              {{ size }}
+            </option>
+          </select>
+          <span class="text-xs text-gray-600 dark:text-gray-400 sm:text-sm">条</span>
+        </div>
+      </div>
 
-    <EditApiKeyModal
-      v-if="showEditApiKeyModal"
-      :accounts="accounts"
-      :api-key="editingApiKey"
-      @close="showEditApiKeyModal = false"
-      @success="handleEditSuccess"
-    />
+      <div class="flex items-center gap-2">
+        <!-- 上一页 -->
+        <button
+          class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 sm:py-1 sm:text-sm"
+          :disabled="currentPage === 1"
+          @click="currentPage--"
+        >
+          <i class="fas fa-chevron-left" />
+        </button>
 
-    <RenewApiKeyModal
-      v-if="showRenewApiKeyModal"
-      :api-key="renewingApiKey"
-      @close="showRenewApiKeyModal = false"
-      @success="handleRenewSuccess"
-    />
+        <!-- 页码 -->
+        <div class="flex items-center gap-1">
+          <!-- 第一页 -->
+          <button
+            v-if="currentPage > 3"
+            class="hidden rounded-md border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 sm:block"
+            @click="currentPage = 1"
+          >
+            1
+          </button>
+          <span
+            v-if="currentPage > 4"
+            class="hidden px-2 text-gray-500 dark:text-gray-400 sm:inline"
+            >...</span
+          >
 
-    <NewApiKeyModal
-      v-if="showNewApiKeyModal"
-      :api-key="newApiKeyData"
-      @close="showNewApiKeyModal = false"
-    />
+          <!-- 中间页码 -->
+          <button
+            v-for="page in pageNumbers"
+            :key="page"
+            :class="[
+              'rounded-md px-2 py-1 text-xs font-medium sm:px-3 sm:text-sm',
+              page === currentPage
+                ? 'bg-blue-600 text-white'
+                : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+            ]"
+            @click="currentPage = page"
+          >
+            {{ page }}
+          </button>
 
-    <BatchApiKeyModal
-      v-if="showBatchApiKeyModal"
-      :api-keys="batchApiKeyData"
-      @close="showBatchApiKeyModal = false"
-    />
+          <!-- 最后一页 -->
+          <span
+            v-if="currentPage < totalPages - 3"
+            class="hidden px-2 text-gray-500 dark:text-gray-400 sm:inline"
+            >...</span
+          >
+          <button
+            v-if="totalPages > 1 && currentPage < totalPages - 2"
+            class="hidden rounded-md border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 sm:block"
+            @click="currentPage = totalPages"
+          >
+            {{ totalPages }}
+          </button>
+        </div>
 
-    <BatchEditApiKeyModal
-      v-if="showBatchEditModal"
-      :accounts="accounts"
-      :selected-keys="selectedApiKeys"
-      @close="showBatchEditModal = false"
-      @success="handleBatchEditSuccess"
-    />
-
-    <!-- 过期时间编辑弹窗 -->
-    <ExpiryEditModal
-      ref="expiryEditModalRef"
-      :api-key="editingExpiryKey || { id: null, expiresAt: null, name: '' }"
-      :show="!!editingExpiryKey"
-      @close="closeExpiryEdit"
-      @save="handleSaveExpiry"
-    />
-
-    <!-- 使用详情弹窗 -->
-    <UsageDetailModal
-      :api-key="selectedApiKeyForDetail || {}"
-      :show="showUsageDetailModal"
-      @close="showUsageDetailModal = false"
-    />
+        <!-- 下一页 -->
+        <button
+          class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 sm:py-1 sm:text-sm"
+          :disabled="currentPage === totalPages || totalPages === 0"
+          @click="currentPage++"
+        >
+          <i class="fas fa-chevron-right" />
+        </button>
+      </div>
+    </div>
   </div>
+
+  <!-- 模态框组件 -->
+  <CreateApiKeyModal
+    v-if="showCreateApiKeyModal"
+    :accounts="accounts"
+    @batch-success="handleBatchCreateSuccess"
+    @close="showCreateApiKeyModal = false"
+    @success="handleCreateSuccess"
+  />
+
+  <EditApiKeyModal
+    v-if="showEditApiKeyModal"
+    :accounts="accounts"
+    :api-key="editingApiKey"
+    @close="showEditApiKeyModal = false"
+    @success="handleEditSuccess"
+  />
+
+  <RenewApiKeyModal
+    v-if="showRenewApiKeyModal"
+    :api-key="renewingApiKey"
+    @close="showRenewApiKeyModal = false"
+    @success="handleRenewSuccess"
+  />
+
+  <NewApiKeyModal
+    v-if="showNewApiKeyModal"
+    :api-key="newApiKeyData"
+    @close="showNewApiKeyModal = false"
+  />
+
+  <BatchApiKeyModal
+    v-if="showBatchApiKeyModal"
+    :api-keys="batchApiKeyData"
+    @close="showBatchApiKeyModal = false"
+  />
+
+  <BatchEditApiKeyModal
+    v-if="showBatchEditModal"
+    :accounts="accounts"
+    :selected-keys="selectedApiKeys"
+    @close="showBatchEditModal = false"
+    @success="handleBatchEditSuccess"
+  />
+
+  <!-- 过期时间编辑弹窗 -->
+  <ExpiryEditModal
+    ref="expiryEditModalRef"
+    :api-key="editingExpiryKey || { id: null, expiresAt: null, name: '' }"
+    :show="!!editingExpiryKey"
+    @close="closeExpiryEdit"
+    @save="handleSaveExpiry"
+  />
+
+  <!-- 使用详情弹窗 -->
+  <UsageDetailModal
+    :api-key="selectedApiKeyForDetail || {}"
+    :show="showUsageDetailModal"
+    @close="showUsageDetailModal = false"
+  />
 </template>
 
 <script setup>
@@ -1311,7 +1289,6 @@ const accounts = ref({
   claude: [],
   gemini: [],
   openai: [],
-  bedrock: [],
   claudeGroups: [],
   geminiGroups: [],
   openaiGroups: []
@@ -1460,15 +1437,13 @@ const paginatedApiKeys = computed(() => {
 // 加载账户列表
 const loadAccounts = async () => {
   try {
-    const [claudeData, claudeConsoleData, geminiData, openaiData, bedrockData, groupsData] =
-      await Promise.all([
-        apiClient.get('/admin/claude-accounts'),
-        apiClient.get('/admin/claude-console-accounts'),
-        apiClient.get('/admin/gemini-accounts'),
-        apiClient.get('/admin/openai-accounts'),
-        apiClient.get('/admin/bedrock-accounts'),
-        apiClient.get('/admin/account-groups')
-      ])
+    const [claudeData, claudeConsoleData, geminiData, openaiData, groupsData] = await Promise.all([
+      apiClient.get('/admin/claude-accounts'),
+      apiClient.get('/admin/claude-console-accounts'),
+      apiClient.get('/admin/gemini-accounts'),
+      apiClient.get('/admin/openai-accounts'),
+      apiClient.get('/admin/account-groups')
+    ])
 
     // 合并Claude OAuth账户和Claude Console账户
     const claudeAccounts = []
@@ -1504,13 +1479,6 @@ const loadAccounts = async () => {
 
     if (openaiData.success) {
       accounts.value.openai = (openaiData.data || []).map((account) => ({
-        ...account,
-        isDedicated: account.accountType === 'dedicated'
-      }))
-    }
-
-    if (bedrockData.success) {
-      accounts.value.bedrock = (bedrockData.data || []).map((account) => ({
         ...account,
         isDedicated: account.accountType === 'dedicated'
       }))
@@ -1623,12 +1591,6 @@ const getBoundAccountName = (accountId) => {
     return `${openaiAccount.name}`
   }
 
-  // 从Bedrock账户列表中查找
-  const bedrockAccount = accounts.value.bedrock.find((acc) => acc.id === accountId)
-  if (bedrockAccount) {
-    return `${bedrockAccount.name}`
-  }
-
   // 如果找不到，返回账户ID的前8位
   return `${accountId.substring(0, 8)}`
 }
@@ -1691,26 +1653,6 @@ const getOpenAIBindingInfo = (key) => {
     }
     // 检查账户是否存在
     const account = accounts.value.openai.find((acc) => acc.id === key.openaiAccountId)
-    if (!account) {
-      return `⚠️ ${info} (账户不存在)`
-    }
-    if (account.accountType === 'dedicated') {
-      return `🔒 专属-${info}`
-    }
-    return info
-  }
-  return ''
-}
-
-// 获取Bedrock绑定信息
-const getBedrockBindingInfo = (key) => {
-  if (key.bedrockAccountId) {
-    const info = getBoundAccountName(key.bedrockAccountId)
-    if (key.bedrockAccountId.startsWith('group:')) {
-      return info
-    }
-    // 检查账户是否存在
-    const account = accounts.value.bedrock.find((acc) => acc.id === key.bedrockAccountId)
     if (!account) {
       return `⚠️ ${info} (账户不存在)`
     }

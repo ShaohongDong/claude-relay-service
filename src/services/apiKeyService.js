@@ -39,7 +39,6 @@ class ApiKeyService {
       geminiAccountId = null,
       openaiAccountId = null,
       azureOpenaiAccountId = null,
-      bedrockAccountId = null, // 添加 Bedrock 账号ID支持
       permissions = 'all', // 'claude', 'gemini', 'openai', 'all'
       isActive = true,
       concurrencyLimit = 0,
@@ -76,7 +75,6 @@ class ApiKeyService {
       geminiAccountId: geminiAccountId || '',
       openaiAccountId: openaiAccountId || '',
       azureOpenaiAccountId: azureOpenaiAccountId || '',
-      bedrockAccountId: bedrockAccountId || '', // 添加 Bedrock 账号ID
       permissions: permissions || 'all',
       enableModelRestriction: String(enableModelRestriction),
       restrictedModels: JSON.stringify(restrictedModels || []),
@@ -112,7 +110,6 @@ class ApiKeyService {
       geminiAccountId: keyData.geminiAccountId,
       openaiAccountId: keyData.openaiAccountId,
       azureOpenaiAccountId: keyData.azureOpenaiAccountId,
-      bedrockAccountId: keyData.bedrockAccountId, // 添加 Bedrock 账号ID
       permissions: keyData.permissions,
       enableModelRestriction: keyData.enableModelRestriction === 'true',
       restrictedModels: JSON.parse(keyData.restrictedModels),
@@ -301,7 +298,6 @@ class ApiKeyService {
         geminiAccountId: keyData.geminiAccountId || '',
         openaiAccountId: keyData.openaiAccountId || '',
         azureOpenaiAccountId: keyData.azureOpenaiAccountId || '',
-        bedrockAccountId: keyData.bedrockAccountId || '', // 添加 Bedrock 账号ID
         permissions: keyData.permissions || 'all',
         tokenLimit: parseInt(keyData.tokenLimit || 0),
         concurrencyLimit: parseInt(keyData.concurrencyLimit || 0),
@@ -443,7 +439,6 @@ class ApiKeyService {
         'geminiAccountId',
         'openaiAccountId',
         'azureOpenaiAccountId',
-        'bedrockAccountId', // 添加 Bedrock 账号ID
         'permissions',
         'expiresAt',
         'enableModelRestriction',
