@@ -4,6 +4,7 @@ const config = require('../../config/config')
 const path = require('path')
 const fs = require('fs')
 const os = require('os')
+const chokidar = require('chokidar')
 
 // 安全的 JSON 序列化函数，处理循环引用和特殊字符
 const safeStringify = (obj, maxDepth = 3, fullDepth = false) => {
@@ -142,6 +143,159 @@ if (!fs.existsSync(config.logging.dirname)) {
   fs.mkdirSync(config.logging.dirname, { recursive: true, mode: 0o755 })
 }
 
+// 📂 文件监控和自动恢复系统
+const fileWatcher = (() => {
+  const watchers = new Map()
+  const transportsMap = new Map() // 存储传输器引用
+
+  // 监控日志文件，检测删除事件并自动重创建传输器
+  const watchLogFile = (transport, filename) => {
+    if (!filename || typeof filename !== 'string') {
+      return
+    }
+
+    const fullPath = path.resolve(
+      filename.replace('%DATE%', new Date().toISOString().split('T')[0])
+    )
+    const directory = path.dirname(fullPath)
+
+    // 存储传输器引用
+    transportsMap.set(fullPath, transport)
+
+    try {
+      // 监控日志目录
+      const watcher = chokidar.watch(directory, {
+        ignored: /(^|[/\\])\../, // 忽略隐藏文件
+        persistent: true,
+        ignoreInitial: true,
+        awaitWriteFinish: {
+          stabilityThreshold: 1000,
+          pollInterval: 100
+        }
+      })
+
+      watcher
+        .on('unlink', (filePath) => {
+          // 当文件被删除时
+          if (transportsMap.has(filePath)) {
+            const affectedTransport = transportsMap.get(filePath)
+
+            // 防止重复处理同一个文件删除事件
+            const delayKey = `recreate_${filePath}`
+            if (watcher._delayedActions && watcher._delayedActions.has(delayKey)) {
+              return // 已经在处理中，跳过
+            }
+
+            // 标记正在处理
+            if (!watcher._delayedActions) {
+              watcher._delayedActions = new Set()
+            }
+            watcher._delayedActions.add(delayKey)
+
+            // 等待一小段时间，确保文件完全删除
+            setTimeout(() => {
+              try {
+                // 重新创建文件和传输器
+                recreateTransport(affectedTransport, filePath)
+                console.log(`🔄 日志文件被删除已自动重创建: ${filePath}`)
+              } catch (error) {
+                console.error(`❌ 重创建日志传输器失败: ${error.message}`, error.stack)
+              } finally {
+                // 清除处理标记
+                watcher._delayedActions.delete(delayKey)
+              }
+            }, 1000) // 增加延迟时间
+          }
+        })
+        .on('error', (error) => {
+          console.error(`📂 文件监控错误: ${error.message}`, error.stack)
+        })
+
+      watchers.set(fullPath, watcher)
+    } catch (error) {
+      console.warn(`📂 无法监控日志文件: ${fullPath}`, error.message)
+    }
+  }
+
+  // 重新创建传输器
+  const recreateTransport = (transport, filePath) => {
+    try {
+      // 对于 winston-daily-rotate-file，使用更直接的方法
+      if (transport.getLogFilePath && typeof transport.getLogFilePath === 'function') {
+        // 强制刷新内部状态
+        if (transport._endStream && typeof transport._endStream === 'function') {
+          transport._endStream(() => {
+            // 重新初始化流
+            if (transport._createLogDir && typeof transport._createLogDir === 'function') {
+              transport._createLogDir()
+            }
+            if (transport._getFile && typeof transport._getFile === 'function') {
+              transport._getFile(true) // 强制创建新文件
+            }
+          })
+        }
+      }
+
+      // 备用方法：直接创建文件
+      try {
+        // 确保目录存在
+        const dir = path.dirname(filePath)
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true })
+        }
+
+        // 如果文件不存在，创建一个空文件
+        if (!fs.existsSync(filePath)) {
+          fs.writeFileSync(filePath, '', { flag: 'a' }) // 使用追加模式确保文件存在
+        }
+      } catch (fsError) {
+        console.warn(`文件系统操作警告: ${fsError.message}`)
+      }
+
+      // 强制触发日志写入以验证文件可写性
+      setTimeout(() => {
+        try {
+          if (transport.write && typeof transport.write === 'function') {
+            transport.write({ level: 'info', message: 'Transport recreated successfully' })
+          }
+        } catch (writeError) {
+          console.warn(`测试写入警告: ${writeError.message}`)
+        }
+      }, 100)
+
+      console.log(`✅ 传输器重创建成功: ${filePath}`)
+    } catch (error) {
+      console.error(`❌ 传输器重创建失败: ${error.message}`, error.stack)
+      throw error
+    }
+  }
+
+  // 清理所有监控器
+  const cleanup = () => {
+    watchers.forEach((watcher) => {
+      try {
+        watcher.close()
+      } catch (error) {
+        console.warn('关闭文件监控器时出错:', error.message)
+      }
+    })
+    watchers.clear()
+    transportsMap.clear()
+  }
+
+  // 监听进程退出事件，清理资源
+  process.on('exit', cleanup)
+  process.on('SIGINT', cleanup)
+  process.on('SIGTERM', cleanup)
+
+  return {
+    watchLogFile,
+    cleanup,
+    getWatchers: () => Array.from(watchers.keys()),
+    getTransports: () => Array.from(transportsMap.keys())
+  }
+})()
+
 // 🔄 增强的日志轮转配置
 const createRotateTransport = (filename, level = null) => {
   const transport = new DailyRotateFile({
@@ -171,6 +325,15 @@ const createRotateTransport = (filename, level = null) => {
     transport.on('archive', (zipFilename) => {
       console.log(`🗜️ Log archived: ${zipFilename}`)
     })
+
+    // 🔄 为每个传输器启动文件监控
+    try {
+      const fullFilename = path.join(config.logging.dirname, filename)
+      fileWatcher.watchLogFile(transport, fullFilename)
+      console.log(`📂 已启动日志文件监控: ${fullFilename}`)
+    } catch (error) {
+      console.warn(`📂 启动日志文件监控失败: ${error.message}`)
+    }
   }
 
   return transport
@@ -409,5 +572,30 @@ logger.start('Logger initialized', {
   maxFiles: config.logging.maxFiles,
   envOverride: process.env.LOG_LEVEL ? true : false
 })
+
+// 📂 文件监控功能已整合到前面的定义中
+
+// 文件监控功能已集成到原有的 createRotateTransport 函数中
+
+// 🔍 增强健康检查，包含文件监控状态
+const originalHealthCheck = logger.healthCheck
+logger.healthCheck = () => {
+  const baseHealth = originalHealthCheck()
+
+  return {
+    ...baseHealth,
+    fileWatcher: {
+      watchersCount: fileWatcher.getWatchers().length,
+      transportsCount: fileWatcher.getTransports().length,
+      watching: fileWatcher.getWatchers()
+    }
+  }
+}
+
+// 🧹 添加清理方法
+logger.cleanup = () => {
+  fileWatcher.cleanup()
+  logger.info('🧹 日志系统资源已清理')
+}
 
 module.exports = logger
