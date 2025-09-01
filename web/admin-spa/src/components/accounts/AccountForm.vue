@@ -1,7 +1,6 @@
 <template>
   <Teleport to="body">
-    <div v-if="show"
-class="modal fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
+    <div v-if="show" class="modal fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
       <div
         class="modal-content custom-scrollbar mx-auto max-h-[90vh] w-full max-w-2xl overflow-y-auto p-4 sm:p-6 md:p-8"
       >
@@ -105,8 +104,7 @@ class="modal fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
                 >添加方式</label
               >
               <div class="flex flex-wrap gap-4">
-                <label v-if="form.platform === 'claude'"
-class="flex cursor-pointer items-center">
+                <label v-if="form.platform === 'claude'" class="flex cursor-pointer items-center">
                   <input
                     v-model="form.addType"
                     class="mr-2 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
@@ -150,8 +148,7 @@ class="flex cursor-pointer items-center">
                 required
                 type="text"
               />
-              <p v-if="errors.name"
-class="mt-1 text-xs text-red-500">
+              <p v-if="errors.name" class="mt-1 text-xs text-red-500">
                 {{ errors.name }}
               </p>
             </div>
@@ -219,8 +216,7 @@ class="mt-1 text-xs text-red-500">
                   required
                 >
                   <option value="">请选择分组</option>
-                  <option v-for="group in filteredGroups"
-:key="group.id" :value="group.id">
+                  <option v-for="group in filteredGroups" :key="group.id" :value="group.id">
                     {{ group.name }} ({{ group.memberCount || 0 }} 个成员)
                   </option>
                   <option value="__new__">+ 新建分组</option>
@@ -230,8 +226,7 @@ class="mt-1 text-xs text-red-500">
                   type="button"
                   @click="refreshGroups"
                 >
-                  <i class="fas fa-sync-alt"
-:class="{ 'animate-spin': loadingGroups }" />
+                  <i class="fas fa-sync-alt" :class="{ 'animate-spin': loadingGroups }" />
                 </button>
               </div>
             </div>
@@ -284,92 +279,6 @@ class="mt-1 text-xs text-red-500">
                   </div>
                 </div>
               </div>
-            </div>
-
-            <div>
-              <label class="mb-3 block text-sm font-semibold text-gray-700 dark:text-gray-300"
-                >AWS 访问密钥 ID *</label
-              >
-              <input
-                v-model="form.accessKeyId"
-                class="form-input w-full dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:placeholder-gray-400"
-                :class="{ 'border-red-500': errors.accessKeyId }"
-                placeholder="请输入 AWS Access Key ID"
-                required
-                type="text"
-              />
-              <p v-if="errors.accessKeyId"
-class="mt-1 text-xs text-red-500">
-                {{ errors.accessKeyId }}
-              </p>
-            </div>
-
-            <div>
-              <label class="mb-3 block text-sm font-semibold text-gray-700 dark:text-gray-300"
-                >AWS 秘密访问密钥 *</label
-              >
-              <input
-                v-model="form.secretAccessKey"
-                class="form-input w-full dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:placeholder-gray-400"
-                :class="{ 'border-red-500': errors.secretAccessKey }"
-                placeholder="请输入 AWS Secret Access Key"
-                required
-                type="password"
-              />
-              <p v-if="errors.secretAccessKey"
-class="mt-1 text-xs text-red-500">
-                {{ errors.secretAccessKey }}
-              </p>
-            </div>
-
-            <div>
-              <label class="mb-3 block text-sm font-semibold text-gray-700 dark:text-gray-300"
-                >AWS 区域 *</label
-              >
-              <input
-                v-model="form.region"
-                class="form-input w-full dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:placeholder-gray-400"
-                :class="{ 'border-red-500': errors.region }"
-                placeholder="例如：us-east-1"
-                required
-                type="text"
-              />
-              <p v-if="errors.region"
-class="mt-1 text-xs text-red-500">
-                {{ errors.region }}
-              </p>
-              <div class="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-3">
-                <div class="flex items-start gap-2">
-                  <i class="fas fa-info-circle mt-0.5 text-blue-600" />
-                  <div class="text-xs text-blue-700">
-                    <p class="mb-1 font-medium">常用 AWS 区域参考：</p>
-                    <div class="grid grid-cols-2 gap-1 text-xs">
-                      <span>• us-east-1 (美国东部)</span>
-                      <span>• us-west-2 (美国西部)</span>
-                      <span>• eu-west-1 (欧洲爱尔兰)</span>
-                      <span>• ap-southeast-1 (新加坡)</span>
-                      <span>• ap-northeast-1 (东京)</span>
-                      <span>• eu-central-1 (法兰克福)</span>
-                    </div>
-                    <p class="mt-2 text-blue-600">💡 请输入完整的区域代码，如 us-east-1</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <label class="mb-3 block text-sm font-semibold text-gray-700 dark:text-gray-300"
-                >会话令牌 (可选)</label
-              >
-              <input
-                v-model="form.sessionToken"
-                class="form-input w-full dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:placeholder-gray-400"
-                placeholder="如果使用临时凭证，请输入会话令牌"
-                type="password"
-              />
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                仅在使用临时 AWS 凭证时需要填写
-              </p>
             </div>
 
             <div>
@@ -453,8 +362,7 @@ class="mt-1 text-xs text-red-500">
         </div>
 
         <!-- Claude Console 特定字段 -->
-        <div v-if="form.platform === 'claude-console' && !isEdit"
-class="space-y-4">
+        <div v-if="form.platform === 'claude-console' && !isEdit" class="space-y-4">
           <div>
             <label class="mb-3 block text-sm font-semibold text-gray-700 dark:text-gray-300"
               >API URL *</label
@@ -467,8 +375,7 @@ class="space-y-4">
               required
               type="text"
             />
-            <p v-if="errors.apiUrl"
-class="mt-1 text-xs text-red-500">
+            <p v-if="errors.apiUrl" class="mt-1 text-xs text-red-500">
               {{ errors.apiUrl }}
             </p>
           </div>
@@ -485,8 +392,7 @@ class="mt-1 text-xs text-red-500">
               required
               type="password"
             />
-            <p v-if="errors.apiKey"
-class="mt-1 text-xs text-red-500">
+            <p v-if="errors.apiKey" class="mt-1 text-xs text-red-500">
               {{ errors.apiKey }}
             </p>
           </div>
@@ -661,8 +567,7 @@ class="mt-1 text-xs text-red-500">
         </div>
 
         <!-- Claude 5小时限制自动停止调度选项 -->
-        <div v-if="form.platform === 'claude'"
-class="mt-4">
+        <div v-if="form.platform === 'claude'" class="mt-4">
           <label class="flex items-start">
             <input
               v-model="form.autoStopOnWarning"
@@ -771,8 +676,7 @@ class="mt-4">
               required
               rows="4"
             />
-            <p v-if="errors.accessToken"
-class="mt-1 text-xs text-red-500">
+            <p v-if="errors.accessToken" class="mt-1 text-xs text-red-500">
               {{ errors.accessToken }}
             </p>
           </div>
@@ -820,8 +724,7 @@ class="mt-1 text-xs text-red-500">
             type="button"
             @click="createAccount"
           >
-            <div v-if="loading"
-class="loading-spinner mr-2" />
+            <div v-if="loading" class="loading-spinner mr-2" />
             {{ loading ? '创建中...' : '创建' }}
           </button>
         </div>
@@ -838,8 +741,7 @@ class="loading-spinner mr-2" />
     />
 
     <!-- 步骤2: Setup Token授权 -->
-    <div v-if="oauthStep === 2 && form.addType === 'setup-token'"
-class="space-y-6">
+    <div v-if="oauthStep === 2 && form.addType === 'setup-token'" class="space-y-6">
       <!-- Claude Setup Token流程 -->
       <div v-if="form.platform === 'claude'">
         <div
@@ -880,14 +782,11 @@ class="space-y-6">
                         :disabled="setupTokenLoading"
                         @click="generateSetupTokenAuthUrl"
                       >
-                        <i v-if="!setupTokenLoading"
-class="fas fa-link mr-2" />
-                        <div v-else
-class="loading-spinner mr-2" />
+                        <i v-if="!setupTokenLoading" class="fas fa-link mr-2" />
+                        <div v-else class="loading-spinner mr-2" />
                         {{ setupTokenLoading ? '生成中...' : '生成 Setup Token 授权链接' }}
                       </button>
-                      <div v-else
-class="space-y-3">
+                      <div v-else class="space-y-3">
                         <div class="flex items-center gap-2">
                           <input
                             class="form-input flex-1 bg-gray-50 font-mono text-xs dark:bg-gray-700"
@@ -1007,16 +906,14 @@ class="space-y-3">
           type="button"
           @click="exchangeSetupTokenCode"
         >
-          <div v-if="setupTokenExchanging"
-class="loading-spinner mr-2" />
+          <div v-if="setupTokenExchanging" class="loading-spinner mr-2" />
           {{ setupTokenExchanging ? '验证中...' : '完成授权' }}
         </button>
       </div>
     </div>
 
     <!-- 编辑模式 -->
-    <div v-if="isEdit"
-class="space-y-6">
+    <div v-if="isEdit" class="space-y-6">
       <!-- 基本信息 -->
       <div>
         <label class="mb-3 block text-sm font-semibold text-gray-700 dark:text-gray-300"
@@ -1093,8 +990,7 @@ class="space-y-6">
             required
           >
             <option value="">请选择分组</option>
-            <option v-for="group in filteredGroups"
-:key="group.id" :value="group.id">
+            <option v-for="group in filteredGroups" :key="group.id" :value="group.id">
               {{ group.name }} ({{ group.memberCount || 0 }} 个成员)
             </option>
             <option value="__new__">+ 新建分组</option>
@@ -1104,8 +1000,7 @@ class="space-y-6">
             type="button"
             @click="refreshGroups"
           >
-            <i class="fas fa-sync-alt"
-:class="{ 'animate-spin': loadingGroups }" />
+            <i class="fas fa-sync-alt" :class="{ 'animate-spin': loadingGroups }" />
           </button>
         </div>
       </div>
@@ -1158,8 +1053,7 @@ class="space-y-6">
       </div>
 
       <!-- Claude 5小时限制自动停止调度选项（编辑模式） -->
-      <div v-if="form.platform === 'claude'"
-class="mt-4">
+      <div v-if="form.platform === 'claude'" class="mt-4">
         <label class="flex items-start">
           <input
             v-model="form.autoStopOnWarning"
@@ -1196,8 +1090,7 @@ class="mt-4">
       </div>
 
       <!-- Claude Console 特定字段（编辑模式）-->
-      <div v-if="form.platform === 'claude-console'"
-class="space-y-4">
+      <div v-if="form.platform === 'claude-console'" class="space-y-4">
         <div>
           <label class="mb-3 block text-sm font-semibold text-gray-700">API URL</label>
           <input
@@ -1410,8 +1303,7 @@ class="space-y-4">
           type="button"
           @click="updateAccount"
         >
-          <div v-if="loading"
-class="loading-spinner mr-2" />
+          <div v-if="loading" class="loading-spinner mr-2" />
           {{ loading ? '更新中...' : '更新' }}
         </button>
       </div>
@@ -1538,10 +1430,6 @@ const form = ref({
   userAgent: props.account?.userAgent || '',
   enableRateLimit: props.account ? props.account.rateLimitDuration > 0 : true,
   rateLimitDuration: props.account?.rateLimitDuration || 60,
-  accessKeyId: props.account?.accessKeyId || '',
-  secretAccessKey: props.account?.secretAccessKey || '',
-  region: props.account?.region || '',
-  sessionToken: props.account?.sessionToken || '',
   defaultModel: props.account?.defaultModel || '',
   smallFastModel: props.account?.smallFastModel || ''
 })
@@ -1577,10 +1465,7 @@ const errors = ref({
   idToken: '',
   accessToken: '',
   apiUrl: '',
-  apiKey: '',
-  accessKeyId: '',
-  secretAccessKey: '',
-  region: ''
+  apiKey: ''
 })
 
 // 计算是否可以进入下一步
@@ -1827,18 +1712,6 @@ const createAccount = async () => {
       errors.value.apiKey = '请填写 API Key'
       hasError = true
     }
-    if (!form.value.accessKeyId || form.value.accessKeyId.trim() === '') {
-      errors.value.accessKeyId = '请填写 AWS 访问密钥 ID'
-      hasError = true
-    }
-    if (!form.value.secretAccessKey || form.value.secretAccessKey.trim() === '') {
-      errors.value.secretAccessKey = '请填写 AWS 秘密访问密钥'
-      hasError = true
-    }
-    if (!form.value.region || form.value.region.trim() === '') {
-      errors.value.region = '请选择 AWS 区域'
-      hasError = true
-    }
   } else if (form.value.addType === 'manual') {
     // 手动模式验证
     if (!form.value.accessToken || form.value.accessToken.trim() === '') {
@@ -1928,12 +1801,6 @@ const createAccount = async () => {
       data.userAgent = form.value.userAgent || null
       // 如果不启用限流，传递 0 表示不限流
       data.rateLimitDuration = form.value.enableRateLimit ? form.value.rateLimitDuration || 60 : 0
-      data.awsCredentials = {
-        accessKeyId: form.value.accessKeyId,
-        secretAccessKey: form.value.secretAccessKey,
-        sessionToken: form.value.sessionToken || null
-      }
-      data.region = form.value.region
       data.defaultModel = form.value.defaultModel || null
       data.smallFastModel = form.value.smallFastModel || null
       data.priority = form.value.priority || 50
@@ -2076,22 +1943,6 @@ const updateAccount = async () => {
       // 如果不启用限流，传递 0 表示不限流
       data.rateLimitDuration = form.value.enableRateLimit ? form.value.rateLimitDuration || 60 : 0
 
-      // 只有当有凭证变更时才构造 awsCredentials 对象
-      if (form.value.accessKeyId || form.value.secretAccessKey || form.value.sessionToken) {
-        data.awsCredentials = {}
-        if (form.value.accessKeyId) {
-          data.awsCredentials.accessKeyId = form.value.accessKeyId
-        }
-        if (form.value.secretAccessKey) {
-          data.awsCredentials.secretAccessKey = form.value.secretAccessKey
-        }
-        if (form.value.sessionToken !== undefined) {
-          data.awsCredentials.sessionToken = form.value.sessionToken || null
-        }
-      }
-      if (form.value.region) {
-        data.region = form.value.region
-      }
       // 模型配置（支持设置为空来使用系统默认）
       data.defaultModel = form.value.defaultModel || null
       data.smallFastModel = form.value.smallFastModel || null
@@ -2395,10 +2246,6 @@ watch(
         enableRateLimit:
           newAccount.rateLimitDuration && newAccount.rateLimitDuration > 0 ? true : false,
         rateLimitDuration: newAccount.rateLimitDuration || 60,
-        accessKeyId: '', // 编辑模式不显示现有的访问密钥
-        secretAccessKey: '', // 编辑模式不显示现有的秘密密钥
-        region: newAccount.region || '',
-        sessionToken: '', // 编辑模式不显示现有的会话令牌
         defaultModel: newAccount.defaultModel || '',
         smallFastModel: newAccount.smallFastModel || ''
       }
