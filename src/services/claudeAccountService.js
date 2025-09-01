@@ -31,14 +31,19 @@ class ClaudeAccountService {
     // 🔄 解密结果缓存，提高解密性能
     this._decryptCache = new LRUCache(500)
 
+    // 📝 定时器管理
+    this._cleanupTimer = null
+
     // 🧹 定期清理缓存（每10分钟）
-    setInterval(
+    this._cleanupTimer = setInterval(
       () => {
         this._decryptCache.cleanup()
         logger.info('🧹 Claude decrypt cache cleanup completed', this._decryptCache.getStats())
       },
       10 * 60 * 1000
     )
+
+    logger.debug('🎯 Claude account service initialized with resource cleanup support')
   }
 
   // 🏢 创建Claude账户
@@ -136,8 +141,7 @@ class ClaudeAccountService {
 
       if (hasProfileScope) {
         try {
-          const agent = this._createProxyAgent(proxy)
-          await this.fetchAndUpdateAccountProfile(accountId, claudeAiOauth.accessToken, agent)
+          await this.fetchAndUpdateAccountProfile(accountId, claudeAiOauth.accessToken)
           logger.info(`📊 Successfully fetched profile info for new account: ${name}`)
         } catch (profileError) {
           logger.warn(`⚠️ Failed to fetch profile info for new account: ${profileError.message}`)
@@ -213,8 +217,26 @@ class ClaudeAccountService {
       logRefreshStart(accountId, accountData.name, 'claude', 'manual_refresh')
       logger.info(`🔄 Starting token refresh for account: ${accountData.name} (${accountId})`)
 
-      // 创建代理agent
-      const agent = this._createProxyAgent(accountData.proxy)
+      // 从连接池获取预热连接
+      const connection = ProxyHelper.getConnectionForAccount(accountId)
+      logger.debug(`🔗 使用连接池连接进行token刷新: 账户 ${accountId}, 连接 ${connection.connectionId}`)
+
+      // 创建axios配置
+      const axiosConfig = {
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/plain, */*',
+          'User-Agent': 'claude-cli/1.0.56 (external, cli)',
+          'Accept-Language': 'en-US,en;q=0.9',
+          Referer: 'https://claude.ai/',
+          Origin: 'https://claude.ai'
+        },
+        httpsAgent: connection.httpsAgent,
+        timeout: 30000
+      }
+
+      // 添加代理监控
+      ProxyHelper.addProxyMonitoring(axiosConfig, accountData.proxy)
 
       const response = await axios.post(
         this.claudeApiUrl,
@@ -223,19 +245,11 @@ class ClaudeAccountService {
           refresh_token: refreshToken,
           client_id: this.claudeOauthClientId
         },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json, text/plain, */*',
-            'User-Agent': 'claude-cli/1.0.56 (external, cli)',
-            'Accept-Language': 'en-US,en;q=0.9',
-            Referer: 'https://claude.ai/',
-            Origin: 'https://claude.ai'
-          },
-          httpsAgent: agent,
-          timeout: 30000
-        }
+        axiosConfig
       )
+
+      // 记录代理连接耗时
+      ProxyHelper.logProxyConnectTime(response)
 
       if (response.status === 200) {
         // 记录完整的响应数据到专门的认证详细日志
@@ -287,7 +301,7 @@ class ClaudeAccountService {
 
         if (hasProfileScope) {
           try {
-            await this.fetchAndUpdateAccountProfile(accountId, access_token, agent)
+            await this.fetchAndUpdateAccountProfile(accountId, access_token)
           } catch (profileError) {
             logger.warn(`⚠️ Failed to fetch profile info after refresh: ${profileError.message}`)
           }
@@ -318,6 +332,9 @@ class ClaudeAccountService {
         throw new Error(`Token refresh failed with status: ${response.status}`)
       }
     } catch (error) {
+      // 记录代理连接错误（如果相关）
+      ProxyHelper.logProxyConnectError(error)
+      
       // 记录刷新失败
       const accountData = await redis.getClaudeAccount(accountId)
       if (accountData) {
@@ -884,21 +901,6 @@ class ClaudeAccountService {
     }
   }
 
-  // 🌐 创建代理agent（使用统一的代理工具）
-  _createProxyAgent(proxyConfig) {
-    const proxyAgent = ProxyHelper.createProxyAgent(proxyConfig)
-    if (proxyAgent) {
-      logger.info(
-        `🌐 Using proxy for Claude request: ${ProxyHelper.getProxyDescription(proxyConfig)}`
-      )
-    } else if (proxyConfig) {
-      logger.debug('🌐 Failed to create proxy agent for Claude')
-    } else {
-      logger.debug('🌐 No proxy configured for Claude request')
-    }
-    return proxyAgent
-  }
-
   // 🔐 加密敏感数据
   _encryptSensitiveData(data) {
     if (!data) {
@@ -1449,15 +1451,14 @@ class ClaudeAccountService {
         }
       }
 
-      // 如果没有提供 agent，创建代理
-      if (!agent) {
-        agent = this._createProxyAgent(accountData.proxy)
-      }
-
       logger.info(`📊 Fetching profile info for account: ${accountData.name} (${accountId})`)
 
-      // 请求 profile 接口
-      const response = await axios.get('https://api.anthropic.com/api/oauth/profile', {
+      // 从连接池获取连接（优先级高于传入的agent）
+      const connection = ProxyHelper.getConnectionForAccount(accountId)
+      logger.debug(`🔗 使用连接池连接获取profile: 账户 ${accountId}, 连接 ${connection.connectionId}`)
+
+      // 创建axios配置
+      const axiosConfig = {
         headers: {
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
@@ -1465,9 +1466,18 @@ class ClaudeAccountService {
           'User-Agent': 'claude-cli/1.0.56 (external, cli)',
           'Accept-Language': 'en-US,en;q=0.9'
         },
-        httpsAgent: agent,
+        httpsAgent: connection.httpsAgent,
         timeout: 15000
-      })
+      }
+
+      // 添加代理监控
+      ProxyHelper.addProxyMonitoring(axiosConfig, accountData.proxy)
+
+      // 请求 profile 接口
+      const response = await axios.get('https://api.anthropic.com/api/oauth/profile', axiosConfig)
+
+      // 记录代理连接耗时
+      ProxyHelper.logProxyConnectTime(response)
 
       if (response.status === 200 && response.data) {
         const profileData = response.data
@@ -1528,6 +1538,9 @@ class ClaudeAccountService {
         throw new Error(`Failed to fetch profile with status: ${response.status}`)
       }
     } catch (error) {
+      // 记录代理连接错误（如果相关）
+      ProxyHelper.logProxyConnectError(error)
+      
       if (error.response?.status === 401) {
         logger.warn(`⚠️ Profile API returned 401 for account ${accountId} - token may be invalid`)
       } else if (error.response?.status === 403) {
@@ -2004,6 +2017,40 @@ class ClaudeAccountService {
     } catch (error) {
       logger.error(`❌ Failed to update session window status for account ${accountId}:`, error)
     }
+  }
+
+  /**
+   * 🧹 清理服务资源
+   * 在应用关闭时调用，清理定时器防止内存泄漏
+   */
+  cleanup() {
+    logger.info('🧹 Starting Claude account service cleanup...')
+    
+    if (this._cleanupTimer) {
+      try {
+        clearInterval(this._cleanupTimer)
+        this._cleanupTimer = null
+        logger.debug('✅ Claude service cleanup timer cleared')
+      } catch (error) {
+        logger.error('❌ Error clearing Claude service cleanup timer:', error.message)
+      }
+    }
+    
+    // 清理缓存
+    if (this._decryptCache) {
+      try {
+        const stats = this._decryptCache.getStats()
+        this._decryptCache.clear()
+        logger.debug(`✅ Claude service decrypt cache cleared (had ${stats.size} items)`)
+      } catch (error) {
+        logger.error('❌ Error clearing Claude service decrypt cache:', error.message)
+      }
+    }
+    
+    // 重置加密密钥缓存
+    this._encryptionKeyCache = null
+    
+    logger.success('✅ Claude account service cleanup completed')
   }
 }
 

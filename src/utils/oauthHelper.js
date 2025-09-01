@@ -153,38 +153,48 @@ async function exchangeCodeForTokens(authorizationCode, codeVerifier, state, pro
     state
   }
 
-  // 创建代理agent
-  const agent = createProxyAgent(proxyConfig)
+  logger.debug('🔄 Attempting OAuth token exchange', {
+    url: OAUTH_CONFIG.TOKEN_URL,
+    codeLength: cleanedCode.length,
+    codePrefix: `${cleanedCode.substring(0, 10)}...`,
+    hasProxy: !!proxyConfig,
+    proxyType: proxyConfig?.type || 'none'
+  })
+
+  // 创建axios配置
+  const axiosConfig = {
+    headers: {
+      'Content-Type': 'application/json',
+      'User-Agent': 'claude-cli/1.0.56 (external, cli)',
+      Accept: 'application/json, text/plain, */*',
+      'Accept-Language': 'en-US,en;q=0.9',
+      Referer: 'https://claude.ai/',
+      Origin: 'https://claude.ai'
+    },
+    timeout: 30000
+  }
+
+  // 如果有代理配置，创建agent（OAuth阶段没有accountId，使用传统方式）
+  if (proxyConfig) {
+    const agent = ProxyHelper.createProxyAgent(proxyConfig)
+    if (agent) {
+      axiosConfig.httpsAgent = agent
+      logger.info(`🌐 Using proxy for OAuth token exchange: ${ProxyHelper.maskProxyInfo(proxyConfig)}`)
+    } else {
+      logger.warn('🌐 Failed to create proxy agent for OAuth token exchange')
+    }
+  } else {
+    logger.debug('🌐 No proxy configured for OAuth token exchange')
+  }
+
+  // 添加代理监控
+  ProxyHelper.addProxyMonitoring(axiosConfig, proxyConfig)
 
   try {
-    if (agent) {
-      logger.info(
-        `🌐 Using proxy for OAuth token exchange: ${ProxyHelper.maskProxyInfo(proxyConfig)}`
-      )
-    } else {
-      logger.debug('🌐 No proxy configured for OAuth token exchange')
-    }
+    const response = await axios.post(OAUTH_CONFIG.TOKEN_URL, params, axiosConfig)
 
-    logger.debug('🔄 Attempting OAuth token exchange', {
-      url: OAUTH_CONFIG.TOKEN_URL,
-      codeLength: cleanedCode.length,
-      codePrefix: `${cleanedCode.substring(0, 10)}...`,
-      hasProxy: !!proxyConfig,
-      proxyType: proxyConfig?.type || 'none'
-    })
-
-    const response = await axios.post(OAUTH_CONFIG.TOKEN_URL, params, {
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': 'claude-cli/1.0.56 (external, cli)',
-        Accept: 'application/json, text/plain, */*',
-        'Accept-Language': 'en-US,en;q=0.9',
-        Referer: 'https://claude.ai/',
-        Origin: 'https://claude.ai'
-      },
-      httpsAgent: agent,
-      timeout: 30000
-    })
+    // 记录代理连接耗时
+    ProxyHelper.logProxyConnectTime(response)
 
     // 记录完整的响应数据到专门的认证详细日志
     logger.authDetail('OAuth token exchange response', response.data)
@@ -236,6 +246,9 @@ async function exchangeCodeForTokens(authorizationCode, codeVerifier, state, pro
 
     return result
   } catch (error) {
+    // 记录代理连接错误（如果相关）
+    ProxyHelper.logProxyConnectError(error)
+    
     // 处理axios错误响应
     if (error.response) {
       // 服务器返回了错误状态码
@@ -358,38 +371,47 @@ async function exchangeSetupTokenCode(authorizationCode, codeVerifier, state, pr
     expires_in: 31536000 // Setup Token 可以设置较长的过期时间
   }
 
-  // 创建代理agent
-  const agent = createProxyAgent(proxyConfig)
+  logger.debug('🔄 Attempting Setup Token exchange', {
+    url: OAUTH_CONFIG.TOKEN_URL,
+    codeLength: cleanedCode.length,
+    codePrefix: `${cleanedCode.substring(0, 10)}...`,
+    hasProxy: !!proxyConfig,
+    proxyType: proxyConfig?.type || 'none'
+  })
+
+  // 创建axios配置
+  const axiosConfig = {
+    headers: {
+      'User-Agent': 'claude-cli/1.0.56 (external, cli)',
+      Accept: 'application/json, text/plain, */*',
+      'Accept-Language': 'en-US,en;q=0.9',
+      Referer: 'https://claude.ai/',
+      Origin: 'https://claude.ai'
+    },
+    timeout: 30000
+  }
+
+  // 如果有代理配置，创建agent（OAuth阶段没有accountId，使用传统方式）
+  if (proxyConfig) {
+    const agent = ProxyHelper.createProxyAgent(proxyConfig)
+    if (agent) {
+      axiosConfig.httpsAgent = agent
+      logger.info(`🌐 Using proxy for Setup Token exchange: ${ProxyHelper.maskProxyInfo(proxyConfig)}`)
+    } else {
+      logger.warn('🌐 Failed to create proxy agent for Setup Token exchange')
+    }
+  } else {
+    logger.debug('🌐 No proxy configured for Setup Token exchange')
+  }
+
+  // 添加代理监控
+  ProxyHelper.addProxyMonitoring(axiosConfig, proxyConfig)
 
   try {
-    if (agent) {
-      logger.info(
-        `🌐 Using proxy for Setup Token exchange: ${ProxyHelper.maskProxyInfo(proxyConfig)}`
-      )
-    } else {
-      logger.debug('🌐 No proxy configured for Setup Token exchange')
-    }
+    const response = await axios.post(OAUTH_CONFIG.TOKEN_URL, params, axiosConfig)
 
-    logger.debug('🔄 Attempting Setup Token exchange', {
-      url: OAUTH_CONFIG.TOKEN_URL,
-      codeLength: cleanedCode.length,
-      codePrefix: `${cleanedCode.substring(0, 10)}...`,
-      hasProxy: !!proxyConfig,
-      proxyType: proxyConfig?.type || 'none'
-    })
-
-    const response = await axios.post(OAUTH_CONFIG.TOKEN_URL, params, {
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': 'claude-cli/1.0.56 (external, cli)',
-        Accept: 'application/json, text/plain, */*',
-        'Accept-Language': 'en-US,en;q=0.9',
-        Referer: 'https://claude.ai/',
-        Origin: 'https://claude.ai'
-      },
-      httpsAgent: agent,
-      timeout: 30000
-    })
+    // 记录代理连接耗时
+    ProxyHelper.logProxyConnectTime(response)
 
     // 记录完整的响应数据到专门的认证详细日志
     logger.authDetail('Setup Token exchange response', response.data)
@@ -440,6 +462,9 @@ async function exchangeSetupTokenCode(authorizationCode, codeVerifier, state, pr
 
     return result
   } catch (error) {
+    // 记录代理连接错误（如果相关）
+    ProxyHelper.logProxyConnectError(error)
+    
     // 使用与标准OAuth相同的错误处理逻辑
     if (error.response) {
       const { status } = error.response

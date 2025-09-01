@@ -18,14 +18,19 @@ class BedrockAccountService {
     // 🔄 解密结果缓存，提高解密性能
     this._decryptCache = new LRUCache(500)
 
+    // 📝 定时器管理
+    this._cleanupTimer = null
+
     // 🧹 定期清理缓存（每10分钟）
-    setInterval(
+    this._cleanupTimer = setInterval(
       () => {
         this._decryptCache.cleanup()
         logger.info('🧹 Bedrock decrypt cache cleanup completed', this._decryptCache.getStats())
       },
       10 * 60 * 1000
     )
+
+    logger.debug('🎯 Bedrock account service initialized with resource cleanup support')
   }
 
   // 🏢 创建Bedrock账户
@@ -474,6 +479,40 @@ class BedrockAccountService {
       logger.error('❌ 获取Bedrock账户统计失败', error)
       return { success: false, error: error.message }
     }
+  }
+
+  /**
+   * 🧹 清理服务资源
+   * 在应用关闭时调用，清理定时器防止内存泄漏
+   */
+  cleanup() {
+    logger.info('🧹 Starting Bedrock account service cleanup...')
+    
+    if (this._cleanupTimer) {
+      try {
+        clearInterval(this._cleanupTimer)
+        this._cleanupTimer = null
+        logger.debug('✅ Bedrock service cleanup timer cleared')
+      } catch (error) {
+        logger.error('❌ Error clearing Bedrock service cleanup timer:', error.message)
+      }
+    }
+    
+    // 清理缓存
+    if (this._decryptCache) {
+      try {
+        const stats = this._decryptCache.getStats()
+        this._decryptCache.clear()
+        logger.debug(`✅ Bedrock service decrypt cache cleared (had ${stats.size} items)`)
+      } catch (error) {
+        logger.error('❌ Error clearing Bedrock service decrypt cache:', error.message)
+      }
+    }
+    
+    // 重置加密密钥缓存
+    this._encryptionKeyCache = null
+    
+    logger.success('✅ Bedrock account service cleanup completed')
   }
 }
 

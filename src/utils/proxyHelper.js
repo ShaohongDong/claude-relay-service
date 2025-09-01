@@ -2,17 +2,47 @@ const { SocksProxyAgent } = require('socks-proxy-agent')
 const { HttpsProxyAgent } = require('https-proxy-agent')
 const logger = require('./logger')
 const config = require('../../config/config')
+const { performance } = require('perf_hooks')
+
+// 懒加载全局连接池管理器，避免循环依赖
+let globalConnectionPoolManager = null
+function getConnectionPoolManager() {
+  if (!globalConnectionPoolManager) {
+    globalConnectionPoolManager = require('../services/globalConnectionPoolManager')
+  }
+  return globalConnectionPoolManager
+}
 
 /**
- * 统一的代理创建工具
- * 支持 SOCKS5 和 HTTP/HTTPS 代理，可配置 IPv4/IPv6
+ * 代理助手 - 简化版
+ * 主要功能：
+ * - 从连接池获取预热连接
+ * - 代理连接监控和日志记录
+ * - 代理配置验证和工具方法
  */
 class ProxyHelper {
   /**
-   * 创建代理 Agent
+   * 从连接池获取账户的预热连接（主要接口）
+   * @param {string} accountId - 账户ID
+   * @returns {object} 连接对象，包含httpsAgent
+   */
+  static getConnectionForAccount(accountId) {
+    try {
+      const poolManager = getConnectionPoolManager()
+      const connection = poolManager.getConnectionForAccount(accountId)
+
+      logger.debug(`🔗 从连接池获取连接: 账户 ${accountId}, 连接 ${connection.connectionId}`)
+      return connection
+    } catch (error) {
+      logger.error(`❌ 连接池获取连接失败: 账户 ${accountId} - ${error.message}`)
+      throw new Error(`Failed to get connection for account ${accountId}: ${error.message}`)
+    }
+  }
+
+  /**
+   * 创建代理 Agent（保留用于向后兼容和降级）
    * @param {object|string|null} proxyConfig - 代理配置对象或 JSON 字符串
    * @param {object} options - 额外选项
-   * @param {boolean|number} options.useIPv4 - 是否使用 IPv4 (true=IPv4, false=IPv6, undefined=auto)
    * @returns {Agent|null} 代理 Agent 实例或 null
    */
   static createProxyAgent(proxyConfig, options = {}) {
@@ -64,6 +94,90 @@ class ProxyHelper {
     } catch (error) {
       logger.warn('⚠️ Failed to create proxy agent:', error.message)
       return null
+    }
+  }
+
+  /**
+   * 为axios请求添加代理连接时间监控
+   * @param {object} axiosConfig - axios配置对象
+   * @param {object|string|null} proxyConfig - 代理配置（仅用于显示）
+   * @param {object} options - 额外选项
+   * @returns {object} 增强的axios配置对象
+   */
+  static addProxyMonitoring(axiosConfig, proxyConfig, options = {}) {
+    const proxyInfo = ProxyHelper.maskProxyInfo(proxyConfig)
+
+    // 记录请求开始时间
+    const originalStartTime = performance.now()
+
+    // 创建一个包装的请求变换器来记录开始时间
+    const originalTransformRequest = axiosConfig.transformRequest || []
+    axiosConfig.transformRequest = [
+      function recordStartTime(data, headers) {
+        // 在headers中记录开始时间和代理信息
+        headers['X-Proxy-Start-Time'] = originalStartTime.toString()
+        headers['X-Proxy-Info'] = proxyInfo
+
+        if (Array.isArray(originalTransformRequest)) {
+          return originalTransformRequest.reduce(
+            (result, transformer) =>
+              typeof transformer === 'function' ? transformer(result, headers) : result,
+            data
+          )
+        } else if (typeof originalTransformRequest === 'function') {
+          return originalTransformRequest(data, headers)
+        }
+        return data
+      }
+    ]
+
+    return axiosConfig
+  }
+
+  /**
+   * 记录代理连接耗时（用于axios响应拦截器）
+   * @param {object} response - axios响应对象
+   */
+  static logProxyConnectTime(response) {
+    try {
+      const startTimeHeader = response.config.headers?.['X-Proxy-Start-Time']
+      const proxyInfoHeader = response.config.headers?.['X-Proxy-Info']
+
+      if (startTimeHeader && proxyInfoHeader) {
+        const startTime = parseFloat(startTimeHeader)
+        const connectTime = performance.now() - startTime
+
+        // 连接耗时超过1秒时使用warn级别，否则使用debug级别
+        if (connectTime > 1000) {
+          logger.warn(`🔗 代理连接耗时较长 - ${proxyInfoHeader} - 总耗时: ${connectTime.toFixed(2)}ms`)
+        } else {
+          logger.debug(`🔗 代理连接成功 - ${proxyInfoHeader} - 总耗时: ${connectTime.toFixed(2)}ms`)
+        }
+      }
+    } catch (error) {
+      logger.debug('Failed to log proxy connect time:', error.message)
+    }
+  }
+
+  /**
+   * 记录代理连接错误
+   * @param {Error} error - axios错误对象
+   */
+  static logProxyConnectError(error) {
+    try {
+      const startTimeHeader = error.config?.headers?.['X-Proxy-Start-Time']
+      const proxyInfoHeader = error.config?.headers?.['X-Proxy-Info']
+
+      if (startTimeHeader && proxyInfoHeader) {
+        const startTime = parseFloat(startTimeHeader)
+        const connectTime = performance.now() - startTime
+
+        logger.warn(
+          `🔗 代理连接失败 - ${proxyInfoHeader} - 耗时: ${connectTime.toFixed(2)}ms - 错误: ${error.message}`
+        )
+      }
+    } catch (logError) {
+      logger.debug('Failed to log proxy connect error:', logError.message)
     }
   }
 
@@ -197,15 +311,37 @@ class ProxyHelper {
   }
 
   /**
-   * 创建代理 Agent（兼容旧的函数接口）
-   * @param {object|string|null} proxyConfig - 代理配置
-   * @param {boolean} useIPv4 - 是否使用 IPv4
-   * @returns {Agent|null} 代理 Agent 实例或 null
-   * @deprecated 使用 createProxyAgent 替代
+   * 获取连接池状态（调试和监控用）
+   * @param {string} accountId - 账户ID（可选，获取特定账户状态）
+   * @returns {object} 连接池状态信息
    */
-  static createProxy(proxyConfig, useIPv4 = true) {
-    logger.warn('⚠️ ProxyHelper.createProxy is deprecated, use createProxyAgent instead')
-    return ProxyHelper.createProxyAgent(proxyConfig, { useIPv4 })
+  static getConnectionPoolStatus(accountId = null) {
+    try {
+      const poolManager = getConnectionPoolManager()
+
+      if (accountId) {
+        return poolManager.getPoolStatus(accountId)
+      } else {
+        return poolManager.getAllPoolStatus()
+      }
+    } catch (error) {
+      logger.error('❌ 获取连接池状态失败:', error.message)
+      return null
+    }
+  }
+
+  /**
+   * 执行连接池健康检查
+   * @returns {object} 健康检查结果
+   */
+  static async performHealthCheck() {
+    try {
+      const poolManager = getConnectionPoolManager()
+      return await poolManager.performHealthCheck()
+    } catch (error) {
+      logger.error('❌ 连接池健康检查失败:', error.message)
+      return null
+    }
   }
 }
 

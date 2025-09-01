@@ -28,6 +28,9 @@ let _encryptionKeyCache = null
 // 🔄 解密结果缓存，提高解密性能
 const decryptCache = new LRUCache(500)
 
+// 📝 定时器管理
+let _cleanupTimer = null
+
 // 生成加密密钥（使用与 claudeAccountService 相同的方法）
 function generateEncryptionKey() {
   if (!_encryptionKeyCache) {
@@ -97,13 +100,15 @@ function decrypt(text) {
 }
 
 // 🧹 定期清理缓存（每10分钟）
-setInterval(
+_cleanupTimer = setInterval(
   () => {
     decryptCache.cleanup()
     logger.info('🧹 OpenAI decrypt cache cleanup completed', decryptCache.getStats())
   },
   10 * 60 * 1000
 )
+
+logger.debug('🎯 OpenAI account service initialized with resource cleanup support')
 
 // 刷新访问令牌
 async function refreshAccessToken(refreshToken, proxy = null) {
@@ -712,6 +717,40 @@ async function updateAccountUsage(accountId, tokens = 0) {
 // 为了兼容性，保留recordUsage作为updateAccountUsage的别名
 const recordUsage = updateAccountUsage
 
+/**
+ * 🧹 清理服务资源
+ * 在应用关闭时调用，清理定时器防止内存泄漏
+ */
+function cleanup() {
+  logger.info('🧹 Starting OpenAI account service cleanup...')
+  
+  if (_cleanupTimer) {
+    try {
+      clearInterval(_cleanupTimer)
+      _cleanupTimer = null
+      logger.debug('✅ OpenAI service cleanup timer cleared')
+    } catch (error) {
+      logger.error('❌ Error clearing OpenAI service cleanup timer:', error.message)
+    }
+  }
+  
+  // 清理缓存
+  if (decryptCache) {
+    try {
+      const stats = decryptCache.getStats()
+      decryptCache.clear()
+      logger.debug(`✅ OpenAI service decrypt cache cleared (had ${stats.size} items)`)
+    } catch (error) {
+      logger.error('❌ Error clearing OpenAI service decrypt cache:', error.message)
+    }
+  }
+  
+  // 重置加密密钥缓存
+  _encryptionKeyCache = null
+  
+  logger.success('✅ OpenAI account service cleanup completed')
+}
+
 module.exports = {
   createAccount,
   getAccount,
@@ -729,5 +768,6 @@ module.exports = {
   encrypt,
   decrypt,
   generateEncryptionKey,
-  decryptCache // 暴露缓存对象以便测试和监控
+  decryptCache, // 暴露缓存对象以便测试和监控
+  cleanup // 清理函数
 }

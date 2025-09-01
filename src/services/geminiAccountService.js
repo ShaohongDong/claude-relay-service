@@ -33,6 +33,9 @@ let _encryptionKeyCache = null
 // 🔄 解密结果缓存，提高解密性能
 const decryptCache = new LRUCache(500)
 
+// 📝 定时器管理
+let _cleanupTimer = null
+
 // 生成加密密钥（使用与 claudeAccountService 相同的方法）
 function generateEncryptionKey() {
   if (!_encryptionKeyCache) {
@@ -102,13 +105,15 @@ function decrypt(text) {
 }
 
 // 🧹 定期清理缓存（每10分钟）
-setInterval(
+_cleanupTimer = setInterval(
   () => {
     decryptCache.cleanup()
     logger.info('🧹 Gemini decrypt cache cleanup completed', decryptCache.getStats())
   },
   10 * 60 * 1000
 )
+
+logger.debug('🎯 Gemini account service initialized with resource cleanup support')
 
 // 创建 OAuth2 客户端（支持代理配置）
 function createOAuth2Client(redirectUri = null, proxyConfig = null) {
@@ -1343,6 +1348,40 @@ async function generateContentStream(
   return response.data // 返回流对象
 }
 
+/**
+ * 🧹 清理服务资源
+ * 在应用关闭时调用，清理定时器防止内存泄漏
+ */
+function cleanup() {
+  logger.info('🧹 Starting Gemini account service cleanup...')
+  
+  if (_cleanupTimer) {
+    try {
+      clearInterval(_cleanupTimer)
+      _cleanupTimer = null
+      logger.debug('✅ Gemini service cleanup timer cleared')
+    } catch (error) {
+      logger.error('❌ Error clearing Gemini service cleanup timer:', error.message)
+    }
+  }
+  
+  // 清理缓存
+  if (decryptCache) {
+    try {
+      const stats = decryptCache.getStats()
+      decryptCache.clear()
+      logger.debug(`✅ Gemini service decrypt cache cleared (had ${stats.size} items)`)
+    } catch (error) {
+      logger.error('❌ Error clearing Gemini service decrypt cache:', error.message)
+    }
+  }
+  
+  // 重置加密密钥缓存
+  _encryptionKeyCache = null
+  
+  logger.success('✅ Gemini account service cleanup completed')
+}
+
 module.exports = {
   generateAuthUrl,
   pollAuthorizationStatus,
@@ -1372,5 +1411,6 @@ module.exports = {
   generateContent,
   generateContentStream,
   OAUTH_CLIENT_ID,
-  OAUTH_SCOPES
+  OAUTH_SCOPES,
+  cleanup
 }

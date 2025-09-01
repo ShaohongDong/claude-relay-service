@@ -746,7 +746,7 @@ is_service_running() {
 # 等待进程完全停止
 wait_for_process_stop() {
     local pid=$1
-    local timeout=${2:-25}  # 默认25秒超时，给应用程序20秒优雅关闭时间
+    local timeout=${2:-40}  # 默认40秒超时，给应用程序35秒优雅关闭时间
     local count=0
     
     while [ $count -lt $timeout ]; do
@@ -765,7 +765,7 @@ wait_for_process_stop() {
 # 优雅关闭进程
 graceful_kill() {
     local pid=$1
-    local timeout=${2:-25}  # 默认25秒超时，与应用程序20秒超时配套
+    local timeout=${2:-40}  # 默认40秒超时，与应用程序35秒超时配套
     
     if ! kill -0 $pid 2>/dev/null; then
         return 0  # 进程已不存在

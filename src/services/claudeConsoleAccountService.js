@@ -23,8 +23,11 @@ class ClaudeConsoleAccountService {
     // 🔄 解密结果缓存，提高解密性能
     this._decryptCache = new LRUCache(500)
 
+    // 📝 定时器管理
+    this._cleanupTimer = null
+
     // 🧹 定期清理缓存（每10分钟）
-    setInterval(
+    this._cleanupTimer = setInterval(
       () => {
         this._decryptCache.cleanup()
         logger.info(
@@ -34,6 +37,8 @@ class ClaudeConsoleAccountService {
       },
       10 * 60 * 1000
     )
+
+    logger.debug('🎯 Claude Console account service initialized with resource cleanup support')
   }
 
   // 🏢 创建Claude Console账户
@@ -818,6 +823,40 @@ class ClaudeConsoleAccountService {
 
     // 返回映射后的模型，如果不存在则返回原模型
     return modelMapping[requestedModel] || requestedModel
+  }
+
+  /**
+   * 🧹 清理服务资源
+   * 在应用关闭时调用，清理定时器防止内存泄漏
+   */
+  cleanup() {
+    logger.info('🧹 Starting Claude Console account service cleanup...')
+    
+    if (this._cleanupTimer) {
+      try {
+        clearInterval(this._cleanupTimer)
+        this._cleanupTimer = null
+        logger.debug('✅ Claude Console service cleanup timer cleared')
+      } catch (error) {
+        logger.error('❌ Error clearing Claude Console service cleanup timer:', error.message)
+      }
+    }
+    
+    // 清理缓存
+    if (this._decryptCache) {
+      try {
+        const stats = this._decryptCache.getStats()
+        this._decryptCache.clear()
+        logger.debug(`✅ Claude Console service decrypt cache cleared (had ${stats.size} items)`)
+      } catch (error) {
+        logger.error('❌ Error clearing Claude Console service decrypt cache:', error.message)
+      }
+    }
+    
+    // 重置加密密钥缓存
+    this._encryptionKeyCache = null
+    
+    logger.success('✅ Claude Console account service cleanup completed')
   }
 }
 

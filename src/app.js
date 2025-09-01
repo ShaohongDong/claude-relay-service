@@ -39,6 +39,11 @@ class Application {
     this.app = express()
     this.server = null
     this.cleanupInterval = null // 保存清理任务定时器
+    
+    // 连接池系统组件
+    this.globalConnectionPoolManager = null
+    this.hybridConnectionManager = null
+    this.connectionLifecycleManager = null
   }
 
   async initialize() {
@@ -75,6 +80,9 @@ class Application {
       logger.info('🕐 Initializing Claude account session windows...')
       const claudeAccountService = require('./services/claudeAccountService')
       await claudeAccountService.initializeSessionWindows()
+
+      // 🔗 初始化连接池系统
+      await this.initializeConnectionPoolSystem()
 
       // 超早期拦截 /admin-next/ 请求 - 在所有中间件之前
       this.app.use((req, res, next) => {
@@ -257,9 +265,10 @@ class Application {
           const timer = logger.timer('health-check')
 
           // 检查各个组件健康状态
-          const [redisHealth, loggerHealth] = await Promise.all([
+          const [redisHealth, loggerHealth, connectionPoolHealth] = await Promise.all([
             this.checkRedisHealth(),
-            this.checkLoggerHealth()
+            this.checkLoggerHealth(),
+            this.checkConnectionPoolHealth()
           ])
 
           const memory = process.memoryUsage()
@@ -298,7 +307,8 @@ class Application {
             },
             components: {
               redis: redisHealth,
-              logger: loggerHealth
+              logger: loggerHealth,
+              connectionPools: connectionPoolHealth
             },
             stats: logger.getStats()
           }
@@ -330,6 +340,38 @@ class Application {
         } catch (error) {
           logger.error('❌ Metrics collection failed:', error)
           res.status(500).json({ error: 'Failed to collect metrics' })
+        }
+      })
+
+      // 🔗 连接池状态端点
+      this.app.get('/connection-pools', async (req, res) => {
+        try {
+          if (!this.globalConnectionPoolManager) {
+            return res.json({
+              status: 'not_initialized',
+              message: 'Connection pool system not initialized',
+              timestamp: new Date().toISOString()
+            })
+          }
+
+          const poolStatus = this.globalConnectionPoolManager.getAllPoolStatus()
+          const hybridStatus = this.hybridConnectionManager?.getMonitoringReport() || null
+          const lifecycleStatus = this.connectionLifecycleManager?.getStatusReport() || null
+
+          res.json({
+            status: 'active',
+            poolManager: poolStatus,
+            hybridManager: hybridStatus,
+            lifecycleManager: lifecycleStatus,
+            timestamp: new Date().toISOString()
+          })
+        } catch (error) {
+          logger.error('❌ Connection pool status collection failed:', error)
+          res.status(500).json({ 
+            status: 'error',
+            error: error.message,
+            timestamp: new Date().toISOString()
+          })
         }
       })
 
@@ -391,6 +433,187 @@ class Application {
     }
   }
 
+  // 🔗 初始化连接池系统
+  async initializeConnectionPoolSystem() {
+    try {
+      logger.info('🔄 Initializing connection pool system...')
+
+      // 初始化全局连接池管理器
+      const globalConnectionPoolManager = require('./services/globalConnectionPoolManager')
+      this.globalConnectionPoolManager = globalConnectionPoolManager
+      
+      logger.info('🔗 Starting global connection pool manager...')
+      await this.globalConnectionPoolManager.initializeAllPools()
+
+      // 初始化混合连接管理器
+      const HybridConnectionManager = require('./services/hybridConnectionManager')
+      this.hybridConnectionManager = new HybridConnectionManager(this.globalConnectionPoolManager)
+      
+      logger.info('🔄 Starting hybrid connection manager...')
+      await this.hybridConnectionManager.start()
+
+      // 初始化连接生命周期管理器
+      const ConnectionLifecycleManager = require('./services/connectionLifecycleManager')
+      this.connectionLifecycleManager = new ConnectionLifecycleManager()
+      
+      logger.info('♻️ Starting connection lifecycle manager...')
+      this.connectionLifecycleManager.start()
+
+      // 设置组件间的事件连接
+      this.setupConnectionPoolEvents()
+
+      logger.success('✅ Connection pool system initialized successfully')
+      
+      // 打印系统状态摘要
+      const summary = this.globalConnectionPoolManager.getSummary()
+      logger.info(`📊 Connection Pool Summary: ${summary.totalPools} pools, ${summary.totalConnections} connections`)
+      
+    } catch (error) {
+      logger.error('❌ Failed to initialize connection pool system:', error.message)
+      
+      // 连接池系统初始化失败不应阻止应用启动，但需要记录错误
+      logger.warn('⚠️ Application will continue without connection pool optimization')
+      
+      // 清理已初始化的组件
+      await this.cleanupConnectionPoolSystem()
+    }
+  }
+
+  // 🎧 设置连接池系统事件连接
+  setupConnectionPoolEvents() {
+    if (!this.hybridConnectionManager || !this.connectionLifecycleManager) {
+      return
+    }
+
+    // 混合管理器 -> 生命周期管理器
+    this.hybridConnectionManager.on('connection:established', (data) => {
+      this.connectionLifecycleManager.registerConnection(
+        data.accountId, 
+        data.connectionId, 
+        { latency: data.latency }
+      )
+    })
+
+    this.hybridConnectionManager.on('connection:lost', (data) => {
+      this.connectionLifecycleManager.unregisterConnection(data.connectionId, data.reason)
+    })
+
+    this.hybridConnectionManager.on('connection:error', (data) => {
+      this.connectionLifecycleManager.updateConnectionUsage(data.connectionId, { error: true })
+    })
+
+    // 生命周期管理器 -> 全局池管理器
+    this.connectionLifecycleManager.on('connection:recreation:requested', async (data) => {
+      try {
+        // 通知全局池管理器重建连接
+        const pool = this.globalConnectionPoolManager.pools?.get(data.accountId)
+        if (pool && typeof pool.recreateConnection === 'function') {
+          await pool.recreateConnection(data.connectionId)
+          logger.info(`🔄 Connection recreated: ${data.connectionId} (${data.reason})`)
+        }
+      } catch (error) {
+        logger.error(`❌ Failed to recreate connection ${data.connectionId}: ${error.message}`)
+      }
+    })
+
+    logger.debug('🎧 Connection pool system events connected')
+  }
+
+  // 🧹 清理连接池系统
+  async cleanupConnectionPoolSystem() {
+    logger.info('🧹 Cleaning up connection pool system...')
+
+    // 获取清理前的状态统计
+    let preCleanupStats = {
+      pools: 0,
+      connections: 0,
+      managers: 0
+    }
+
+    try {
+      if (this.globalConnectionPoolManager) {
+        const summary = this.globalConnectionPoolManager.getSummary()
+        preCleanupStats.pools = summary.totalPools || 0
+        preCleanupStats.connections = summary.totalConnections || 0
+        logger.info(`📊 Pre-cleanup: ${preCleanupStats.pools} pools, ${preCleanupStats.connections} connections`)
+      }
+    } catch (error) {
+      logger.warn('⚠️ Could not get pre-cleanup stats:', error.message)
+    }
+
+    let cleanupResults = {
+      lifecycleManager: false,
+      hybridManager: false,
+      globalPoolManager: false
+    }
+
+    // 清理连接生命周期管理器
+    if (this.connectionLifecycleManager) {
+      preCleanupStats.managers++
+      try {
+        logger.info('♻️ Stopping connection lifecycle manager...')
+        this.connectionLifecycleManager.stop()
+        cleanupResults.lifecycleManager = true
+        logger.info('♻️ Connection lifecycle manager stopped successfully')
+      } catch (error) {
+        logger.error('❌ Error stopping connection lifecycle manager:', error.message)
+      }
+    } else {
+      logger.debug('♻️ Connection lifecycle manager was not initialized')
+    }
+
+    // 清理混合连接管理器
+    if (this.hybridConnectionManager) {
+      preCleanupStats.managers++
+      try {
+        logger.info('🔄 Stopping hybrid connection manager...')
+        this.hybridConnectionManager.stop()
+        cleanupResults.hybridManager = true
+        logger.info('🔄 Hybrid connection manager stopped successfully')
+      } catch (error) {
+        logger.error('❌ Error stopping hybrid connection manager:', error.message)
+      }
+    } else {
+      logger.debug('🔄 Hybrid connection manager was not initialized')
+    }
+
+    // 清理全局连接池管理器
+    if (this.globalConnectionPoolManager) {
+      preCleanupStats.managers++
+      try {
+        logger.info('🔗 Destroying global connection pool manager...')
+        this.globalConnectionPoolManager.destroy()
+        cleanupResults.globalPoolManager = true
+        logger.info('🔗 Global connection pool manager destroyed successfully')
+      } catch (error) {
+        logger.error('❌ Error destroying global connection pool manager:', error.message)
+      }
+    } else {
+      logger.debug('🔗 Global connection pool manager was not initialized')
+    }
+
+    // 重置引用
+    this.globalConnectionPoolManager = null
+    this.hybridConnectionManager = null
+    this.connectionLifecycleManager = null
+
+    // 生成清理报告
+    const successfulCleanups = Object.values(cleanupResults).filter(Boolean).length
+    const totalComponents = Object.keys(cleanupResults).length
+
+    logger.info(`📋 Connection pool cleanup summary:`)
+    logger.info(`   - Managers initialized: ${preCleanupStats.managers}`)
+    logger.info(`   - Connection pools: ${preCleanupStats.pools}`)
+    logger.info(`   - Active connections: ${preCleanupStats.connections}`)
+    logger.info(`   - Components cleaned successfully: ${successfulCleanups}/${totalComponents}`)
+
+    if (successfulCleanups === totalComponents) {
+      logger.success('✅ Connection pool system cleanup completed successfully')
+    } else {
+      logger.warn(`⚠️ Connection pool system cleanup completed with ${totalComponents - successfulCleanups} failures`)
+    }
+  }
+
   // 🔍 端口可用性检查
   async checkPortAvailability(port, host = '0.0.0.0') {
     return new Promise((resolve) => {
@@ -449,6 +672,50 @@ class Application {
     }
   }
 
+  // 🔗 连接池健康检查
+  async checkConnectionPoolHealth() {
+    try {
+      if (!this.globalConnectionPoolManager) {
+        return {
+          status: 'not_initialized',
+          message: 'Connection pool system not initialized'
+        }
+      }
+
+      const healthResult = await this.globalConnectionPoolManager.performHealthCheck()
+      const summary = this.globalConnectionPoolManager.getSummary()
+      
+      let status = 'healthy'
+      if (healthResult.unhealthyPools > 0) {
+        if (healthResult.unhealthyPools >= healthResult.totalPools) {
+          status = 'critical' // 所有池都不健康
+        } else if (healthResult.unhealthyPools / healthResult.totalPools > 0.5) {
+          status = 'degraded' // 50%以上池不健康
+        } else {
+          status = 'warning' // 部分池不健康
+        }
+      }
+
+      return {
+        status,
+        totalPools: healthResult.totalPools,
+        healthyPools: healthResult.healthyPools,
+        unhealthyPools: healthResult.unhealthyPools,
+        totalConnections: healthResult.totalConnections,
+        isInitialized: summary.isInitialized,
+        hybridManager: this.hybridConnectionManager ? 
+          this.hybridConnectionManager.getManagerStatus() : null,
+        lifecycleManager: this.connectionLifecycleManager ?
+          this.connectionLifecycleManager.getLifecycleStats() : null
+      }
+    } catch (error) {
+      return {
+        status: 'error',
+        error: error.message
+      }
+    }
+  }
+
   async start() {
     try {
       await this.initialize()
@@ -476,6 +743,7 @@ class Application {
         logger.info(`⚙️  Admin API: http://${config.server.host}:${config.server.port}/admin`)
         logger.info(`🏥 Health check: http://${config.server.host}:${config.server.port}/health`)
         logger.info(`📊 Metrics: http://${config.server.host}:${config.server.port}/metrics`)
+        logger.info(`🔗 Connection pools: http://${config.server.host}:${config.server.port}/connection-pools`)
       })
 
       // 🚨 处理服务器错误
@@ -493,10 +761,11 @@ class Application {
         process.exit(1)
       })
 
-      const serverTimeout = 600000 // 默认10分钟
+      const serverTimeout = 30000 // 30秒超时，支持快速优雅关闭
       this.server.timeout = serverTimeout
       this.server.keepAliveTimeout = serverTimeout + 5000 // keepAlive 稍长一点
-      logger.info(`⏱️  Server timeout set to ${serverTimeout}ms (${serverTimeout / 1000}s)`)
+      this.server.headersTimeout = serverTimeout + 10000 // 请求头超时稍长
+      logger.info(`⏱️  Server timeout set to ${serverTimeout}ms (${serverTimeout / 1000}s) - optimized for graceful shutdown`)
 
       // 🔄 定期清理任务
       this.startCleanupTasks()
@@ -575,6 +844,7 @@ class Application {
 
   setupGracefulShutdown() {
     const shutdown = async (signal) => {
+      const shutdownStart = Date.now()
       logger.info(`🛑 Received ${signal}, starting graceful shutdown...`)
 
       // 清理定时器（防止阻塞进程退出）
@@ -584,33 +854,169 @@ class Application {
       }
 
       if (this.server) {
+        logger.info('🚪 Closing HTTP server...')
         this.server.close(async () => {
-          logger.info('🚪 HTTP server closed')
+          const serverCloseTime = Date.now() - shutdownStart
+          logger.info(`🚪 HTTP server closed (${serverCloseTime}ms)`)
+
+          // 清理连接池系统
+          logger.info('🔗 Cleaning up connection pool system...')
+          const poolCleanupStart = Date.now()
+          try {
+            await this.cleanupConnectionPoolSystem()
+            const poolCleanupTime = Date.now() - poolCleanupStart
+            logger.info(`🔗 Connection pool system cleaned up (${poolCleanupTime}ms)`)
+          } catch (error) {
+            const poolCleanupTime = Date.now() - poolCleanupStart
+            logger.error(`❌ Error cleaning up connection pool system (${poolCleanupTime}ms):`, error)
+          }
 
           // 清理 pricing service 的文件监听器
+          logger.info('💰 Cleaning up pricing service...')
+          const pricingCleanupStart = Date.now()
           try {
             pricingService.cleanup()
-            logger.info('💰 Pricing service cleaned up')
+            const pricingCleanupTime = Date.now() - pricingCleanupStart
+            logger.info(`💰 Pricing service cleaned up (${pricingCleanupTime}ms)`)
           } catch (error) {
-            logger.error('❌ Error cleaning up pricing service:', error)
+            const pricingCleanupTime = Date.now() - pricingCleanupStart
+            logger.error(`❌ Error cleaning up pricing service (${pricingCleanupTime}ms):`, error)
           }
 
+          // 断开Redis连接
+          logger.info('📦 Disconnecting from Redis...')
+          const redisDisconnectStart = Date.now()
           try {
             await redis.disconnect()
-            logger.info('👋 Redis disconnected')
+            const redisDisconnectTime = Date.now() - redisDisconnectStart
+            logger.info(`👋 Redis disconnected (${redisDisconnectTime}ms)`)
           } catch (error) {
-            logger.error('❌ Error disconnecting Redis:', error)
+            const redisDisconnectTime = Date.now() - redisDisconnectStart
+            logger.error(`❌ Error disconnecting Redis (${redisDisconnectTime}ms):`, error)
           }
 
-          logger.success('✅ Graceful shutdown completed')
+          // 清理缓存监控器的定时器
+          logger.info('📊 Cleaning up cache monitor...')
+          const cacheMonitorCleanupStart = Date.now()
+          try {
+            const cacheMonitor = require('./utils/cacheMonitor')
+            if (cacheMonitor && typeof cacheMonitor.cleanup === 'function') {
+              cacheMonitor.cleanup()
+              const cacheMonitorCleanupTime = Date.now() - cacheMonitorCleanupStart
+              logger.info(`📊 Cache monitor cleaned up (${cacheMonitorCleanupTime}ms)`)
+            } else {
+              logger.debug('📊 Cache monitor cleanup not available')
+            }
+          } catch (error) {
+            const cacheMonitorCleanupTime = Date.now() - cacheMonitorCleanupStart
+            logger.error(`❌ Error cleaning up cache monitor (${cacheMonitorCleanupTime}ms):`, error)
+          }
+
+          // 清理所有账户服务的定时器
+          logger.info('🎯 Cleaning up account services...')
+          const accountServicesCleanupStart = Date.now()
+          let cleanedServices = 0
+          let failedServices = 0
+
+          const accountServices = [
+            { name: 'Claude Account Service', module: './services/claudeAccountService' },
+            { name: 'OpenAI Account Service', module: './services/openaiAccountService' },
+            { name: 'Azure OpenAI Account Service', module: './services/azureOpenaiAccountService' },
+            { name: 'Gemini Account Service', module: './services/geminiAccountService' },
+            { name: 'Bedrock Account Service', module: './services/bedrockAccountService' },
+            { name: 'Claude Console Account Service', module: './services/claudeConsoleAccountService' }
+          ]
+
+          for (const service of accountServices) {
+            try {
+              const serviceModule = require(service.module)
+              if (serviceModule && typeof serviceModule.cleanup === 'function') {
+                serviceModule.cleanup()
+                cleanedServices++
+                logger.debug(`✅ ${service.name} cleaned up`)
+              } else {
+                logger.debug(`⚠️ ${service.name} cleanup not available`)
+              }
+            } catch (error) {
+              failedServices++
+              logger.error(`❌ Error cleaning up ${service.name}:`, error.message)
+            }
+          }
+
+          const accountServicesCleanupTime = Date.now() - accountServicesCleanupStart
+          logger.info(`🎯 Account services cleanup completed (${accountServicesCleanupTime}ms): ${cleanedServices} succeeded, ${failedServices} failed`)
+
+          // 清理日志系统的文件监控器
+          logger.info('📝 Cleaning up logger file watchers...')
+          const loggerCleanupStart = Date.now()
+          try {
+            logger.cleanup()
+            const loggerCleanupTime = Date.now() - loggerCleanupStart
+            logger.info(`📝 Logger file watchers cleaned up (${loggerCleanupTime}ms)`)
+          } catch (error) {
+            const loggerCleanupTime = Date.now() - loggerCleanupStart
+            logger.error(`❌ Error cleaning up logger (${loggerCleanupTime}ms):`, error)
+          }
+
+          // 清理全局HTTP Agent（防止连接泄露）
+          logger.info('🌐 Cleaning up global HTTP agents...')
+          const httpCleanupStart = Date.now()
+          try {
+            const https = require('https')
+            const http = require('http')
+            
+            // 销毁全局HTTP Agent
+            if (https.globalAgent) {
+              https.globalAgent.destroy()
+            }
+            if (http.globalAgent) {
+              http.globalAgent.destroy()  
+            }
+            
+            const httpCleanupTime = Date.now() - httpCleanupStart
+            logger.info(`🌐 Global HTTP agents cleaned up (${httpCleanupTime}ms)`)
+          } catch (error) {
+            const httpCleanupTime = Date.now() - httpCleanupStart
+            logger.error(`❌ Error cleaning up HTTP agents (${httpCleanupTime}ms):`, error)
+          }
+
+          // 清理process事件监听器（关键修复）
+          logger.info('🎧 Cleaning up process event listeners...')
+          const processCleanupStart = Date.now()
+          try {
+            process.removeAllListeners('SIGTERM')
+            process.removeAllListeners('SIGINT')
+            process.removeAllListeners('uncaughtException')
+            process.removeAllListeners('unhandledRejection')
+            const processCleanupTime = Date.now() - processCleanupStart
+            logger.info(`🎧 Process event listeners cleaned up (${processCleanupTime}ms)`)
+          } catch (error) {
+            const processCleanupTime = Date.now() - processCleanupStart
+            logger.error(`❌ Error cleaning up process listeners (${processCleanupTime}ms):`, error)
+          }
+
+          const totalShutdownTime = Date.now() - shutdownStart
+          console.log(`✅ Graceful shutdown completed in ${totalShutdownTime}ms`) // 使用console.log避免logger问题
           process.exit(0)
         })
 
-        // 强制关闭超时（给优雅关闭足够时间）
-        setTimeout(() => {
-          logger.warn('⚠️ Forced shutdown due to timeout')
+        // 增加强制关闭超时时间并添加进度提醒
+        const shutdownTimeout = 35000 // 35秒超时
+        const timeoutHandle = setTimeout(() => {
+          const elapsedTime = Date.now() - shutdownStart
+          logger.warn(`⚠️ Forced shutdown due to timeout after ${elapsedTime}ms (limit: ${shutdownTimeout}ms)`)
+          logger.warn('💡 Some resources may not have been cleaned up properly')
           process.exit(1)
-        }, 20000)
+        }, shutdownTimeout)
+
+        // 添加中期进度提醒
+        setTimeout(() => {
+          const elapsedTime = Date.now() - shutdownStart
+          logger.info(`🕒 Shutdown in progress... ${elapsedTime}ms elapsed (timeout in ${shutdownTimeout - elapsedTime}ms)`)
+        }, 15000) // 15秒提醒
+
+        // 记录超时配置
+        logger.info(`⏱️ Shutdown timeout set to ${shutdownTimeout}ms`)
       } else {
         process.exit(0)
       }

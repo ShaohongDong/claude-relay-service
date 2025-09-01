@@ -20,6 +20,7 @@ class PricingService {
     this.updateInterval = 24 * 60 * 60 * 1000 // 24小时
     this.fileWatcher = null // 文件监听器
     this.reloadDebounceTimer = null // 防抖定时器
+    this.updateTimer = null // 定时更新定时器
 
     // 硬编码的 1 小时缓存价格（美元/百万 token）
     // ephemeral_5m 的价格使用 model_pricing.json 中的 cache_creation_input_token_cost
@@ -82,9 +83,11 @@ class PricingService {
       await this.checkAndUpdatePricing()
 
       // 设置定时更新
-      setInterval(() => {
+      this.updateTimer = setInterval(() => {
         this.checkAndUpdatePricing()
       }, this.updateInterval)
+      
+      logger.debug(`💰 Pricing update timer set for ${this.updateInterval/1000/60/60} hours interval`)
 
       // 设置文件监听器
       this.setupFileWatcher()
@@ -640,6 +643,11 @@ class PricingService {
 
   // 清理资源
   cleanup() {
+    if (this.updateTimer) {
+      clearInterval(this.updateTimer)
+      this.updateTimer = null
+      logger.debug('💰 Update timer cleared')
+    }
     if (this.fileWatcher) {
       this.fileWatcher.close()
       this.fileWatcher = null

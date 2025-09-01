@@ -22,11 +22,21 @@ class CacheMonitor {
       sensitiveDataPatterns: [/password/i, /token/i, /secret/i, /key/i, /credential/i]
     }
 
+    // 📝 定时器管理
+    this.timers = {
+      securityCleanup: null,
+      forceCleanup: null,
+      quickStats: null,
+      detailedReport: null
+    }
+
     // 🧹 定期执行安全清理
     this.setupSecurityCleanup()
 
     // 📊 定期报告统计信息
     this.setupPeriodicReporting()
+
+    logger.info('📊 Cache monitor initialized with resource cleanup support')
   }
 
   /**
@@ -162,7 +172,7 @@ class CacheMonitor {
    */
   setupSecurityCleanup() {
     // 每 10 分钟执行一次安全清理
-    setInterval(
+    this.timers.securityCleanup = setInterval(
       () => {
         this.performSecurityCleanup()
       },
@@ -170,13 +180,15 @@ class CacheMonitor {
     )
 
     // 每 30 分钟强制完整清理
-    setInterval(() => {
+    this.timers.forceCleanup = setInterval(() => {
       logger.warn('⚠️ Performing forced complete cleanup for security')
       for (const [name, monitor] of this.monitors) {
         monitor.cache.clear()
         logger.info(`🗑️ Force cleared cache: ${name}`)
       }
     }, this.securityConfig.forceCleanupInterval)
+
+    logger.debug('🔒 Security cleanup timers initialized')
   }
 
   /**
@@ -184,7 +196,7 @@ class CacheMonitor {
    */
   setupPeriodicReporting() {
     // 每 5 分钟生成一次简单统计
-    setInterval(
+    this.timers.quickStats = setInterval(
       () => {
         const stats = this.getGlobalStats()
         logger.info(
@@ -195,12 +207,14 @@ class CacheMonitor {
     )
 
     // 每 30 分钟生成一次详细报告
-    setInterval(
+    this.timers.detailedReport = setInterval(
       () => {
         this.generateReport()
       },
       30 * 60 * 1000
     )
+
+    logger.debug('📊 Periodic reporting timers initialized')
   }
 
   /**
@@ -286,6 +300,63 @@ class CacheMonitor {
       }
 
       logger.warn(`🚨 Emergency cleaned ${name}: ${beforeSize} -> ${cache.cache.size} items`)
+    }
+  }
+
+  /**
+   * 🧹 清理所有资源
+   * 在应用关闭时调用，清理定时器防止内存泄漏
+   */
+  cleanup() {
+    logger.info('🧹 Starting cache monitor cleanup...')
+    
+    let clearedTimers = 0
+    
+    // 清理所有定时器
+    for (const [timerName, timerId] of Object.entries(this.timers)) {
+      if (timerId) {
+        try {
+          clearInterval(timerId)
+          clearedTimers++
+          logger.debug(`✅ Cleared timer: ${timerName}`)
+        } catch (error) {
+          logger.error(`❌ Error clearing timer ${timerName}:`, error.message)
+        }
+      }
+    }
+    
+    // 重置定时器对象
+    this.timers = {
+      securityCleanup: null,
+      forceCleanup: null,
+      quickStats: null,
+      detailedReport: null
+    }
+    
+    // 清理缓存数据
+    const cacheCount = this.monitors.size
+    this.monitors.clear()
+    
+    // 重置统计
+    this.totalHits = 0
+    this.totalMisses = 0
+    this.totalEvictions = 0
+    
+    logger.success(`✅ Cache monitor cleanup completed: cleared ${clearedTimers} timers, ${cacheCount} cache monitors`)
+  }
+
+  /**
+   * 🔍 获取清理状态
+   */
+  getCleanupStatus() {
+    const activeTimers = Object.values(this.timers).filter(Boolean).length
+    const totalTimers = Object.keys(this.timers).length
+    
+    return {
+      isCleanedUp: activeTimers === 0,
+      activeTimers,
+      totalTimers,
+      activeCacheMonitors: this.monitors.size
     }
   }
 }

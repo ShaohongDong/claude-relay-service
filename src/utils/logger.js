@@ -743,8 +743,93 @@ logger.healthCheck = () => {
 
 // 🧹 添加清理方法
 logger.cleanup = () => {
-  fileWatcher.cleanup()
-  logger.info('🧹 日志系统资源已清理')
+  try {
+    logger.info('🧹 开始清理日志系统资源...')
+    
+    // 清理文件监控器
+    fileWatcher.cleanup()
+    
+    // 关闭主logger的所有传输器
+    if (logger.transports && logger.transports.length > 0) {
+      logger.transports.forEach(transport => {
+        try {
+          if (transport.close && typeof transport.close === 'function') {
+            transport.close()
+          }
+          if (transport._stream && typeof transport._stream.end === 'function') {
+            transport._stream.end()
+          }
+        } catch (error) {
+          console.warn('Warning: Error closing transport:', error.message)
+        }
+      })
+      logger.clear() // 移除所有传输器
+    }
+    
+    // 关闭安全日志记录器的传输器
+    if (securityLogger && securityLogger.transports) {
+      securityLogger.transports.forEach(transport => {
+        try {
+          if (transport.close && typeof transport.close === 'function') {
+            transport.close()
+          }
+          if (transport._stream && typeof transport._stream.end === 'function') {
+            transport._stream.end()
+          }
+        } catch (error) {
+          console.warn('Warning: Error closing security transport:', error.message)
+        }
+      })
+      securityLogger.clear()
+    }
+    
+    // 关闭认证详细日志记录器的传输器
+    if (authDetailLogger && authDetailLogger.transports) {
+      authDetailLogger.transports.forEach(transport => {
+        try {
+          if (transport.close && typeof transport.close === 'function') {
+            transport.close()
+          }
+          if (transport._stream && typeof transport._stream.end === 'function') {
+            transport._stream.end()
+          }
+        } catch (error) {
+          console.warn('Warning: Error closing auth detail transport:', error.message)
+        }
+      })
+      authDetailLogger.clear()
+    }
+    
+    // 关闭异常处理器
+    if (logger.exceptions && logger.exceptions.handlers) {
+      logger.exceptions.handlers.forEach(handler => {
+        try {
+          if (handler.close && typeof handler.close === 'function') {
+            handler.close()
+          }
+        } catch (error) {
+          console.warn('Warning: Error closing exception handler:', error.message)
+        }
+      })
+    }
+    
+    // 关闭rejection处理器
+    if (logger.rejections && logger.rejections.handlers) {
+      logger.rejections.handlers.forEach(handler => {
+        try {
+          if (handler.close && typeof handler.close === 'function') {
+            handler.close()
+          }
+        } catch (error) {
+          console.warn('Warning: Error closing rejection handler:', error.message)
+        }
+      })
+    }
+    
+    console.log('✅ 日志系统所有传输器已关闭')
+  } catch (error) {
+    console.error('❌ 日志系统清理失败:', error.message)
+  }
 }
 
 module.exports = logger

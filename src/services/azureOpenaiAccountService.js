@@ -47,13 +47,18 @@ class EncryptionKeyManager {
 
 const encryptionKeyManager = new EncryptionKeyManager()
 
+// 📝 定时器管理
+let _cleanupTimer = null
+
 // 定期清理过期密钥
-setInterval(
+_cleanupTimer = setInterval(
   () => {
     encryptionKeyManager.cleanup()
   },
   60 * 60 * 1000
 ) // 每小时清理一次
+
+logger.debug('🎯 Azure OpenAI account service initialized with resource cleanup support')
 
 // 生成加密密钥 - 使用安全的密钥管理器
 function generateEncryptionKey() {
@@ -461,6 +466,36 @@ async function migrateApiKeysForAzureSupport() {
   return migratedCount
 }
 
+/**
+ * 🧹 清理服务资源
+ * 在应用关闭时调用，清理定时器防止内存泄漏
+ */
+function cleanup() {
+  logger.info('🧹 Starting Azure OpenAI account service cleanup...')
+  
+  if (_cleanupTimer) {
+    try {
+      clearInterval(_cleanupTimer)
+      _cleanupTimer = null
+      logger.debug('✅ Azure OpenAI service cleanup timer cleared')
+    } catch (error) {
+      logger.error('❌ Error clearing Azure OpenAI service cleanup timer:', error.message)
+    }
+  }
+  
+  // 清理加密密钥管理器
+  if (encryptionKeyManager && typeof encryptionKeyManager.cleanup === 'function') {
+    try {
+      encryptionKeyManager.cleanup()
+      logger.debug('✅ Azure OpenAI encryption key manager cleaned')
+    } catch (error) {
+      logger.error('❌ Error cleaning Azure OpenAI encryption key manager:', error.message)
+    }
+  }
+  
+  logger.success('✅ Azure OpenAI account service cleanup completed')
+}
+
 module.exports = {
   createAccount,
   getAccount,
@@ -475,5 +510,6 @@ module.exports = {
   toggleSchedulable,
   migrateApiKeysForAzureSupport,
   encrypt,
-  decrypt
+  decrypt,
+  cleanup
 }
