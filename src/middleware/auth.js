@@ -615,7 +615,7 @@ const requestLogger = (req, res, next) => {
         `◀️ [${requestId}] ${req.method} ${req.originalUrl} | ${res.statusCode} | ${duration}ms | ${contentLength}B`,
         logMetadata
       )
-    } else if (res.statusCode >= 400) {
+    } else if (res.statusCode >= 400 && res.statusCode < 500) {
       logger.warn(
         `◀️ [${requestId}] ${req.method} ${req.originalUrl} | ${res.statusCode} | ${duration}ms | ${contentLength}B`,
         logMetadata
@@ -631,9 +631,9 @@ const requestLogger = (req, res, next) => {
       )
     }
 
-    // 慢请求警告
+    // 慢请求信息
     if (duration > 5000) {
-      logger.warn(
+      logger.info(
         `🐌 [${requestId}] Slow request detected: ${duration}ms for ${req.method} ${req.originalUrl}`
       )
     }
