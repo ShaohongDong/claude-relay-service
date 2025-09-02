@@ -9,6 +9,7 @@ const bcrypt = require('bcryptjs')
 const config = require('../config/config')
 const logger = require('./utils/logger')
 const redis = require('./models/redis')
+const timerManager = require('./utils/timerManager')
 const pricingService = require('./services/pricingService')
 const cacheMonitor = require('./utils/cacheMonitor')
 
@@ -141,6 +142,17 @@ class Application {
 
       // 📝 请求日志（使用自定义logger而不是morgan）
       this.app.use(requestLogger)
+
+      // 🐛 HTTP调试拦截器（仅在启用调试时生效）
+      if (process.env.DEBUG_HTTP_TRAFFIC === 'true') {
+        try {
+          const { debugInterceptor } = require('./middleware/debugInterceptor')
+          this.app.use(debugInterceptor)
+          logger.info('🐛 HTTP调试拦截器已启用 - 日志输出到 logs/http-debug-*.log')
+        } catch (error) {
+          logger.warn('⚠️ 无法加载HTTP调试拦截器:', error.message)
+        }
+      }
 
       // 🔧 基础中间件
       this.app.use(
@@ -577,14 +589,20 @@ class Application {
       logger.debug('🔄 Hybrid connection manager was not initialized')
     }
 
-    // 清理全局连接池管理器
+    // 清理全局连接池管理器（异步）
     if (this.globalConnectionPoolManager) {
       preCleanupStats.managers++
       try {
         logger.info('🔗 Destroying global connection pool manager...')
-        this.globalConnectionPoolManager.destroy()
-        cleanupResults.globalPoolManager = true
-        logger.info('🔗 Global connection pool manager destroyed successfully')
+        const destroyResult = await this.globalConnectionPoolManager.destroy(20000) // 20秒超时
+        cleanupResults.globalPoolManager = !destroyResult.timeout
+        
+        if (destroyResult.timeout) {
+          logger.warn(`⚠️ Global connection pool manager destroy timeout (${destroyResult.elapsedTime}ms)`)
+        } else {
+          logger.info(`🔗 Global connection pool manager destroyed successfully (${destroyResult.elapsedTime}ms)`)
+        }
+        logger.info(`📊 Pool cleanup result: ${destroyResult.completed} completed, ${destroyResult.errors} errors`)
       } catch (error) {
         logger.error('❌ Error destroying global connection pool manager:', error.message)
       }
@@ -761,11 +779,12 @@ class Application {
         process.exit(1)
       })
 
-      const serverTimeout = 30000 // 30秒超时，支持快速优雅关闭
+      // 调整超时配置以配合35秒优雅关闭时间
+      const serverTimeout = 22000 // 22秒超时，为35秒优雅关闭预留充足时间
       this.server.timeout = serverTimeout
-      this.server.keepAliveTimeout = serverTimeout + 5000 // keepAlive 稍长一点
-      this.server.headersTimeout = serverTimeout + 10000 // 请求头超时稍长
-      logger.info(`⏱️  Server timeout set to ${serverTimeout}ms (${serverTimeout / 1000}s) - optimized for graceful shutdown`)
+      this.server.keepAliveTimeout = 25000 // 25秒keepAlive，确保在应用关闭前完成
+      this.server.headersTimeout = 27000 // 27秒请求头超时，仍留有8秒缓冲
+      logger.info(`⏱️  Server timeout optimized: ${serverTimeout}ms (${serverTimeout / 1000}s), keepAlive: ${this.server.keepAliveTimeout}ms, headers: ${this.server.headersTimeout}ms`)
 
       // 🔄 定期清理任务
       this.startCleanupTasks()
@@ -813,8 +832,8 @@ class Application {
   }
 
   startCleanupTasks() {
-    // 🧹 每小时清理一次过期数据
-    this.cleanupInterval = setInterval(async () => {
+    // 🧹 每小时清理一次过期数据 - 使用定时器管理器
+    const cleanupResult = timerManager.setInterval(async () => {
       try {
         logger.info('🧹 Starting scheduled cleanup...')
 
@@ -835,10 +854,18 @@ class Application {
       } catch (error) {
         logger.error('❌ Cleanup task failed:', error)
       }
-    }, config.system.cleanupInterval)
+    }, config.system.cleanupInterval, {
+      name: 'system-cleanup',
+      description: 'Periodic cleanup of expired data and error accounts',
+      service: 'application'
+    })
+
+    // 保存定时器ID以便后续清理
+    this.cleanupTimerId = cleanupResult.timerId
+    this.cleanupInterval = cleanupResult.intervalId // 保持兼容性
 
     logger.info(
-      `🔄 Cleanup tasks scheduled every ${config.system.cleanupInterval / 1000 / 60} minutes`
+      `🔄 Cleanup tasks scheduled every ${config.system.cleanupInterval / 1000 / 60} minutes (Timer: ${this.cleanupTimerId})`
     )
   }
 
@@ -848,9 +875,21 @@ class Application {
       logger.info(`🛑 Received ${signal}, starting graceful shutdown...`)
 
       // 清理定时器（防止阻塞进程退出）
-      if (this.cleanupInterval) {
-        clearInterval(this.cleanupInterval)
-        logger.info('🧹 Cleanup interval cleared')
+      logger.info('⏲️ Cleaning up application timers...')
+      const timerCleanupStart = Date.now()
+      try {
+        if (this.cleanupTimerId) {
+          timerManager.clearTimer(this.cleanupTimerId)
+          logger.info(`🧹 Application cleanup timer cleared (${this.cleanupTimerId})`)
+        }
+        
+        // 清理application服务的所有定时器
+        const clearedCount = timerManager.clearTimersByService('application')
+        const timerCleanupTime = Date.now() - timerCleanupStart
+        logger.info(`⏲️ Application timers cleaned up (${timerCleanupTime}ms): ${clearedCount} timers`)
+      } catch (error) {
+        const timerCleanupTime = Date.now() - timerCleanupStart
+        logger.error(`❌ Error cleaning up application timers (${timerCleanupTime}ms):`, error)
       }
 
       if (this.server) {
@@ -866,9 +905,11 @@ class Application {
             await this.cleanupConnectionPoolSystem()
             const poolCleanupTime = Date.now() - poolCleanupStart
             logger.info(`🔗 Connection pool system cleaned up (${poolCleanupTime}ms)`)
+            reportProgress('Connection pool system cleaned up')
           } catch (error) {
             const poolCleanupTime = Date.now() - poolCleanupStart
             logger.error(`❌ Error cleaning up connection pool system (${poolCleanupTime}ms):`, error)
+            reportProgress('Connection pool cleanup failed')
           }
 
           // 清理 pricing service 的文件监听器
@@ -890,9 +931,11 @@ class Application {
             await redis.disconnect()
             const redisDisconnectTime = Date.now() - redisDisconnectStart
             logger.info(`👋 Redis disconnected (${redisDisconnectTime}ms)`)
+            reportProgress('Redis disconnected')
           } catch (error) {
             const redisDisconnectTime = Date.now() - redisDisconnectStart
             logger.error(`❌ Error disconnecting Redis (${redisDisconnectTime}ms):`, error)
+            reportProgress('Redis disconnect failed')
           }
 
           // 清理缓存监控器的定时器
@@ -995,25 +1038,45 @@ class Application {
             logger.error(`❌ Error cleaning up process listeners (${processCleanupTime}ms):`, error)
           }
 
+          // 最后清理全局定时器管理器（在logger之前）
+          logger.info('⏲️ Cleaning up global timer manager...')
+          const globalTimerCleanupStart = Date.now()
+          try {
+            const timerCleanupResult = timerManager.clearAllTimers()
+            const globalTimerCleanupTime = Date.now() - globalTimerCleanupStart
+            logger.info(`⏲️ Global timer manager cleaned up (${globalTimerCleanupTime}ms): ${timerCleanupResult.total} timers, ${timerCleanupResult.errors} errors`)
+            reportProgress(`All resources cleaned up - ${timerCleanupResult.total} timers cleared`, true)
+          } catch (error) {
+            const globalTimerCleanupTime = Date.now() - globalTimerCleanupStart
+            logger.error(`❌ Error cleaning up global timer manager (${globalTimerCleanupTime}ms):`, error)
+            reportProgress('Global timer cleanup failed', true)
+          }
+
           const totalShutdownTime = Date.now() - shutdownStart
           console.log(`✅ Graceful shutdown completed in ${totalShutdownTime}ms`) // 使用console.log避免logger问题
           process.exit(0)
         })
 
-        // 增加强制关闭超时时间并添加进度提醒
+        // 智能进度监控函数
+        const reportProgress = (stage, forceReport = false) => {
+          const elapsedTime = Date.now() - shutdownStart
+          if (elapsedTime > 10000 || forceReport) { // 只有超过10秒或强制报告时才提醒
+            logger.info(`🕒 ${stage} (${elapsedTime}ms elapsed)`)
+          }
+        }
+
+        // 强制关闭超时使用timerManager统一管理
         const shutdownTimeout = 35000 // 35秒超时
-        const timeoutHandle = setTimeout(() => {
+        const forceShutdownTimer = timerManager.setTimeout(() => {
           const elapsedTime = Date.now() - shutdownStart
           logger.warn(`⚠️ Forced shutdown due to timeout after ${elapsedTime}ms (limit: ${shutdownTimeout}ms)`)
           logger.warn('💡 Some resources may not have been cleaned up properly')
           process.exit(1)
-        }, shutdownTimeout)
-
-        // 添加中期进度提醒
-        setTimeout(() => {
-          const elapsedTime = Date.now() - shutdownStart
-          logger.info(`🕒 Shutdown in progress... ${elapsedTime}ms elapsed (timeout in ${shutdownTimeout - elapsedTime}ms)`)
-        }, 15000) // 15秒提醒
+        }, shutdownTimeout, {
+          name: 'force-shutdown',
+          service: 'application',
+          description: 'Force shutdown if graceful shutdown takes too long'
+        })
 
         // 记录超时配置
         logger.info(`⏱️ Shutdown timeout set to ${shutdownTimeout}ms`)

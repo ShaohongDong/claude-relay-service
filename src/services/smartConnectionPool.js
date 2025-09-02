@@ -355,57 +355,140 @@ class SmartConnectionPool extends EventEmitter {
   }
 
   /**
-   * 销毁连接池
+   * 销毁连接池（带超时控制）
    */
-  destroy() {
-    logger.info(`🗑️ 销毁连接池: 账户 ${this.accountId}`)
+  destroy(timeout = 5000) { // 5秒超时
+    return new Promise((resolve) => {
+      logger.info(`🗑️ 销毁连接池: 账户 ${this.accountId}`)
+      const startTime = Date.now()
+      
+      let destroyedCount = 0
+      let errorCount = 0
+      const totalConnections = this.connections.length
 
-    let destroyedCount = 0
-    let errorCount = 0
-
-    // 逐个销毁连接并关闭底层代理资源
-    this.connections.forEach((connection) => {
-      try {
-        // 标记连接为不健康
-        connection.isHealthy = false
-
-        // 关闭代理Agent的底层连接
-        if (connection.agent && typeof connection.agent.destroy === 'function') {
-          connection.agent.destroy()
-          destroyedCount++
-          logger.debug(`🔌 代理连接已关闭: 连接 ${connection.id}`)
-        } else if (connection.agent && connection.agent.sockets) {
-          // 对于某些代理类型，手动关闭sockets
-          if (connection.agent.sockets) {
-            for (const hostPort in connection.agent.sockets) {
-              const sockets = connection.agent.sockets[hostPort]
-              if (Array.isArray(sockets)) {
-                sockets.forEach(socket => {
-                  try {
-                    socket.destroy()
-                  } catch (socketError) {
-                    logger.warn(`⚠️ 关闭socket失败: ${socketError.message}`)
-                  }
-                })
-              }
-            }
-          }
-          destroyedCount++
-          logger.debug(`🔌 代理socket已关闭: 连接 ${connection.id}`)
-        } else {
-          logger.warn(`⚠️ 连接 ${connection.id} 的代理Agent无法关闭 (agent类型: ${typeof connection.agent})`)
-        }
-      } catch (error) {
-        errorCount++
-        logger.error(`❌ 销毁连接失败: 连接 ${connection.id}, 错误: ${error.message}`)
+      if (totalConnections === 0) {
+        logger.info(`ℹ️ 连接池无连接需要销毁: 账户 ${this.accountId}`)
+        this.connections = []
+        this.isInitialized = false
+        logger.success(`✅ 连接池已销毁: 账户 ${this.accountId} (无连接)`)
+        return resolve({ destroyed: 0, errors: 0, timeout: false })
       }
+
+      // 设置超时处理
+      const timeoutHandle = setTimeout(() => {
+        const elapsedTime = Date.now() - startTime
+        logger.warn(`⚠️ 连接池销毁超时: 账户 ${this.accountId} (${elapsedTime}ms)`)
+        logger.warn(`📊 销毁状态: 完成 ${destroyedCount}/${totalConnections}, 错误 ${errorCount}`)
+        
+        // 强制清理状态
+        this.connections = []
+        this.isInitialized = false
+        
+        resolve({ 
+          destroyed: destroyedCount, 
+          errors: errorCount, 
+          timeout: true, 
+          elapsedTime 
+        })
+      }, timeout)
+
+      // 统一处理连接销毁完成
+      const handleConnectionDestroyed = (connectionId, isError = false) => {
+        if (isError) {
+          errorCount++
+        } else {
+          destroyedCount++
+        }
+        
+        const finished = destroyedCount + errorCount
+        if (finished >= totalConnections) {
+          clearTimeout(timeoutHandle)
+          const elapsedTime = Date.now() - startTime
+          
+          // 清空连接数组
+          this.connections = []
+          this.isInitialized = false
+          
+          logger.success(`✅ 连接池已销毁: 账户 ${this.accountId} (${elapsedTime}ms): 成功关闭 ${destroyedCount}, 错误 ${errorCount}`)
+          resolve({ 
+            destroyed: destroyedCount, 
+            errors: errorCount, 
+            timeout: false, 
+            elapsedTime 
+          })
+        }
+      }
+
+      // 异步销毁每个连接
+      this.connections.forEach((connection) => {
+        // 立即标记连接为不健康
+        connection.isHealthy = false
+        
+        // 为每个连接设置独立的销毁超时
+        const connectionTimeout = Math.min(timeout / totalConnections, 2000) // 每个连接最多2秒
+        
+        Promise.race([
+          // 连接销毁Promise
+          new Promise((connResolve) => {
+            try {
+              let destroyed = false
+              
+              // 尝试优雅关闭代理Agent
+              if (connection.agent && typeof connection.agent.destroy === 'function') {
+                try {
+                  connection.agent.destroy()
+                  destroyed = true
+                  logger.debug(`🔌 代理连接已关闭: 连接 ${connection.id}`)
+                } catch (destroyError) {
+                  logger.warn(`⚠️ 代理Agent destroy失败: ${destroyError.message}`)
+                }
+              }
+              
+              // 备用方法：手动关闭sockets
+              if (!destroyed && connection.agent && connection.agent.sockets) {
+                try {
+                  for (const hostPort in connection.agent.sockets) {
+                    const sockets = connection.agent.sockets[hostPort]
+                    if (Array.isArray(sockets)) {
+                      sockets.forEach(socket => {
+                        try {
+                          socket.destroy()
+                        } catch (socketError) {
+                          logger.warn(`⚠️ 关闭socket失败: ${socketError.message}`)
+                        }
+                      })
+                    }
+                  }
+                  destroyed = true
+                  logger.debug(`🔌 代理socket已关闭: 连接 ${connection.id}`)
+                } catch (socketsError) {
+                  logger.warn(`⚠️ 关闭sockets失败: ${socketsError.message}`)
+                }
+              }
+              
+              if (!destroyed) {
+                logger.warn(`⚠️ 连接 ${connection.id} 的代理Agent无法关闭 (agent类型: ${typeof connection.agent})`)
+                connResolve(false) // 标记为处理失败但不是严重错误
+              } else {
+                connResolve(true)
+              }
+            } catch (error) {
+              logger.error(`❌ 销毁连接失败: 连接 ${connection.id}, 错误: ${error.message}`)
+              connResolve(false)
+            }
+          }),
+          // 单个连接的超时Promise
+          new Promise((connResolve) => {
+            setTimeout(() => {
+              logger.warn(`⚠️ 连接销毁超时: ${connection.id} (${connectionTimeout}ms)`)
+              connResolve(false)
+            }, connectionTimeout)
+          })
+        ]).then((success) => {
+          handleConnectionDestroyed(connection.id, !success)
+        })
+      })
     })
-
-    // 清空连接数组
-    this.connections = []
-    this.isInitialized = false
-
-    logger.success(`✅ 连接池已销毁: 账户 ${this.accountId} (成功关闭: ${destroyedCount}, 错误: ${errorCount})`)
   }
 }
 

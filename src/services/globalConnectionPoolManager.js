@@ -319,26 +319,121 @@ class GlobalConnectionPoolManager {
   }
 
   /**
-   * 销毁所有连接池
+   * 销毁所有连接池（带超时控制）
    */
-  destroy() {
-    logger.info('🗑️ 开始销毁所有连接池...')
+  destroy(timeout = 20000) { // 20秒超时
+    return new Promise((resolve) => {
+      logger.info('🗑️ 开始销毁所有连接池...')
+      const startTime = Date.now()
+      
+      let completedPools = 0
+      let errorPools = 0
+      const totalPools = this.pools.size
 
-    for (const [accountId, pool] of this.pools) {
-      try {
-        pool.destroy()
-        logger.debug(`🗑️ 连接池已销毁: 账户 ${accountId}`)
-      } catch (error) {
-        logger.error(`❌ 销毁连接池失败: 账户 ${accountId} - ${error.message}`)
+      if (totalPools === 0) {
+        logger.info('ℹ️ 没有连接池需要销毁')
+        this.pools.clear()
+        this.isInitialized = false
+        this.stats.totalPools = 0
+        this.stats.totalConnections = 0
+        logger.success('✅ 连接池销毁完成（无需操作）')
+        return resolve({ completed: 0, errors: 0, timeout: false })
       }
-    }
 
-    this.pools.clear()
-    this.isInitialized = false
-    this.stats.totalPools = 0
-    this.stats.totalConnections = 0
+      // 设置超时处理
+      const timeoutHandle = setTimeout(() => {
+        const elapsedTime = Date.now() - startTime
+        logger.warn(`⚠️ 连接池销毁超时 (${elapsedTime}ms)，强制完成清理`)
+        logger.warn(`📊 销毁状态: 完成 ${completedPools}/${totalPools}, 错误 ${errorPools}`)
+        
+        // 强制清理剩余状态
+        this.pools.clear()
+        this.isInitialized = false
+        this.stats.totalPools = 0
+        this.stats.totalConnections = 0
+        
+        resolve({ 
+          completed: completedPools, 
+          errors: errorPools, 
+          timeout: true, 
+          elapsedTime 
+        })
+      }, timeout)
 
-    logger.success('✅ 所有连接池已销毁')
+      // 分阶段清理：优雅关闭 -> 强制关闭
+      const gracefulTimeout = Math.min(timeout * 0.75, 15000) // 75%时间用于优雅关闭，最多15秒
+      
+      logger.info(`🕒 阶段1: 优雅关闭连接池 (${gracefulTimeout}ms)`)
+      
+      // 统一处理单个池销毁完成
+      const handlePoolDestroyed = (accountId, isError = false) => {
+        if (isError) {
+          errorPools++
+        } else {
+          completedPools++
+        }
+        
+        const finished = completedPools + errorPools
+        if (finished >= totalPools) {
+          clearTimeout(timeoutHandle)
+          const elapsedTime = Date.now() - startTime
+          
+          this.pools.clear()
+          this.isInitialized = false
+          this.stats.totalPools = 0
+          this.stats.totalConnections = 0
+          
+          logger.success(`✅ 所有连接池已销毁 (${elapsedTime}ms): 成功 ${completedPools}, 错误 ${errorPools}`)
+          resolve({ 
+            completed: completedPools, 
+            errors: errorPools, 
+            timeout: false, 
+            elapsedTime 
+          })
+        }
+      }
+
+      // 异步销毁每个连接池
+      for (const [accountId, pool] of this.pools) {
+        // 为每个连接池设置独立的销毁超时
+        const poolTimeout = Math.min(gracefulTimeout / totalPools, 5000) // 每个池最多5秒
+        
+        Promise.race([
+          // 池的销毁Promise
+          new Promise((poolResolve) => {
+            try {
+              // 如果池有异步destroy方法，使用Promise处理
+              const destroyResult = pool.destroy()
+              if (destroyResult && typeof destroyResult.then === 'function') {
+                destroyResult
+                  .then(() => poolResolve(true))
+                  .catch(() => poolResolve(false))
+              } else {
+                // 同步destroy方法
+                poolResolve(true)
+              }
+            } catch (error) {
+              logger.error(`❌ 销毁连接池失败: 账户 ${accountId} - ${error.message}`)
+              poolResolve(false)
+            }
+          }),
+          // 单个池的超时Promise
+          new Promise((poolResolve) => {
+            setTimeout(() => {
+              logger.warn(`⚠️ 连接池销毁超时: 账户 ${accountId} (${poolTimeout}ms)`)
+              poolResolve(false)
+            }, poolTimeout)
+          })
+        ]).then((success) => {
+          if (success) {
+            logger.debug(`🗑️ 连接池已销毁: 账户 ${accountId}`)
+            handlePoolDestroyed(accountId, false)
+          } else {
+            handlePoolDestroyed(accountId, true)
+          }
+        })
+      }
+    })
   }
 
   /**

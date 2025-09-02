@@ -410,18 +410,31 @@ const fileWatcher = (() => {
     }
   }
 
-  // 监听进程退出事件，确保资源清理
-  const setupProcessExitHandlers = () => {
-    const exitHandler = (eventType) => {
-      console.log(`📤 接收到 ${eventType} 事件，清理日志监控资源`)
-      cleanup()
-    }
+  // 监听进程退出事件，确保资源清理 - 使用once避免重复注册
+  const setupProcessExitHandlers = (() => {
+    let initialized = false
+    
+    return () => {
+      if (initialized) {
+        console.log('⚠️ 进程退出处理器已初始化，跳过重复注册')
+        return
+      }
+      
+      const exitHandler = (eventType) => {
+        console.log(`📤 接收到 ${eventType} 事件，清理日志监控资源`)
+        cleanup()
+      }
 
-    process.on('exit', () => exitHandler('exit'))
-    process.on('SIGINT', () => exitHandler('SIGINT'))
-    process.on('SIGTERM', () => exitHandler('SIGTERM'))
-    process.on('SIGHUP', () => exitHandler('SIGHUP'))
-  }
+      // 使用 once 避免重复监听器，并标记已初始化
+      process.once('exit', () => exitHandler('exit'))
+      process.once('SIGINT', () => exitHandler('SIGINT'))
+      process.once('SIGTERM', () => exitHandler('SIGTERM'))
+      process.once('SIGHUP', () => exitHandler('SIGHUP'))
+      
+      initialized = true
+      console.log('✅ 日志系统进程退出处理器已初始化')
+    }
+  })()
 
   // 初始化退出处理器
   setupProcessExitHandlers()

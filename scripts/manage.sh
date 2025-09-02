@@ -746,7 +746,7 @@ is_service_running() {
 # 等待进程完全停止
 wait_for_process_stop() {
     local pid=$1
-    local timeout=${2:-40}  # 默认40秒超时，给应用程序35秒优雅关闭时间
+    local timeout=${2:-45}  # 默认45秒超时，给应用程序35秒优雅关闭时间+10秒缓冲
     local count=0
     
     while [ $count -lt $timeout ]; do
@@ -765,7 +765,7 @@ wait_for_process_stop() {
 # 优雅关闭进程
 graceful_kill() {
     local pid=$1
-    local timeout=${2:-40}  # 默认40秒超时，与应用程序35秒超时配套
+    local timeout=${2:-45}  # 默认45秒超时，与应用程序35秒优雅关闭配套+10秒缓冲
     
     if ! kill -0 $pid 2>/dev/null; then
         return 0  # 进程已不存在
@@ -880,7 +880,7 @@ stop_service() {
         for pid in "${pids_to_kill[@]}"; do
             if kill -0 $pid 2>/dev/null; then
                 print_info "优雅停止进程 $pid..."
-                if graceful_kill $pid 25; then  # 使用25秒超时
+                if graceful_kill $pid 40; then  # 使用40秒超时，配合应用35秒优雅关闭
                     stop_success=true
                 else
                     print_warning "无法优雅停止进程 $pid"
@@ -926,11 +926,12 @@ restart_service() {
         return 1
     fi
     
-    # 确保服务完全停止
+    # 确保服务完全停止 - 延长验证时间以配合优雅关闭
     print_info "验证服务已完全停止..."
     local wait_count=0
-    while is_service_running && [ $wait_count -lt 10 ]; do
-        print_info "等待服务完全停止... ($((wait_count + 1))/10)"
+    local max_wait=15  # 增加到15秒，给优雅关闭更多时间
+    while is_service_running && [ $wait_count -lt $max_wait ]; do
+        print_info "等待服务完全停止... ($((wait_count + 1))/$max_wait)"
         sleep 1
         wait_count=$((wait_count + 1))
     done

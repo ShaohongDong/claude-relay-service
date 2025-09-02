@@ -2,6 +2,7 @@ const fs = require('fs')
 const path = require('path')
 const https = require('https')
 const logger = require('../utils/logger')
+const timerManager = require('../utils/timerManager')
 
 class PricingService {
   constructor() {
@@ -19,8 +20,8 @@ class PricingService {
     this.lastUpdated = null
     this.updateInterval = 24 * 60 * 60 * 1000 // 24小时
     this.fileWatcher = null // 文件监听器
-    this.reloadDebounceTimer = null // 防抖定时器
-    this.updateTimer = null // 定时更新定时器
+    this.reloadDebounceTimerId = null // 防抖定时器ID
+    this.updateTimerId = null // 定时更新定时器ID
 
     // 硬编码的 1 小时缓存价格（美元/百万 token）
     // ephemeral_5m 的价格使用 model_pricing.json 中的 cache_creation_input_token_cost
@@ -82,12 +83,18 @@ class PricingService {
       // 检查是否需要下载或更新价格数据
       await this.checkAndUpdatePricing()
 
-      // 设置定时更新
-      this.updateTimer = setInterval(() => {
+      // 设置定时更新 - 使用定时器管理器
+      const updateResult = timerManager.setInterval(() => {
         this.checkAndUpdatePricing()
-      }, this.updateInterval)
+      }, this.updateInterval, {
+        name: 'pricing-update',
+        description: 'Periodic update of model pricing data from remote source',
+        service: 'pricingService'
+      })
       
-      logger.debug(`💰 Pricing update timer set for ${this.updateInterval/1000/60/60} hours interval`)
+      this.updateTimerId = updateResult.timerId
+      
+      logger.debug(`💰 Pricing update timer set for ${this.updateInterval/1000/60/60} hours interval (Timer: ${this.updateTimerId})`)
 
       // 设置文件监听器
       this.setupFileWatcher()
@@ -586,15 +593,23 @@ class PricingService {
   // 处理文件变化（带防抖）
   handleFileChange() {
     // 清除之前的定时器
-    if (this.reloadDebounceTimer) {
-      clearTimeout(this.reloadDebounceTimer)
+    if (this.reloadDebounceTimerId) {
+      timerManager.clearTimer(this.reloadDebounceTimerId)
+      this.reloadDebounceTimerId = null
     }
 
-    // 设置新的定时器（防抖500ms）
-    this.reloadDebounceTimer = setTimeout(async () => {
+    // 设置新的定时器（防抖500ms） - 使用定时器管理器
+    const debounceResult = timerManager.setTimeout(async () => {
       logger.info('🔄 Reloading pricing data due to file change...')
       await this.reloadPricingData()
-    }, 500)
+      this.reloadDebounceTimerId = null // 定时器执行后自动清理
+    }, 500, {
+      name: 'pricing-reload-debounce',
+      description: 'Debounced pricing data reload after file change',
+      service: 'pricingService'
+    })
+    
+    this.reloadDebounceTimerId = debounceResult.timerId
   }
 
   // 重新加载价格数据
@@ -643,20 +658,44 @@ class PricingService {
 
   // 清理资源
   cleanup() {
-    if (this.updateTimer) {
-      clearInterval(this.updateTimer)
-      this.updateTimer = null
+    logger.info('🧹 Cleaning up pricing service resources...')
+    let cleanupCount = 0
+    
+    // 清理定时更新定时器
+    if (this.updateTimerId) {
+      timerManager.clearTimer(this.updateTimerId)
+      this.updateTimerId = null
+      cleanupCount++
       logger.debug('💰 Update timer cleared')
     }
+    
+    // 清理文件监控器
     if (this.fileWatcher) {
-      this.fileWatcher.close()
-      this.fileWatcher = null
-      logger.debug('💰 File watcher closed')
+      try {
+        this.fileWatcher.close()
+        this.fileWatcher = null
+        cleanupCount++
+        logger.debug('💰 File watcher closed')
+      } catch (error) {
+        logger.warn('⚠️ Error closing file watcher:', error.message)
+      }
     }
-    if (this.reloadDebounceTimer) {
-      clearTimeout(this.reloadDebounceTimer)
-      this.reloadDebounceTimer = null
+    
+    // 清理防抖定时器
+    if (this.reloadDebounceTimerId) {
+      timerManager.clearTimer(this.reloadDebounceTimerId)
+      this.reloadDebounceTimerId = null
+      cleanupCount++
+      logger.debug('💰 Reload debounce timer cleared')
     }
+    
+    // 清理服务的所有定时器（保险措施）
+    const serviceTimersCleaned = timerManager.clearTimersByService('pricingService')
+    if (serviceTimersCleaned > 0) {
+      logger.info(`💰 Additional service timers cleaned: ${serviceTimersCleaned}`)
+    }
+    
+    logger.success(`✅ Pricing service cleanup completed: ${cleanupCount} resources cleaned`)
   }
 }
 
