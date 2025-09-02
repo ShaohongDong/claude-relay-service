@@ -487,7 +487,7 @@ class BedrockAccountService {
    */
   cleanup() {
     logger.info('🧹 Starting Bedrock account service cleanup...')
-    
+
     if (this._cleanupTimer) {
       try {
         clearInterval(this._cleanupTimer)
@@ -497,7 +497,7 @@ class BedrockAccountService {
         logger.error('❌ Error clearing Bedrock service cleanup timer:', error.message)
       }
     }
-    
+
     // 清理缓存
     if (this._decryptCache) {
       try {
@@ -508,10 +508,10 @@ class BedrockAccountService {
         logger.error('❌ Error clearing Bedrock service decrypt cache:', error.message)
       }
     }
-    
+
     // 重置加密密钥缓存
     this._encryptionKeyCache = null
-    
+
     logger.success('✅ Bedrock account service cleanup completed')
   }
 }

@@ -472,7 +472,7 @@ async function migrateApiKeysForAzureSupport() {
  */
 function cleanup() {
   logger.info('🧹 Starting Azure OpenAI account service cleanup...')
-  
+
   if (_cleanupTimer) {
     try {
       clearInterval(_cleanupTimer)
@@ -482,7 +482,7 @@ function cleanup() {
       logger.error('❌ Error clearing Azure OpenAI service cleanup timer:', error.message)
     }
   }
-  
+
   // 清理加密密钥管理器
   if (encryptionKeyManager && typeof encryptionKeyManager.cleanup === 'function') {
     try {
@@ -492,7 +492,7 @@ function cleanup() {
       logger.error('❌ Error cleaning Azure OpenAI encryption key manager:', error.message)
     }
   }
-  
+
   logger.success('✅ Azure OpenAI account service cleanup completed')
 }
 

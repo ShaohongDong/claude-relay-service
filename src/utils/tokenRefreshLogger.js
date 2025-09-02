@@ -142,7 +142,7 @@ const tokenFileWatcher = (() => {
   const cleanup = () => {
     console.log('🧹 开始清理Token日志监控资源...')
     let cleanedCount = 0
-    
+
     watchers.forEach((watcher) => {
       try {
         watcher.close()
@@ -153,20 +153,20 @@ const tokenFileWatcher = (() => {
     })
     watchers.clear()
     transportsMap.clear()
-    
+
     console.log(`✅ 已清理 ${cleanedCount} 个Token日志监控器`)
   }
 
   // 设置进程退出处理器 - 使用once避免重复注册
   const setupProcessExitHandlers = (() => {
     let initialized = false
-    
+
     return () => {
       if (initialized) {
         console.log('⚠️ Token日志进程退出处理器已初始化，跳过重复注册')
         return
       }
-      
+
       const exitHandler = (eventType) => {
         console.log(`📤 Token日志接收到 ${eventType} 事件，清理监控资源`)
         cleanup()
@@ -177,7 +177,7 @@ const tokenFileWatcher = (() => {
       process.once('SIGINT', () => exitHandler('SIGINT'))
       process.once('SIGTERM', () => exitHandler('SIGTERM'))
       process.once('SIGHUP', () => exitHandler('SIGHUP'))
-      
+
       initialized = true
       console.log('✅ Token日志系统进程退出处理器已初始化')
     }

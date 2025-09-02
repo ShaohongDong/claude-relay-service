@@ -167,11 +167,9 @@ const fileWatcher = (() => {
         }
       })
 
-      watcher
-        .on('unlink', handleFileDeleted)
-        .on('error', (error) => {
-          console.error(`📂 目录监控错误 ${directory}:`, error.message)
-        })
+      watcher.on('unlink', handleFileDeleted).on('error', (error) => {
+        console.error(`📂 目录监控错误 ${directory}:`, error.message)
+      })
 
       directoryWatchers.set(directory, watcher)
       console.log(`📁 创建目录监控器: ${path.basename(directory)}`)
@@ -185,7 +183,7 @@ const fileWatcher = (() => {
   // 集中处理文件删除事件（避免重复触发）
   const handleFileDeleted = (filePath) => {
     const normalizedPath = path.normalize(filePath)
-    
+
     // 检查是否有传输器关联到这个文件
     if (!fileTransportsMap.has(normalizedPath)) {
       return // 没有关联的传输器，忽略
@@ -204,7 +202,12 @@ const fileWatcher = (() => {
       try {
         const transportInfo = fileTransportsMap.get(normalizedPath)
         if (transportInfo) {
-          recreateTransport(transportInfo.transport, normalizedPath, transportInfo.filename, transportInfo.config)
+          recreateTransport(
+            transportInfo.transport,
+            normalizedPath,
+            transportInfo.filename,
+            transportInfo.config
+          )
           console.log(`🔄 传输器重创建完成: ${path.basename(normalizedPath)}`)
         }
       } catch (error) {
@@ -228,7 +231,7 @@ const fileWatcher = (() => {
     } else {
       fullPath = path.resolve(filename.replace('%DATE%', new Date().toISOString().split('T')[0]))
     }
-    
+
     const directory = path.dirname(fullPath)
     const normalizedPath = path.normalize(fullPath)
 
@@ -247,7 +250,7 @@ const fileWatcher = (() => {
 
     // 获取或创建目录监控器（一个目录只需要一个监控器）
     getOrCreateDirectoryWatcher(directory)
-    
+
     console.log(`📂 注册文件监控: ${path.basename(normalizedPath)}`)
   }
 
@@ -255,7 +258,7 @@ const fileWatcher = (() => {
   const recreateTransport = (oldTransport, filePath, originalFilename, config) => {
     try {
       const fileName = path.basename(filePath)
-      
+
       // 1. 安全关闭旧传输器
       closeTransportSafely(oldTransport)
 
@@ -270,7 +273,6 @@ const fileWatcher = (() => {
 
       // 5. 验证新传输器工作正常
       validateTransport(newTransport)
-
     } catch (error) {
       console.error(`❌ 传输器重创建失败 ${path.basename(filePath)}:`, error.message)
       throw error
@@ -286,7 +288,7 @@ const fileWatcher = (() => {
         transport._stream.destroy()
         transport._stream = null
       }
-      
+
       // 调用传输器的关闭方法
       if (transport.close && typeof transport.close === 'function') {
         transport.close()
@@ -322,7 +324,7 @@ const fileWatcher = (() => {
       maxSize: oldTransport.maxSize || appConfig.logging.maxSize,
       maxFiles: oldTransport.maxFiles || appConfig.logging.maxFiles,
       auditFile: path.join(
-        appConfig.logging.dirname, 
+        appConfig.logging.dirname,
         `.${originalFilename.replace('%DATE%', 'audit')}.json`
       ),
       format: oldTransport.format || logFormat,
@@ -332,24 +334,30 @@ const fileWatcher = (() => {
   }
 
   // 在logger中替换传输器的辅助方法
-  const replaceTransportInLogger = (oldTransport, newTransport, filePath, originalFilename, config) => {
+  const replaceTransportInLogger = (
+    oldTransport,
+    newTransport,
+    filePath,
+    originalFilename,
+    config
+  ) => {
     if (!loggerInstance.logger) {
       throw new Error('Logger实例未设置')
     }
 
-    const logger = loggerInstance.logger
-    
+    const { logger } = loggerInstance
+
     // 移除旧传输器
     try {
       logger.remove(oldTransport)
     } catch (error) {
       // 备用方法：直接过滤数组
-      logger.transports = logger.transports.filter(t => t !== oldTransport)
+      logger.transports = logger.transports.filter((t) => t !== oldTransport)
     }
-    
+
     // 添加新传输器
     logger.add(newTransport)
-    
+
     // 更新映射表
     fileTransportsMap.set(path.normalize(filePath), {
       transport: newTransport,
@@ -379,7 +387,7 @@ const fileWatcher = (() => {
   // 🧹 优化的资源清理方法
   const cleanup = () => {
     console.log('🧹 开始清理日志监控资源...')
-    
+
     // 清理目录监控器
     let cleanedWatchers = 0
     directoryWatchers.forEach((watcher, directory) => {
@@ -390,36 +398,34 @@ const fileWatcher = (() => {
         console.warn(`关闭目录监控器失败 ${directory}:`, error.message)
       }
     })
-    
+
     // 清理数据结构
     directoryWatchers.clear()
     fileTransportsMap.clear()
     pendingRecreations.clear()
-    
+
     console.log(`✅ 已清理 ${cleanedWatchers} 个监控器和相关资源`)
   }
 
   // 获取监控状态信息
-  const getMonitoringStatus = () => {
-    return {
-      directoryWatchers: directoryWatchers.size,
-      monitoredFiles: fileTransportsMap.size,
-      pendingRecreations: pendingRecreations.size,
-      watchedDirectories: Array.from(directoryWatchers.keys()).map(dir => path.basename(dir)),
-      monitoredFilesList: Array.from(fileTransportsMap.keys()).map(file => path.basename(file))
-    }
-  }
+  const getMonitoringStatus = () => ({
+    directoryWatchers: directoryWatchers.size,
+    monitoredFiles: fileTransportsMap.size,
+    pendingRecreations: pendingRecreations.size,
+    watchedDirectories: Array.from(directoryWatchers.keys()).map((dir) => path.basename(dir)),
+    monitoredFilesList: Array.from(fileTransportsMap.keys()).map((file) => path.basename(file))
+  })
 
   // 监听进程退出事件，确保资源清理 - 使用once避免重复注册
   const setupProcessExitHandlers = (() => {
     let initialized = false
-    
+
     return () => {
       if (initialized) {
         console.log('⚠️ 进程退出处理器已初始化，跳过重复注册')
         return
       }
-      
+
       const exitHandler = (eventType) => {
         console.log(`📤 接收到 ${eventType} 事件，清理日志监控资源`)
         cleanup()
@@ -430,7 +436,7 @@ const fileWatcher = (() => {
       process.once('SIGINT', () => exitHandler('SIGINT'))
       process.once('SIGTERM', () => exitHandler('SIGTERM'))
       process.once('SIGHUP', () => exitHandler('SIGHUP'))
-      
+
       initialized = true
       console.log('✅ 日志系统进程退出处理器已初始化')
     }
@@ -539,30 +545,32 @@ const logger = winston.createLogger({
     })
   ],
 
-  // 🚨 异常处理
+  // 🚨 异常处理 - 移除console transport，避免EPIPE错误
   exceptionHandlers: [
     new winston.transports.File({
       filename: path.join(config.logging.dirname, 'exceptions.log'),
       format: logFormat,
       maxsize: 10485760, // 10MB
       maxFiles: 5
-    }),
-    new winston.transports.Console({
-      format: consoleFormat
     })
+    // 注释掉console transport，因为异常处理时经常发生EPIPE错误
+    // new winston.transports.Console({
+    //   format: consoleFormat
+    // })
   ],
 
-  // 🔄 未捕获异常处理
+  // 🔄 未捕获异常处理 - 移除console transport，避免EPIPE错误
   rejectionHandlers: [
     new winston.transports.File({
       filename: path.join(config.logging.dirname, 'rejections.log'),
       format: logFormat,
       maxsize: 10485760, // 10MB
       maxFiles: 5
-    }),
-    new winston.transports.Console({
-      format: consoleFormat
     })
+    // 注释掉console transport，因为rejection处理时经常发生EPIPE错误
+    // new winston.transports.Console({
+    //   format: consoleFormat
+    // })
   ],
 
   // 防止进程退出
@@ -581,7 +589,7 @@ logger.start = (message, metadata = {}) => {
 logger.request = (method, url, status, duration, metadata = {}) => {
   const emoji = status >= 400 ? '🔴' : status >= 300 ? '🟡' : '🟢'
   // 304 Not Modified 降级为 info 级别，其他 3xx 仍为 warn
-  const level = status >= 400 ? 'error' : (status >= 300 && status !== 304) ? 'warn' : 'info'
+  const level = status >= 400 ? 'error' : status >= 300 && status !== 304 ? 'warn' : 'info'
 
   logger[level](`${emoji} ${method} ${url} - ${status} (${duration}ms)`, {
     type: 'request',
@@ -749,23 +757,75 @@ logger.healthCheck = () => {
     fileWatcher: {
       ...monitoringStatus,
       status: monitoringStatus.directoryWatchers > 0 ? 'active' : 'inactive',
-      efficiency: monitoringStatus.directoryWatchers > 0 ? 
-        Math.round(monitoringStatus.monitoredFiles / monitoringStatus.directoryWatchers * 100) / 100 : 0
+      efficiency:
+        monitoringStatus.directoryWatchers > 0
+          ? Math.round(
+              (monitoringStatus.monitoredFiles / monitoringStatus.directoryWatchers) * 100
+            ) / 100
+          : 0
     }
   }
 }
 
+// 🛑 优雅关闭标志，防止在关闭过程中出现EPIPE错误
+let isShuttingDown = false
+
+// 设置优雅关闭状态
+logger.setShuttingDown = (shutting = true) => {
+  isShuttingDown = shutting
+  
+  if (shutting) {
+    // 在关闭过程中，将console transport的handleExceptions设置为false，避免EPIPE
+    logger.transports.forEach((transport) => {
+      if (transport.constructor.name === 'Console') {
+        transport.handleExceptions = false
+        transport.handleRejections = false
+        // 添加错误处理，忽略EPIPE错误
+        if (transport._stream && transport._stream.on) {
+          transport._stream.on('error', (error) => {
+            if (error.code === 'EPIPE') {
+              // 静默忽略EPIPE错误，避免循环
+              return
+            }
+            console.error('Console transport error:', error.message)
+          })
+        }
+      }
+    })
+  }
+}
+
+// 重写console transport的write方法，在关闭期间防止EPIPE
+const originalConsoleTransports = logger.transports.filter(t => t.constructor.name === 'Console')
+originalConsoleTransports.forEach((transport) => {
+  if (transport.log) {
+    const originalLog = transport.log
+    transport.log = function(info, callback) {
+      // 在关闭期间，直接调用callback而不实际写入
+      if (isShuttingDown) {
+        if (callback) callback()
+        return true
+      }
+      return originalLog.call(this, info, callback)
+    }
+  }
+})
+
 // 🧹 添加清理方法
 logger.cleanup = () => {
   try {
-    logger.info('🧹 开始清理日志系统资源...')
+    // 设置关闭状态，阻止进一步的console输出
+    logger.setShuttingDown(true)
     
+    // 使用console.log记录开始清理，避免winston循环
+    console.log('🧹 Starting logger system cleanup...')
+
     // 清理文件监控器
     fileWatcher.cleanup()
-    
+
     // 关闭主logger的所有传输器
     if (logger.transports && logger.transports.length > 0) {
-      logger.transports.forEach(transport => {
+      logger.transports.forEach((transport) => {
         try {
           if (transport.close && typeof transport.close === 'function') {
             transport.close()
@@ -779,10 +839,10 @@ logger.cleanup = () => {
       })
       logger.clear() // 移除所有传输器
     }
-    
+
     // 关闭安全日志记录器的传输器
     if (securityLogger && securityLogger.transports) {
-      securityLogger.transports.forEach(transport => {
+      securityLogger.transports.forEach((transport) => {
         try {
           if (transport.close && typeof transport.close === 'function') {
             transport.close()
@@ -796,10 +856,10 @@ logger.cleanup = () => {
       })
       securityLogger.clear()
     }
-    
+
     // 关闭认证详细日志记录器的传输器
     if (authDetailLogger && authDetailLogger.transports) {
-      authDetailLogger.transports.forEach(transport => {
+      authDetailLogger.transports.forEach((transport) => {
         try {
           if (transport.close && typeof transport.close === 'function') {
             transport.close()
@@ -813,10 +873,10 @@ logger.cleanup = () => {
       })
       authDetailLogger.clear()
     }
-    
+
     // 关闭异常处理器
     if (logger.exceptions && logger.exceptions.handlers) {
-      logger.exceptions.handlers.forEach(handler => {
+      logger.exceptions.handlers.forEach((handler) => {
         try {
           if (handler.close && typeof handler.close === 'function') {
             handler.close()
@@ -826,10 +886,10 @@ logger.cleanup = () => {
         }
       })
     }
-    
+
     // 关闭rejection处理器
     if (logger.rejections && logger.rejections.handlers) {
-      logger.rejections.handlers.forEach(handler => {
+      logger.rejections.handlers.forEach((handler) => {
         try {
           if (handler.close && typeof handler.close === 'function') {
             handler.close()
@@ -839,7 +899,7 @@ logger.cleanup = () => {
         }
       })
     }
-    
+
     console.log('✅ 日志系统所有传输器已关闭')
   } catch (error) {
     console.error('❌ 日志系统清理失败:', error.message)

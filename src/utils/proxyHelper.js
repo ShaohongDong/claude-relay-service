@@ -149,7 +149,9 @@ class ProxyHelper {
 
         // 连接耗时超过1秒时使用warn级别，否则使用debug级别
         if (connectTime > 1000) {
-          logger.warn(`🔗 代理连接耗时较长 - ${proxyInfoHeader} - 总耗时: ${connectTime.toFixed(2)}ms`)
+          logger.warn(
+            `🔗 代理连接耗时较长 - ${proxyInfoHeader} - 总耗时: ${connectTime.toFixed(2)}ms`
+          )
         } else {
           logger.debug(`🔗 代理连接成功 - ${proxyInfoHeader} - 总耗时: ${connectTime.toFixed(2)}ms`)
         }

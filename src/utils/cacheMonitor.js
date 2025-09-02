@@ -309,9 +309,9 @@ class CacheMonitor {
    */
   cleanup() {
     logger.info('🧹 Starting cache monitor cleanup...')
-    
+
     let clearedTimers = 0
-    
+
     // 清理所有定时器
     for (const [timerName, timerId] of Object.entries(this.timers)) {
       if (timerId) {
@@ -324,7 +324,7 @@ class CacheMonitor {
         }
       }
     }
-    
+
     // 重置定时器对象
     this.timers = {
       securityCleanup: null,
@@ -332,17 +332,19 @@ class CacheMonitor {
       quickStats: null,
       detailedReport: null
     }
-    
+
     // 清理缓存数据
     const cacheCount = this.monitors.size
     this.monitors.clear()
-    
+
     // 重置统计
     this.totalHits = 0
     this.totalMisses = 0
     this.totalEvictions = 0
-    
-    logger.success(`✅ Cache monitor cleanup completed: cleared ${clearedTimers} timers, ${cacheCount} cache monitors`)
+
+    logger.success(
+      `✅ Cache monitor cleanup completed: cleared ${clearedTimers} timers, ${cacheCount} cache monitors`
+    )
   }
 
   /**
@@ -351,7 +353,7 @@ class CacheMonitor {
   getCleanupStatus() {
     const activeTimers = Object.values(this.timers).filter(Boolean).length
     const totalTimers = Object.keys(this.timers).length
-    
+
     return {
       isCleanedUp: activeTimers === 0,
       activeTimers,

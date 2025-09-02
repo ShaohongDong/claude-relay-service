@@ -24,7 +24,7 @@ class GlobalConnectionPoolManager {
       lastHealthCheckAt: null
     }
 
-    logger.info('🌐 全局连接池管理器已创建')
+    logger.info('🌐 Global connection pool manager created')
   }
 
   /**
@@ -32,33 +32,33 @@ class GlobalConnectionPoolManager {
    */
   async initializeAllPools() {
     if (this.isInitialized) {
-      logger.info('⚠️ 连接池管理器已初始化，跳过重复初始化')
+      logger.info('⚠️ Connection pool manager already initialized, skipping duplicate initialization')
       return
     }
 
     this.stats.initializeStartedAt = Date.now()
-    logger.info('🚀 开始初始化所有账户连接池...')
+    logger.info('🚀 Starting initialization of all account connection pools...')
 
     try {
-      // 获取所有Claude账户
+      // Get all Claude accounts
       const accounts = await this.getAllClaudeAccounts()
-      logger.info(`📊 发现 ${accounts.length} 个Claude账户`)
+      logger.info(`📊 Found ${accounts.length} Claude accounts`)
 
       let successCount = 0
       let failureCount = 0
 
-      // 为每个账户创建连接池
+      // Create connection pool for each account
       for (const account of accounts) {
         try {
           await this.initializeAccountPool(account.id, account.name, account.proxy)
           successCount++
-          logger.success(`✅ 账户连接池初始化成功: ${account.name} (${account.id})`)
+          logger.success(`✅ Account connection pool initialized successfully: ${account.name} (${account.id})`)
         } catch (error) {
           failureCount++
           logger.error(
-            `❌ 账户连接池初始化失败: ${account.name} (${account.id}) - ${error.message}`
+            `❌ Account connection pool initialization failed: ${account.name} (${account.id}) - ${error.message}`
           )
-          // 继续处理其他账户，不中断整体初始化
+          // Continue processing other accounts, do not interrupt overall initialization
         }
       }
 
@@ -69,25 +69,27 @@ class GlobalConnectionPoolManager {
       const totalTime = this.stats.initializeCompletedAt - this.stats.initializeStartedAt
 
       logger.success(
-        `🎉 连接池管理器初始化完成! 成功: ${successCount}, 失败: ${failureCount}, 耗时: ${totalTime}ms`
+        `🎉 Connection pool manager initialization completed! Success: ${successCount}, Failed: ${failureCount}, Duration: ${totalTime}ms`
       )
 
-      // 计算总连接数
+      // Calculate total connections
       this.updateConnectionStats()
 
-      logger.info(`📈 连接池统计: ${this.stats.totalPools} 个池, ${this.stats.totalConnections} 个连接`)
+      logger.info(
+        `📈 Connection pool statistics: ${this.stats.totalPools} pools, ${this.stats.totalConnections} connections`
+      )
     } catch (error) {
-      logger.error('❌ 连接池管理器初始化失败:', error.message)
+      logger.error('❌ Connection pool manager initialization failed:', error.message)
       throw error
     }
   }
 
   /**
-   * 初始化单个账户的连接池
+   * Initialize connection pool for a single account
    */
   async initializeAccountPool(accountId, accountName, proxyConfig) {
     if (this.pools.has(accountId)) {
-      logger.warn(`⚠️ 账户连接池已存在: ${accountName} (${accountId})`)
+      logger.warn(`⚠️ Account connection pool already exists: ${accountName} (${accountId})`)
       return
     }
 
@@ -95,26 +97,26 @@ class GlobalConnectionPoolManager {
       throw new Error(`Account ${accountId} has no proxy configuration`)
     }
 
-    logger.info(`🔧 初始化账户连接池: ${accountName} (${accountId})`)
+    logger.info(`🔧 Initializing account connection pool: ${accountName} (${accountId})`)
 
-    // 创建智能连接池
+    // Create smart connection pool
     const pool = new SmartConnectionPool(accountId, proxyConfig)
 
-    // 初始化连接池（预热连接）
+    // Initialize connection pool (preheat connections)
     await pool.initialize()
 
-    // 存储到管理器中
+    // Store in manager
     this.pools.set(accountId, pool)
 
-    logger.debug(`💾 连接池已存储: 账户 ${accountName} (${accountId})`)
+    logger.debug(`💾 Connection pool stored: Account ${accountName} (${accountId})`)
   }
 
   /**
-   * 获取所有Claude账户信息
+   * Get all Claude account information
    */
   async getAllClaudeAccounts() {
     try {
-      // 获取所有Claude账户
+      // Get all Claude accounts
       const accountKeys = await redis.client.keys('claude:account:*')
       const accounts = []
 
@@ -122,54 +124,54 @@ class GlobalConnectionPoolManager {
         try {
           const accountData = await redis.client.hgetall(key)
           if (accountData && accountData.id) {
-            // 解析代理配置
+            // Parse proxy configuration
             let proxyConfig = null
             if (accountData.proxy) {
               try {
                 proxyConfig = JSON.parse(accountData.proxy)
               } catch (parseError) {
-                logger.warn(`⚠️ 账户 ${accountData.id} 代理配置解析失败: ${parseError.message}`)
+                logger.warn(`⚠️ Account ${accountData.id} proxy configuration parsing failed: ${parseError.message}`)
                 continue
               }
             }
 
             accounts.push({
               id: accountData.id,
-              name: accountData.name || `账户-${accountData.id.slice(0, 8)}`,
+              name: accountData.name || `Account-${accountData.id.slice(0, 8)}`,
               proxy: proxyConfig,
               isActive: accountData.isActive === 'true',
               status: accountData.status
             })
           }
         } catch (error) {
-          logger.warn(`⚠️ 读取账户数据失败 ${key}: ${error.message}`)
+          logger.warn(`⚠️ Failed to read account data ${key}: ${error.message}`)
           continue
         }
       }
 
-      // 过滤活跃账户和有代理配置的账户
+      // Filter active accounts and accounts with proxy configuration
       const activeAccounts = accounts.filter((account) => {
         if (!account.isActive) {
-          logger.debug(`⏸️ 跳过非活跃账户: ${account.name} (${account.id})`)
+          logger.debug(`⏸️ Skipping inactive account: ${account.name} (${account.id})`)
           return false
         }
         if (!account.proxy) {
-          logger.debug(`⏸️ 跳过无代理配置账户: ${account.name} (${account.id})`)
+          logger.debug(`⏸️ Skipping account without proxy configuration: ${account.name} (${account.id})`)
           return false
         }
         return true
       })
 
-      logger.info(`📋 有效账户筛选: ${accounts.length} -> ${activeAccounts.length}`)
+      logger.info(`📋 Valid account filtering: ${accounts.length} -> ${activeAccounts.length}`)
       return activeAccounts
     } catch (error) {
-      logger.error('❌ 获取Claude账户列表失败:', error.message)
+      logger.error('❌ Failed to get Claude account list:', error.message)
       throw error
     }
   }
 
   /**
-   * 获取指定账户的连接
+   * Get connection for specified account
    */
   getConnectionForAccount(accountId) {
     if (!this.isInitialized) {
@@ -183,16 +185,16 @@ class GlobalConnectionPoolManager {
 
     try {
       const connection = pool.getConnection()
-      logger.debug(`🔗 获取连接: 账户 ${accountId}, 连接 ${connection.connectionId}`)
+      logger.debug(`🔗 Get connection: Account ${accountId}, Connection ${connection.connectionId}`)
       return connection
     } catch (error) {
-      logger.error(`❌ 获取连接失败: 账户 ${accountId} - ${error.message}`)
+      logger.error(`❌ Failed to get connection: Account ${accountId} - ${error.message}`)
       throw error
     }
   }
 
   /**
-   * 获取连接池状态
+   * Get connection pool status
    */
   getPoolStatus(accountId) {
     const pool = this.pools.get(accountId)
@@ -204,7 +206,7 @@ class GlobalConnectionPoolManager {
   }
 
   /**
-   * 获取所有连接池状态
+   * Get all connection pool statuses
    */
   getAllPoolStatus() {
     const status = {
@@ -224,7 +226,7 @@ class GlobalConnectionPoolManager {
   }
 
   /**
-   * 更新连接统计信息
+   * Update connection statistics
    */
   updateConnectionStats() {
     let totalConnections = 0
@@ -242,15 +244,15 @@ class GlobalConnectionPoolManager {
   }
 
   /**
-   * 健康检查 - 检查所有连接池状态
+   * Health check - Check all connection pool statuses
    */
   async performHealthCheck() {
     if (!this.isInitialized) {
-      logger.warn('⚠️ 连接池管理器未初始化，跳过健康检查')
+      logger.warn('⚠️ Connection pool manager not initialized, skipping health check')
       return
     }
 
-    logger.debug('🏥 开始连接池健康检查...')
+    logger.debug('🏥 Starting connection pool health check...')
 
     let healthyPools = 0
     let unhealthyPools = 0
@@ -261,14 +263,14 @@ class GlobalConnectionPoolManager {
         healthyPools++
       } else {
         unhealthyPools++
-        logger.warn(`⚠️ 连接池无可用连接: 账户 ${accountId}`)
+        logger.warn(`⚠️ Connection pool has no available connections: Account ${accountId}`)
       }
     }
 
     this.updateConnectionStats()
 
     logger.info(
-      `🏥 健康检查完成: 健康 ${healthyPools}, 不健康 ${unhealthyPools}, 总连接 ${this.stats.totalConnections}`
+      `🏥 Health check completed: Healthy ${healthyPools}, Unhealthy ${unhealthyPools}, Total connections ${this.stats.totalConnections}`
     )
 
     return {
@@ -280,153 +282,154 @@ class GlobalConnectionPoolManager {
   }
 
   /**
-   * 添加新账户的连接池
+   * Add connection pool for new account
    */
   async addAccountPool(accountId, accountName, proxyConfig) {
     try {
       await this.initializeAccountPool(accountId, accountName, proxyConfig)
       this.stats.totalPools = this.pools.size
       this.updateConnectionStats()
-      logger.success(`✅ 新账户连接池已添加: ${accountName} (${accountId})`)
+      logger.success(`✅ New account connection pool added: ${accountName} (${accountId})`)
       return true
     } catch (error) {
-      logger.error(`❌ 添加账户连接池失败: ${accountName} (${accountId}) - ${error.message}`)
+      logger.error(`❌ Failed to add account connection pool: ${accountName} (${accountId}) - ${error.message}`)
       return false
     }
   }
 
   /**
-   * 移除账户的连接池
+   * Remove account connection pool
    */
   removeAccountPool(accountId) {
     const pool = this.pools.get(accountId)
     if (!pool) {
-      logger.warn(`⚠️ 账户连接池不存在: ${accountId}`)
+      logger.warn(`⚠️ Account connection pool does not exist: ${accountId}`)
       return false
     }
 
-    // 销毁连接池
+    // Destroy connection pool
     pool.destroy()
 
-    // 从管理器中移除
+    // Remove from manager
     this.pools.delete(accountId)
 
     this.stats.totalPools = this.pools.size
     this.updateConnectionStats()
 
-    logger.success(`✅ 账户连接池已移除: ${accountId}`)
+    logger.success(`✅ Account connection pool removed: ${accountId}`)
     return true
   }
 
   /**
-   * 销毁所有连接池（带超时控制）
+   * Destroy all connection pools (with timeout control)
    */
-  destroy(timeout = 20000) { // 20秒超时
+  destroy(timeout = 20000) {
+    // 20 second timeout
     return new Promise((resolve) => {
-      logger.info('🗑️ 开始销毁所有连接池...')
+      logger.info('🗑️ Starting to destroy all connection pools...')
       const startTime = Date.now()
-      
+
       let completedPools = 0
       let errorPools = 0
       const totalPools = this.pools.size
 
       if (totalPools === 0) {
-        logger.info('ℹ️ 没有连接池需要销毁')
+        logger.info('ℹ️ No connection pools to destroy')
         this.pools.clear()
         this.isInitialized = false
         this.stats.totalPools = 0
         this.stats.totalConnections = 0
-        logger.success('✅ 连接池销毁完成（无需操作）')
+        logger.success('✅ Connection pool destruction completed (no action needed)')
         return resolve({ completed: 0, errors: 0, timeout: false })
       }
 
-      // 设置超时处理
+      // Set timeout handling
       const timeoutHandle = setTimeout(() => {
         const elapsedTime = Date.now() - startTime
-        logger.warn(`⚠️ 连接池销毁超时 (${elapsedTime}ms)，强制完成清理`)
-        logger.warn(`📊 销毁状态: 完成 ${completedPools}/${totalPools}, 错误 ${errorPools}`)
-        
-        // 强制清理剩余状态
+        logger.warn(`⚠️ Connection pool destruction timeout (${elapsedTime}ms), forcing cleanup completion`)
+        logger.warn(`📊 Destruction status: Completed ${completedPools}/${totalPools}, Errors ${errorPools}`)
+
+        // Force cleanup remaining state
         this.pools.clear()
         this.isInitialized = false
         this.stats.totalPools = 0
         this.stats.totalConnections = 0
-        
-        resolve({ 
-          completed: completedPools, 
-          errors: errorPools, 
-          timeout: true, 
-          elapsedTime 
+
+        resolve({
+          completed: completedPools,
+          errors: errorPools,
+          timeout: true,
+          elapsedTime
         })
       }, timeout)
 
-      // 分阶段清理：优雅关闭 -> 强制关闭
-      const gracefulTimeout = Math.min(timeout * 0.75, 15000) // 75%时间用于优雅关闭，最多15秒
-      
-      logger.info(`🕒 阶段1: 优雅关闭连接池 (${gracefulTimeout}ms)`)
-      
-      // 统一处理单个池销毁完成
+      // Phased cleanup: graceful shutdown -> forced shutdown
+      const gracefulTimeout = Math.min(timeout * 0.75, 15000) // 75% time for graceful shutdown, max 15 seconds
+
+      logger.info(`🕒 Phase 1: Graceful connection pool shutdown (${gracefulTimeout}ms)`)
+
+      // Unified handling of single pool destruction completion
       const handlePoolDestroyed = (accountId, isError = false) => {
         if (isError) {
           errorPools++
         } else {
           completedPools++
         }
-        
+
         const finished = completedPools + errorPools
         if (finished >= totalPools) {
           clearTimeout(timeoutHandle)
           const elapsedTime = Date.now() - startTime
-          
+
           this.pools.clear()
           this.isInitialized = false
           this.stats.totalPools = 0
           this.stats.totalConnections = 0
-          
-          logger.success(`✅ 所有连接池已销毁 (${elapsedTime}ms): 成功 ${completedPools}, 错误 ${errorPools}`)
-          resolve({ 
-            completed: completedPools, 
-            errors: errorPools, 
-            timeout: false, 
-            elapsedTime 
+
+          logger.success(
+            `✅ All connection pools destroyed (${elapsedTime}ms): Success ${completedPools}, Errors ${errorPools}`
+          )
+          resolve({
+            completed: completedPools,
+            errors: errorPools,
+            timeout: false,
+            elapsedTime
           })
         }
       }
 
-      // 异步销毁每个连接池
+      // Asynchronously destroy each connection pool
       for (const [accountId, pool] of this.pools) {
-        // 为每个连接池设置独立的销毁超时
-        const poolTimeout = Math.min(gracefulTimeout / totalPools, 5000) // 每个池最多5秒
-        
+        // Set independent destruction timeout for each connection pool
+        const poolTimeout = Math.min(gracefulTimeout / totalPools, 5000) // max 5 seconds per pool
+
         Promise.race([
-          // 池的销毁Promise
+          // Pool destruction Promise
           new Promise((poolResolve) => {
             try {
-              // 如果池有异步destroy方法，使用Promise处理
+              // If pool has async destroy method, handle with Promise
               const destroyResult = pool.destroy()
               if (destroyResult && typeof destroyResult.then === 'function') {
-                destroyResult
-                  .then(() => poolResolve(true))
-                  .catch(() => poolResolve(false))
+                destroyResult.then(() => poolResolve(true)).catch(() => poolResolve(false))
               } else {
-                // 同步destroy方法
+                // Synchronous destroy method
                 poolResolve(true)
               }
             } catch (error) {
-              logger.error(`❌ 销毁连接池失败: 账户 ${accountId} - ${error.message}`)
+              logger.error(`❌ Failed to destroy connection pool: Account ${accountId} - ${error.message}`)
               poolResolve(false)
             }
           }),
-          // 单个池的超时Promise
+          // Single pool timeout Promise
           new Promise((poolResolve) => {
             setTimeout(() => {
-              logger.warn(`⚠️ 连接池销毁超时: 账户 ${accountId} (${poolTimeout}ms)`)
+              logger.warn(`⚠️ Connection pool destruction timeout: Account ${accountId} (${poolTimeout}ms)`)
               poolResolve(false)
             }, poolTimeout)
           })
         ]).then((success) => {
           if (success) {
-            logger.debug(`🗑️ 连接池已销毁: 账户 ${accountId}`)
+            logger.debug(`🗑️ Connection pool destroyed: Account ${accountId}`)
             handlePoolDestroyed(accountId, false)
           } else {
             handlePoolDestroyed(accountId, true)
@@ -437,7 +440,7 @@ class GlobalConnectionPoolManager {
   }
 
   /**
-   * 获取管理器实例的摘要信息
+   * Get manager instance summary information
    */
   getSummary() {
     return {
@@ -452,7 +455,7 @@ class GlobalConnectionPoolManager {
   }
 }
 
-// 创建全局单例实例
+// Create global singleton instance
 const globalConnectionPoolManager = new GlobalConnectionPoolManager()
 
 module.exports = globalConnectionPoolManager

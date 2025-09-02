@@ -832,7 +832,7 @@ class ClaudeConsoleAccountService {
    */
   cleanup() {
     logger.info('🧹 Starting Claude Console account service cleanup...')
-    
+
     if (this._cleanupTimer) {
       try {
         clearInterval(this._cleanupTimer)
@@ -842,7 +842,7 @@ class ClaudeConsoleAccountService {
         logger.error('❌ Error clearing Claude Console service cleanup timer:', error.message)
       }
     }
-    
+
     // 清理缓存
     if (this._decryptCache) {
       try {
@@ -853,10 +853,10 @@ class ClaudeConsoleAccountService {
         logger.error('❌ Error clearing Claude Console service decrypt cache:', error.message)
       }
     }
-    
+
     // 重置加密密钥缓存
     this._encryptionKeyCache = null
-    
+
     logger.success('✅ Claude Console account service cleanup completed')
   }
 }

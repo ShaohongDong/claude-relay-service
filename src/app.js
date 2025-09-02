@@ -39,9 +39,9 @@ class Application {
   constructor() {
     this.app = express()
     this.server = null
-    this.cleanupInterval = null // 保存清理任务定时器
+    this.cleanupInterval = null // Save cleanup task timer
     
-    // 连接池系统组件
+    // Connection pool system components
     this.globalConnectionPoolManager = null
     this.hybridConnectionManager = null
     this.connectionLifecycleManager = null
@@ -460,31 +460,41 @@ class Application {
     try {
       logger.info('🔄 Initializing connection pool system...')
 
-      // 初始化全局连接池管理器
+      // 步骤1: 初始化全局连接池管理器 (仅创建对象，不初始化连接池)
       const globalConnectionPoolManager = require('./services/globalConnectionPoolManager')
       this.globalConnectionPoolManager = globalConnectionPoolManager
-      
-      logger.info('🔗 Starting global connection pool manager...')
-      await this.globalConnectionPoolManager.initializeAllPools()
+      logger.info('🌐 Global connection pool manager created')
 
-      // 初始化混合连接管理器
+      // 步骤2: 初始化混合连接管理器
       const HybridConnectionManager = require('./services/hybridConnectionManager')
       this.hybridConnectionManager = new HybridConnectionManager(this.globalConnectionPoolManager)
-      
-      logger.info('🔄 Starting hybrid connection manager...')
-      await this.hybridConnectionManager.start()
+      logger.info('🔄 Hybrid connection manager created')
 
-      // 初始化连接生命周期管理器
+      // 步骤3: 初始化连接生命周期管理器
       const ConnectionLifecycleManager = require('./services/connectionLifecycleManager')
       this.connectionLifecycleManager = new ConnectionLifecycleManager()
-      
-      logger.info('♻️ Starting connection lifecycle manager...')
-      this.connectionLifecycleManager.start()
+      logger.info('♻️ Connection lifecycle manager created')
 
-      // 设置组件间的事件连接
+      // 步骤4: 设置组件间的事件连接 (在创建连接之前!)
       this.setupConnectionPoolEvents()
+      logger.info('🎧 Event listeners setup completed')
+
+      // 步骤5: 启动混合连接管理器 (设置池的事件监听器)
+      await this.hybridConnectionManager.start()
+      logger.info('🔄 Hybrid connection manager started')
+
+      // 步骤6: 启动连接生命周期管理器
+      this.connectionLifecycleManager.start()
+      logger.info('♻️ Connection lifecycle manager started')
+
+      // 步骤7: 现在所有事件监听器都就位，可以安全地初始化连接池了
+      logger.info('🔗 Starting connection pool initialization with event listeners ready...')
+      await this.globalConnectionPoolManager.initializeAllPools()
 
       logger.success('✅ Connection pool system initialized successfully')
+      
+      // 同步现有连接到生命周期管理器 (确保所有连接都被注册)
+      await this.syncExistingConnections()
       
       // 打印系统状态摘要
       const summary = this.globalConnectionPoolManager.getSummary()
@@ -539,6 +549,65 @@ class Application {
     })
 
     logger.debug('🎧 Connection pool system events connected')
+  }
+
+  // 🔄 同步现有连接到生命周期管理器
+  async syncExistingConnections() {
+    if (!this.globalConnectionPoolManager || !this.connectionLifecycleManager) {
+      logger.warn('⚠️ Cannot sync connections: managers not initialized')
+      return
+    }
+
+    logger.info('🔄 Syncing existing connections to lifecycle manager...')
+    
+    let totalSynced = 0
+    
+    try {
+      // 遍历所有连接池
+      for (const [accountId, pool] of this.globalConnectionPoolManager.pools) {
+        if (!pool || typeof pool.getAllConnections !== 'function') {
+          logger.warn(`⚠️ Pool for account ${accountId} does not support connection enumeration`)
+          continue
+        }
+
+        // 获取连接池中的所有现有连接
+        const connections = pool.getAllConnections()
+        logger.debug(`📊 Found ${connections.length} existing connections in pool for account ${accountId}`)
+
+        // 将每个连接注册到生命周期管理器
+        for (const conn of connections) {
+          try {
+            this.connectionLifecycleManager.registerConnection(
+              conn.accountId,
+              conn.connectionId,
+              {
+                latency: conn.latency,
+                proxyInfo: conn.proxyInfo,
+                agent: conn.agent,
+                syncedFromExisting: true // 标记这是同步的现有连接
+              }
+            )
+            totalSynced++
+          } catch (error) {
+            logger.error(`❌ Failed to sync connection ${conn.connectionId}: ${error.message}`)
+          }
+        }
+      }
+
+      logger.success(`✅ Successfully synced ${totalSynced} existing connections to lifecycle manager`)
+      
+      // 触发一次健康检查以验证同步结果
+      if (this.connectionLifecycleManager.performFallbackHealthCheck) {
+        setTimeout(() => {
+          logger.info('🏥 Triggering fallback health check to verify sync results...')
+          this.connectionLifecycleManager.performFallbackHealthCheck()
+        }, 1000)
+      }
+      
+    } catch (error) {
+      logger.error(`❌ Failed to sync existing connections: ${error.message}`)
+      throw error
+    }
   }
 
   // 🧹 清理连接池系统
@@ -1275,6 +1344,16 @@ class Application {
   setupGracefulShutdown() {
     const shutdown = async (signal) => {
       const shutdownStart = Date.now()
+      
+      // 🛑 关键修复：立即设置logger为关闭状态，防止EPIPE错误
+      if (logger.setShuttingDown) {
+        logger.setShuttingDown(true)
+      }
+      
+      // 使用console.log记录关闭开始，避免winston在关闭状态下的潜在问题
+      console.log(`🛑 [${new Date().toISOString()}] Received ${signal}, starting graceful shutdown...`)
+      
+      // 仍然尝试使用logger记录，但已经设置了保护机制
       logger.info(`🛑 Received ${signal}, starting graceful shutdown...`)
 
       // 清理定时器（防止阻塞进程退出）
@@ -1282,7 +1361,7 @@ class Application {
       const timerCleanupStart = Date.now()
       try {
         if (this.cleanupTimerId) {
-          timerManager.clearTimer(this.cleanupTimerId)
+          timerManager.safeCleanTimer(this.cleanupTimerId)
           logger.info(`🧹 Application cleanup timer cleared (${this.cleanupTimerId})`)
         }
         
@@ -1493,12 +1572,40 @@ class Application {
 
     // 处理未捕获异常
     process.on('uncaughtException', (error) => {
-      logger.error('💥 Uncaught exception:', error)
+      // 🛑 在记录错误前设置关闭状态，防止EPIPE
+      if (logger.setShuttingDown) {
+        logger.setShuttingDown(true)
+      }
+      
+      // 使用console.error作为备用，确保错误能被记录
+      console.error(`💥 [${new Date().toISOString()}] Uncaught exception:`, error)
+      
+      // 尝试使用logger记录，但已设置保护
+      try {
+        logger.error('💥 Uncaught exception:', error)
+      } catch (logError) {
+        console.error('Logger error during exception handling:', logError.message)
+      }
+      
       shutdown('uncaughtException')
     })
 
     process.on('unhandledRejection', (reason, promise) => {
-      logger.error('💥 Unhandled rejection at:', promise, 'reason:', reason)
+      // 🛑 在记录错误前设置关闭状态，防止EPIPE
+      if (logger.setShuttingDown) {
+        logger.setShuttingDown(true)
+      }
+      
+      // 使用console.error作为备用
+      console.error(`💥 [${new Date().toISOString()}] Unhandled rejection at:`, promise, 'reason:', reason)
+      
+      // 尝试使用logger记录，但已设置保护
+      try {
+        logger.error('💥 Unhandled rejection at:', promise, 'reason:', reason)
+      } catch (logError) {
+        console.error('Logger error during rejection handling:', logError.message)
+      }
+      
       shutdown('unhandledRejection')
     })
   }

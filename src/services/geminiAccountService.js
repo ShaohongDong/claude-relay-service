@@ -1354,7 +1354,7 @@ async function generateContentStream(
  */
 function cleanup() {
   logger.info('🧹 Starting Gemini account service cleanup...')
-  
+
   if (_cleanupTimer) {
     try {
       clearInterval(_cleanupTimer)
@@ -1364,7 +1364,7 @@ function cleanup() {
       logger.error('❌ Error clearing Gemini service cleanup timer:', error.message)
     }
   }
-  
+
   // 清理缓存
   if (decryptCache) {
     try {
@@ -1375,10 +1375,10 @@ function cleanup() {
       logger.error('❌ Error clearing Gemini service decrypt cache:', error.message)
     }
   }
-  
+
   // 重置加密密钥缓存
   _encryptionKeyCache = null
-  
+
   logger.success('✅ Gemini account service cleanup completed')
 }
 

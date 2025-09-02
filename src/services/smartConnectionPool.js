@@ -49,13 +49,15 @@ class SmartConnectionPool extends EventEmitter {
       }
 
       this.isInitialized = true
-      logger.success(`🎉 连接池预热完成: 账户 ${this.accountId} (${this.connections.length} 个连接)`)
-      
+      logger.success(
+        `🎉 连接池预热完成: 账户 ${this.accountId} (${this.connections.length} 个连接)`
+      )
+
       // 发射连接池状态变化事件
       this.emit('pool:status:changed', {
         oldStatus: 'initializing',
         status: 'ready',
-        healthyConnections: this.connections.filter(conn => conn.isHealthy).length,
+        healthyConnections: this.connections.filter((conn) => conn.isHealthy).length,
         totalConnections: this.connections.length
       })
     } catch (error) {
@@ -251,12 +253,12 @@ class SmartConnectionPool extends EventEmitter {
         connectionId: newConnection.id,
         downtime: Date.now() - (brokenConnection.lastUsedAt || brokenConnection.createdAt)
       })
-      
+
       // 发射连接池状态变化事件
       this.emit('pool:status:changed', {
         oldStatus: 'degraded',
         status: 'ready',
-        healthyConnections: this.connections.filter(conn => conn.isHealthy).length,
+        healthyConnections: this.connections.filter((conn) => conn.isHealthy).length,
         totalConnections: this.connections.length
       })
     } catch (error) {
@@ -357,11 +359,12 @@ class SmartConnectionPool extends EventEmitter {
   /**
    * 销毁连接池（带超时控制）
    */
-  destroy(timeout = 5000) { // 5秒超时
+  destroy(timeout = 5000) {
+    // 5秒超时
     return new Promise((resolve) => {
       logger.info(`🗑️ 销毁连接池: 账户 ${this.accountId}`)
       const startTime = Date.now()
-      
+
       let destroyedCount = 0
       let errorCount = 0
       const totalConnections = this.connections.length
@@ -379,16 +382,16 @@ class SmartConnectionPool extends EventEmitter {
         const elapsedTime = Date.now() - startTime
         logger.warn(`⚠️ 连接池销毁超时: 账户 ${this.accountId} (${elapsedTime}ms)`)
         logger.warn(`📊 销毁状态: 完成 ${destroyedCount}/${totalConnections}, 错误 ${errorCount}`)
-        
+
         // 强制清理状态
         this.connections = []
         this.isInitialized = false
-        
-        resolve({ 
-          destroyed: destroyedCount, 
-          errors: errorCount, 
-          timeout: true, 
-          elapsedTime 
+
+        resolve({
+          destroyed: destroyedCount,
+          errors: errorCount,
+          timeout: true,
+          elapsedTime
         })
       }, timeout)
 
@@ -399,22 +402,24 @@ class SmartConnectionPool extends EventEmitter {
         } else {
           destroyedCount++
         }
-        
+
         const finished = destroyedCount + errorCount
         if (finished >= totalConnections) {
           clearTimeout(timeoutHandle)
           const elapsedTime = Date.now() - startTime
-          
+
           // 清空连接数组
           this.connections = []
           this.isInitialized = false
-          
-          logger.success(`✅ 连接池已销毁: 账户 ${this.accountId} (${elapsedTime}ms): 成功关闭 ${destroyedCount}, 错误 ${errorCount}`)
-          resolve({ 
-            destroyed: destroyedCount, 
-            errors: errorCount, 
-            timeout: false, 
-            elapsedTime 
+
+          logger.success(
+            `✅ 连接池已销毁: 账户 ${this.accountId} (${elapsedTime}ms): 成功关闭 ${destroyedCount}, 错误 ${errorCount}`
+          )
+          resolve({
+            destroyed: destroyedCount,
+            errors: errorCount,
+            timeout: false,
+            elapsedTime
           })
         }
       }
@@ -423,16 +428,16 @@ class SmartConnectionPool extends EventEmitter {
       this.connections.forEach((connection) => {
         // 立即标记连接为不健康
         connection.isHealthy = false
-        
+
         // 为每个连接设置独立的销毁超时
         const connectionTimeout = Math.min(timeout / totalConnections, 2000) // 每个连接最多2秒
-        
+
         Promise.race([
           // 连接销毁Promise
           new Promise((connResolve) => {
             try {
               let destroyed = false
-              
+
               // 尝试优雅关闭代理Agent
               if (connection.agent && typeof connection.agent.destroy === 'function') {
                 try {
@@ -443,14 +448,14 @@ class SmartConnectionPool extends EventEmitter {
                   logger.warn(`⚠️ 代理Agent destroy失败: ${destroyError.message}`)
                 }
               }
-              
+
               // 备用方法：手动关闭sockets
               if (!destroyed && connection.agent && connection.agent.sockets) {
                 try {
                   for (const hostPort in connection.agent.sockets) {
                     const sockets = connection.agent.sockets[hostPort]
                     if (Array.isArray(sockets)) {
-                      sockets.forEach(socket => {
+                      sockets.forEach((socket) => {
                         try {
                           socket.destroy()
                         } catch (socketError) {
@@ -465,9 +470,11 @@ class SmartConnectionPool extends EventEmitter {
                   logger.warn(`⚠️ 关闭sockets失败: ${socketsError.message}`)
                 }
               }
-              
+
               if (!destroyed) {
-                logger.warn(`⚠️ 连接 ${connection.id} 的代理Agent无法关闭 (agent类型: ${typeof connection.agent})`)
+                logger.warn(
+                  `⚠️ 连接 ${connection.id} 的代理Agent无法关闭 (agent类型: ${typeof connection.agent})`
+                )
                 connResolve(false) // 标记为处理失败但不是严重错误
               } else {
                 connResolve(true)
@@ -489,6 +496,21 @@ class SmartConnectionPool extends EventEmitter {
         })
       })
     })
+  }
+
+  /**
+   * 获取所有现有连接 (用于同步到生命周期管理器)
+   */
+  getAllConnections() {
+    return this.connections.map((conn) => ({
+      connectionId: conn.id,
+      accountId: this.accountId,
+      isHealthy: conn.isHealthy,
+      createdAt: conn.createdAt || Date.now(),
+      latency: conn.latency,
+      agent: conn.agent,
+      proxyInfo: this.proxyConfig ? `${this.proxyConfig.host}:${this.proxyConfig.port}` : 'direct'
+    }))
   }
 }
 

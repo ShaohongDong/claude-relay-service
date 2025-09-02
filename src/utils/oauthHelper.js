@@ -179,7 +179,9 @@ async function exchangeCodeForTokens(authorizationCode, codeVerifier, state, pro
     const agent = ProxyHelper.createProxyAgent(proxyConfig)
     if (agent) {
       axiosConfig.httpsAgent = agent
-      logger.info(`🌐 Using proxy for OAuth token exchange: ${ProxyHelper.maskProxyInfo(proxyConfig)}`)
+      logger.info(
+        `🌐 Using proxy for OAuth token exchange: ${ProxyHelper.maskProxyInfo(proxyConfig)}`
+      )
     } else {
       logger.warn('🌐 Failed to create proxy agent for OAuth token exchange')
     }
@@ -248,7 +250,7 @@ async function exchangeCodeForTokens(authorizationCode, codeVerifier, state, pro
   } catch (error) {
     // 记录代理连接错误（如果相关）
     ProxyHelper.logProxyConnectError(error)
-    
+
     // 处理axios错误响应
     if (error.response) {
       // 服务器返回了错误状态码
@@ -396,7 +398,9 @@ async function exchangeSetupTokenCode(authorizationCode, codeVerifier, state, pr
     const agent = ProxyHelper.createProxyAgent(proxyConfig)
     if (agent) {
       axiosConfig.httpsAgent = agent
-      logger.info(`🌐 Using proxy for Setup Token exchange: ${ProxyHelper.maskProxyInfo(proxyConfig)}`)
+      logger.info(
+        `🌐 Using proxy for Setup Token exchange: ${ProxyHelper.maskProxyInfo(proxyConfig)}`
+      )
     } else {
       logger.warn('🌐 Failed to create proxy agent for Setup Token exchange')
     }
@@ -464,7 +468,7 @@ async function exchangeSetupTokenCode(authorizationCode, codeVerifier, state, pr
   } catch (error) {
     // 记录代理连接错误（如果相关）
     ProxyHelper.logProxyConnectError(error)
-    
+
     // 使用与标准OAuth相同的错误处理逻辑
     if (error.response) {
       const { status } = error.response

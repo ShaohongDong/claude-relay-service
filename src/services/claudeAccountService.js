@@ -16,6 +16,7 @@ const {
 const tokenRefreshService = require('./tokenRefreshService')
 const LRUCache = require('../utils/lruCache')
 const { formatDateWithTimezone, getISOStringWithTimezone } = require('../utils/dateHelper')
+const timerManager = require('../utils/timerManager')
 
 class ClaudeAccountService {
   constructor() {
@@ -34,15 +35,23 @@ class ClaudeAccountService {
 
     // 📝 定时器管理
     this._cleanupTimer = null
+    this._cleanupTimerId = null
 
-    // 🧹 定期清理缓存（每10分钟）
-    this._cleanupTimer = setInterval(
+    // 🧹 定期清理缓存（每10分钟）- 使用timerManager统一管理
+    const cleanupResult = timerManager.setInterval(
       () => {
         this._decryptCache.cleanup()
         logger.info('🧹 Claude decrypt cache cleanup completed', this._decryptCache.getStats())
       },
-      10 * 60 * 1000
+      10 * 60 * 1000,
+      {
+        name: 'claude-account-cache-cleanup',
+        service: 'claudeAccountService',
+        description: '定期清理Claude账户解密缓存'
+      }
     )
+    this._cleanupTimer = cleanupResult.intervalId
+    this._cleanupTimerId = cleanupResult.timerId
 
     logger.debug('🎯 Claude account service initialized with resource cleanup support')
   }
@@ -220,7 +229,9 @@ class ClaudeAccountService {
 
       // 从连接池获取预热连接
       const connection = ProxyHelper.getConnectionForAccount(accountId)
-      logger.debug(`🔗 使用连接池连接进行token刷新: 账户 ${accountId}, 连接 ${connection.connectionId}`)
+      logger.debug(
+        `🔗 使用连接池连接进行token刷新: 账户 ${accountId}, 连接 ${connection.connectionId}`
+      )
 
       // 创建axios配置
       const axiosConfig = {
@@ -335,7 +346,7 @@ class ClaudeAccountService {
     } catch (error) {
       // 记录代理连接错误（如果相关）
       ProxyHelper.logProxyConnectError(error)
-      
+
       // 记录刷新失败
       const accountData = await redis.getClaudeAccount(accountId)
       if (accountData) {
@@ -1456,7 +1467,9 @@ class ClaudeAccountService {
 
       // 从连接池获取连接（优先级高于传入的agent）
       const connection = ProxyHelper.getConnectionForAccount(accountId)
-      logger.debug(`🔗 使用连接池连接获取profile: 账户 ${accountId}, 连接 ${connection.connectionId}`)
+      logger.debug(
+        `🔗 使用连接池连接获取profile: 账户 ${accountId}, 连接 ${connection.connectionId}`
+      )
 
       // 创建axios配置
       const axiosConfig = {
@@ -1541,7 +1554,7 @@ class ClaudeAccountService {
     } catch (error) {
       // 记录代理连接错误（如果相关）
       ProxyHelper.logProxyConnectError(error)
-      
+
       if (error.response?.status === 401) {
         logger.warn(`⚠️ Profile API returned 401 for account ${accountId} - token may be invalid`)
       } else if (error.response?.status === 403) {
@@ -2026,17 +2039,18 @@ class ClaudeAccountService {
    */
   cleanup() {
     logger.info('🧹 Starting Claude account service cleanup...')
-    
-    if (this._cleanupTimer) {
+
+    if (this._cleanupTimerId) {
       try {
-        clearInterval(this._cleanupTimer)
+        timerManager.safeCleanTimer(this._cleanupTimerId)
         this._cleanupTimer = null
+        this._cleanupTimerId = null
         logger.debug('✅ Claude service cleanup timer cleared')
       } catch (error) {
         logger.error('❌ Error clearing Claude service cleanup timer:', error.message)
       }
     }
-    
+
     // 清理缓存
     if (this._decryptCache) {
       try {
@@ -2047,10 +2061,10 @@ class ClaudeAccountService {
         logger.error('❌ Error clearing Claude service decrypt cache:', error.message)
       }
     }
-    
+
     // 重置加密密钥缓存
     this._encryptionKeyCache = null
-    
+
     logger.success('✅ Claude account service cleanup completed')
   }
 }

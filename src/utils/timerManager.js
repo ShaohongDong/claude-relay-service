@@ -15,7 +15,7 @@ class TimerManager {
       activeTimers: 0
     }
     this.isCleanupRegistered = false
-    
+
     logger.info('⏲️ 全局定时器管理器已创建')
     this.setupProcessExitHandlers()
   }
@@ -32,10 +32,10 @@ class TimerManager {
     }
 
     const timerId = this.generateTimerId('interval')
-    
+
     try {
       const intervalId = setInterval(callback, interval)
-      
+
       const timerInfo = {
         id: timerId,
         type: 'interval',
@@ -50,14 +50,14 @@ class TimerManager {
           ...metadata
         }
       }
-      
+
       this.timers.set(timerId, timerInfo)
       this.intervals.set(intervalId, timerId)
       this.stats.totalCreated++
       this.stats.activeTimers++
-      
+
       logger.debug(`⏲️ 定时器已注册: ${timerId} (${timerInfo.metadata.name}) - 间隔: ${interval}ms`)
-      
+
       return { timerId, intervalId }
     } catch (error) {
       logger.error(`❌ 注册定时器失败: ${error.message}`)
@@ -77,17 +77,17 @@ class TimerManager {
     }
 
     const timerId = this.generateTimerId('timeout')
-    
+
     try {
       const timeoutId = setTimeout(() => {
-        // 执行回调后自动清理
+        // 执行回调后自动清理（使用静默模式避免重复清理警告）
         try {
           callback()
         } finally {
-          this.clearTimer(timerId)
+          this.clearTimer(timerId, true) // 静默清理，避免重复清理警告
         }
       }, timeout)
-      
+
       const timerInfo = {
         id: timerId,
         type: 'timeout',
@@ -102,14 +102,16 @@ class TimerManager {
           ...metadata
         }
       }
-      
+
       this.timers.set(timerId, timerInfo)
       this.timeouts.set(timeoutId, timerId)
       this.stats.totalCreated++
       this.stats.activeTimers++
-      
-      logger.debug(`⏲️ 超时定时器已注册: ${timerId} (${timerInfo.metadata.name}) - 超时: ${timeout}ms`)
-      
+
+      logger.debug(
+        `⏲️ 超时定时器已注册: ${timerId} (${timerInfo.metadata.name}) - 超时: ${timeout}ms`
+      )
+
       return { timerId, timeoutId }
     } catch (error) {
       logger.error(`❌ 注册超时定时器失败: ${error.message}`)
@@ -119,11 +121,15 @@ class TimerManager {
 
   /**
    * 清理指定定时器
+   * @param {string} timerId - 定时器ID
+   * @param {boolean} silent - 静默模式，不记录不存在的警告
    */
-  clearTimer(timerId) {
+  clearTimer(timerId, silent = false) {
     const timer = this.timers.get(timerId)
     if (!timer) {
-      logger.warn(`⚠️ 定时器不存在: ${timerId}`)
+      if (!silent) {
+        logger.warn(`⚠️ 定时器不存在: ${timerId}`)
+      }
       return false
     }
 
@@ -135,11 +141,11 @@ class TimerManager {
         clearTimeout(timer.timeoutId)
         this.timeouts.delete(timer.timeoutId)
       }
-      
+
       this.timers.delete(timerId)
       this.stats.totalCleared++
       this.stats.activeTimers--
-      
+
       logger.debug(`⏲️ 定时器已清理: ${timerId} (${timer.metadata.name})`)
       return true
     } catch (error) {
@@ -149,24 +155,34 @@ class TimerManager {
   }
 
   /**
+   * 安全清理定时器（用于外部调用，自动处理重复清理）
+   * @param {string} timerId - 定时器ID
+   * @returns {boolean} 是否成功清理
+   */
+  safeCleanTimer(timerId) {
+    return this.clearTimer(timerId, true) // 使用静默模式
+  }
+
+  /**
    * 按服务清理定时器
    */
   clearTimersByService(serviceName) {
     const timersToClean = []
-    
+
     for (const [timerId, timer] of this.timers) {
       if (timer.metadata.service === serviceName) {
         timersToClean.push(timerId)
       }
     }
-    
+
     let clearedCount = 0
     for (const timerId of timersToClean) {
-      if (this.clearTimer(timerId)) {
+      if (this.clearTimer(timerId, true)) {
+        // 使用静默模式避免批量清理时的警告
         clearedCount++
       }
     }
-    
+
     logger.info(`⏲️ 服务定时器清理完成: ${serviceName} (${clearedCount}/${timersToClean.length})`)
     return clearedCount
   }
@@ -176,11 +192,11 @@ class TimerManager {
    */
   clearAllTimers() {
     logger.info(`⏲️ 开始清理所有定时器 (${this.timers.size} 个)...`)
-    
+
     let clearedIntervals = 0
     let clearedTimeouts = 0
     let errors = 0
-    
+
     // 清理所有interval
     for (const [intervalId, timerId] of this.intervals) {
       try {
@@ -191,7 +207,7 @@ class TimerManager {
         logger.warn(`⚠️ 清理interval失败: ${intervalId} - ${error.message}`)
       }
     }
-    
+
     // 清理所有timeout
     for (const [timeoutId, timerId] of this.timeouts) {
       try {
@@ -202,18 +218,20 @@ class TimerManager {
         logger.warn(`⚠️ 清理timeout失败: ${timeoutId} - ${error.message}`)
       }
     }
-    
+
     // 更新统计信息
     this.stats.totalCleared += clearedIntervals + clearedTimeouts
     this.stats.activeTimers = 0
-    
+
     // 清空所有映射
     this.timers.clear()
     this.intervals.clear()
     this.timeouts.clear()
-    
-    logger.success(`✅ 所有定时器已清理: interval ${clearedIntervals}, timeout ${clearedTimeouts}, 错误 ${errors}`)
-    
+
+    logger.success(
+      `✅ 所有定时器已清理: interval ${clearedIntervals}, timeout ${clearedTimeouts}, 错误 ${errors}`
+    )
+
     return {
       intervals: clearedIntervals,
       timeouts: clearedTimeouts,
@@ -228,10 +246,10 @@ class TimerManager {
   getStatus() {
     const timersByService = new Map()
     const timersByType = { interval: 0, timeout: 0 }
-    
+
     for (const timer of this.timers.values()) {
       // 按服务分组
-      const service = timer.metadata.service
+      const { service } = timer.metadata
       if (!timersByService.has(service)) {
         timersByService.set(service, { interval: 0, timeout: 0, timers: [] })
       }
@@ -242,11 +260,11 @@ class TimerManager {
         type: timer.type,
         createdAt: timer.metadata.createdAt
       })
-      
+
       // 按类型统计
       timersByType[timer.type]++
     }
-    
+
     return {
       stats: { ...this.stats },
       activeTimers: this.timers.size,
@@ -265,7 +283,7 @@ class TimerManager {
    */
   getTimerList() {
     const timerList = []
-    
+
     for (const timer of this.timers.values()) {
       timerList.push({
         id: timer.id,
@@ -279,7 +297,7 @@ class TimerManager {
         timeout: timer.timeout
       })
     }
-    
+
     return timerList.sort((a, b) => a.createdAt - b.createdAt)
   }
 
@@ -310,7 +328,7 @@ class TimerManager {
     process.once('SIGINT', () => exitHandler('SIGINT'))
     process.once('SIGTERM', () => exitHandler('SIGTERM'))
     process.once('SIGHUP', () => exitHandler('SIGHUP'))
-    
+
     this.isCleanupRegistered = true
     logger.info('✅ 定时器管理器进程退出处理器已初始化')
   }
@@ -321,18 +339,19 @@ class TimerManager {
   healthCheck() {
     const status = this.getStatus()
     const now = Date.now()
-    
+
     // 检查是否有过期的timeout（可能泄漏）
     let suspiciousTimeouts = 0
     for (const timer of this.timers.values()) {
       if (timer.type === 'timeout') {
         const age = now - timer.metadata.createdAt
-        if (age > (timer.timeout * 2)) { // 如果存在时间超过预期timeout的2倍
+        if (age > timer.timeout * 2) {
+          // 如果存在时间超过预期timeout的2倍
           suspiciousTimeouts++
         }
       }
     }
-    
+
     return {
       healthy: true,
       activeTimers: status.activeTimers,

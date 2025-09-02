@@ -13,6 +13,7 @@ const {
   logTokenUsage,
   logRefreshSkipped
 } = require('../utils/tokenRefreshLogger')
+const timerManager = require('../utils/timerManager')
 const LRUCache = require('../utils/lruCache')
 // const tokenRefreshService = require('./tokenRefreshService')
 
@@ -30,6 +31,7 @@ const decryptCache = new LRUCache(500)
 
 // 📝 定时器管理
 let _cleanupTimer = null
+let _cleanupTimerId = null
 
 // 生成加密密钥（使用与 claudeAccountService 相同的方法）
 function generateEncryptionKey() {
@@ -99,14 +101,21 @@ function decrypt(text) {
   }
 }
 
-// 🧹 定期清理缓存（每10分钟）
-_cleanupTimer = setInterval(
+// 🧹 定期清理缓存（每10分钟）- 使用timerManager统一管理
+const cleanupResult = timerManager.setInterval(
   () => {
     decryptCache.cleanup()
     logger.info('🧹 OpenAI decrypt cache cleanup completed', decryptCache.getStats())
   },
-  10 * 60 * 1000
+  10 * 60 * 1000,
+  {
+    name: 'openai-account-cache-cleanup',
+    service: 'openaiAccountService',
+    description: '定期清理OpenAI账户解密缓存'
+  }
 )
+_cleanupTimer = cleanupResult.intervalId
+_cleanupTimerId = cleanupResult.timerId
 
 logger.debug('🎯 OpenAI account service initialized with resource cleanup support')
 
@@ -723,17 +732,18 @@ const recordUsage = updateAccountUsage
  */
 function cleanup() {
   logger.info('🧹 Starting OpenAI account service cleanup...')
-  
-  if (_cleanupTimer) {
+
+  if (_cleanupTimerId) {
     try {
-      clearInterval(_cleanupTimer)
+      timerManager.safeCleanTimer(_cleanupTimerId)
       _cleanupTimer = null
+      _cleanupTimerId = null
       logger.debug('✅ OpenAI service cleanup timer cleared')
     } catch (error) {
       logger.error('❌ Error clearing OpenAI service cleanup timer:', error.message)
     }
   }
-  
+
   // 清理缓存
   if (decryptCache) {
     try {
@@ -744,10 +754,10 @@ function cleanup() {
       logger.error('❌ Error clearing OpenAI service decrypt cache:', error.message)
     }
   }
-  
+
   // 重置加密密钥缓存
   _encryptionKeyCache = null
-  
+
   logger.success('✅ OpenAI account service cleanup completed')
 }
 

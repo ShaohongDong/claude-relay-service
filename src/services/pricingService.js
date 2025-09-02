@@ -84,17 +84,23 @@ class PricingService {
       await this.checkAndUpdatePricing()
 
       // 设置定时更新 - 使用定时器管理器
-      const updateResult = timerManager.setInterval(() => {
-        this.checkAndUpdatePricing()
-      }, this.updateInterval, {
-        name: 'pricing-update',
-        description: 'Periodic update of model pricing data from remote source',
-        service: 'pricingService'
-      })
-      
+      const updateResult = timerManager.setInterval(
+        () => {
+          this.checkAndUpdatePricing()
+        },
+        this.updateInterval,
+        {
+          name: 'pricing-update',
+          description: 'Periodic update of model pricing data from remote source',
+          service: 'pricingService'
+        }
+      )
+
       this.updateTimerId = updateResult.timerId
-      
-      logger.debug(`💰 Pricing update timer set for ${this.updateInterval/1000/60/60} hours interval (Timer: ${this.updateTimerId})`)
+
+      logger.debug(
+        `💰 Pricing update timer set for ${this.updateInterval / 1000 / 60 / 60} hours interval (Timer: ${this.updateTimerId})`
+      )
 
       // 设置文件监听器
       this.setupFileWatcher()
@@ -592,23 +598,27 @@ class PricingService {
 
   // 处理文件变化（带防抖）
   handleFileChange() {
-    // 清除之前的定时器
+    // 清除之前的定时器（使用安全清理方法）
     if (this.reloadDebounceTimerId) {
-      timerManager.clearTimer(this.reloadDebounceTimerId)
+      timerManager.safeCleanTimer(this.reloadDebounceTimerId)
       this.reloadDebounceTimerId = null
     }
 
     // 设置新的定时器（防抖500ms） - 使用定时器管理器
-    const debounceResult = timerManager.setTimeout(async () => {
-      logger.info('🔄 Reloading pricing data due to file change...')
-      await this.reloadPricingData()
-      this.reloadDebounceTimerId = null // 定时器执行后自动清理
-    }, 500, {
-      name: 'pricing-reload-debounce',
-      description: 'Debounced pricing data reload after file change',
-      service: 'pricingService'
-    })
-    
+    const debounceResult = timerManager.setTimeout(
+      async () => {
+        logger.info('🔄 Reloading pricing data due to file change...')
+        await this.reloadPricingData()
+        this.reloadDebounceTimerId = null // setTimeout会自动清理
+      },
+      500,
+      {
+        name: 'pricing-reload-debounce',
+        description: 'Debounced pricing data reload after file change',
+        service: 'pricingService'
+      }
+    )
+
     this.reloadDebounceTimerId = debounceResult.timerId
   }
 
@@ -660,15 +670,15 @@ class PricingService {
   cleanup() {
     logger.info('🧹 Cleaning up pricing service resources...')
     let cleanupCount = 0
-    
+
     // 清理定时更新定时器
     if (this.updateTimerId) {
-      timerManager.clearTimer(this.updateTimerId)
+      timerManager.safeCleanTimer(this.updateTimerId)
       this.updateTimerId = null
       cleanupCount++
       logger.debug('💰 Update timer cleared')
     }
-    
+
     // 清理文件监控器
     if (this.fileWatcher) {
       try {
@@ -680,21 +690,21 @@ class PricingService {
         logger.warn('⚠️ Error closing file watcher:', error.message)
       }
     }
-    
+
     // 清理防抖定时器
     if (this.reloadDebounceTimerId) {
-      timerManager.clearTimer(this.reloadDebounceTimerId)
+      timerManager.safeCleanTimer(this.reloadDebounceTimerId)
       this.reloadDebounceTimerId = null
       cleanupCount++
       logger.debug('💰 Reload debounce timer cleared')
     }
-    
+
     // 清理服务的所有定时器（保险措施）
     const serviceTimersCleaned = timerManager.clearTimersByService('pricingService')
     if (serviceTimersCleaned > 0) {
       logger.info(`💰 Additional service timers cleaned: ${serviceTimersCleaned}`)
     }
-    
+
     logger.success(`✅ Pricing service cleanup completed: ${cleanupCount} resources cleaned`)
   }
 }
