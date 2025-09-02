@@ -567,7 +567,8 @@ logger.start = (message, metadata = {}) => {
 
 logger.request = (method, url, status, duration, metadata = {}) => {
   const emoji = status >= 400 ? '🔴' : status >= 300 ? '🟡' : '🟢'
-  const level = status >= 400 ? 'error' : status >= 300 ? 'warn' : 'info'
+  // 304 Not Modified 降级为 info 级别，其他 3xx 仍为 warn
+  const level = status >= 400 ? 'error' : (status >= 300 && status !== 304) ? 'warn' : 'info'
 
   logger[level](`${emoji} ${method} ${url} - ${status} (${duration}ms)`, {
     type: 'request',
