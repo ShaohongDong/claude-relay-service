@@ -366,22 +366,32 @@ class Application {
             })
           }
 
+          const debug = req.query.debug === 'true'
           const poolStatus = this.globalConnectionPoolManager.getAllPoolStatus()
           const hybridStatus = this.hybridConnectionManager?.getMonitoringReport() || null
           const lifecycleStatus = this.connectionLifecycleManager?.getStatusReport() || null
 
-          res.json({
+          const basicResponse = {
             status: 'active',
             poolManager: poolStatus,
             hybridManager: hybridStatus,
             lifecycleManager: lifecycleStatus,
             timestamp: new Date().toISOString()
-          })
+          }
+
+          if (debug) {
+            // 🐛 DEBUG模式：收集详细诊断信息
+            const debugInfo = await this.collectDebugInfo()
+            basicResponse.debug = debugInfo
+          }
+
+          res.json(basicResponse)
         } catch (error) {
           logger.error('❌ Connection pool status collection failed:', error)
           res.status(500).json({ 
             status: 'error',
             error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
             timestamp: new Date().toISOString()
           })
         }
@@ -732,6 +742,399 @@ class Application {
         error: error.message
       }
     }
+  }
+
+  // 🐛 收集详细DEBUG信息
+  async collectDebugInfo() {
+    const debugInfo = {
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      systemInfo: {
+        nodeVersion: process.version,
+        platform: process.platform,
+        arch: process.arch,
+        memory: process.memoryUsage(),
+        cpuUsage: process.cpuUsage()
+      },
+      connections: {
+        detailed: [],
+        events: [],
+        performance: {},
+        errors: []
+      },
+      configurations: {
+        validation: {},
+        proxy: {},
+        accounts: {}
+      },
+      dependencies: {
+        redis: { status: 'unknown' },
+        accounts: { status: 'unknown' }
+      },
+      recommendations: []
+    }
+
+    try {
+      // 🔍 收集连接详细信息
+      if (this.globalConnectionPoolManager) {
+        debugInfo.connections.detailed = await this.collectConnectionDetails()
+        debugInfo.connections.events = this.collectRecentEvents()
+        debugInfo.connections.performance = this.collectPerformanceMetrics()
+        debugInfo.connections.errors = this.collectErrorHistory()
+      }
+
+      // 🔧 配置验证
+      debugInfo.configurations = await this.validateConfigurations()
+
+      // 📦 依赖健康检查
+      debugInfo.dependencies = await this.checkDependencies()
+
+      // 💡 生成操作建议
+      debugInfo.recommendations = this.generateRecommendations(debugInfo)
+
+    } catch (error) {
+      logger.error('❌ Debug info collection failed:', error)
+      debugInfo.collectionError = {
+        message: error.message,
+        stack: error.stack
+      }
+    }
+
+    return debugInfo
+  }
+
+  // 🔍 收集连接详细信息
+  async collectConnectionDetails() {
+    if (!this.globalConnectionPoolManager) return []
+
+    const details = []
+    
+    for (const [accountId, pool] of this.globalConnectionPoolManager.pools) {
+      try {
+        const poolDetail = {
+          accountId,
+          poolStatus: pool.getStatus(),
+          connections: []
+        }
+
+        // 获取每个连接的详细信息
+        if (pool.connections) {
+          for (let i = 0; i < pool.connections.length; i++) {
+            const conn = pool.connections[i]
+            poolDetail.connections.push({
+              index: i,
+              id: conn.id || `conn_${i}`,
+              isHealthy: conn.isHealthy,
+              usageCount: conn.usageCount,
+              createdAt: conn.createdAt,
+              lastUsedAt: conn.lastUsedAt,
+              latencyHistory: conn.latencyHistory || [],
+              errorHistory: conn.errorHistory || [],
+              proxyType: conn.proxyType,
+              status: conn.status || 'unknown'
+            })
+          }
+        }
+
+        details.push(poolDetail)
+      } catch (error) {
+        details.push({
+          accountId,
+          error: error.message
+        })
+      }
+    }
+
+    return details
+  }
+
+  // 📚 收集最近事件
+  collectRecentEvents() {
+    const events = []
+    
+    // 从混合连接管理器收集事件
+    if (this.hybridConnectionManager && this.hybridConnectionManager.recentEvents) {
+      events.push(...this.hybridConnectionManager.recentEvents.slice(-20)) // 最近20个事件
+    }
+
+    // 从生命周期管理器收集事件
+    if (this.connectionLifecycleManager && this.connectionLifecycleManager.recentEvents) {
+      events.push(...this.connectionLifecycleManager.recentEvents.slice(-20))
+    }
+
+    return events.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+  }
+
+  // 📊 收集性能指标
+  collectPerformanceMetrics() {
+    const metrics = {
+      averageLatency: 0,
+      requestCount: 0,
+      errorRate: 0,
+      throughput: 0,
+      trends: {}
+    }
+
+    try {
+      if (this.hybridConnectionManager) {
+        const hybridStats = this.hybridConnectionManager.getManagerStatus()
+        if (hybridStats.state) {
+          metrics.averageLatency = hybridStats.state.averageLatency || 0
+          metrics.errorRate = hybridStats.state.totalErrors > 0 ? 
+            (hybridStats.state.totalErrors / hybridStats.state.totalConnections) : 0
+        }
+      }
+
+      if (this.connectionLifecycleManager) {
+        const lifecycleStats = this.connectionLifecycleManager.getLifecycleStats()
+        if (lifecycleStats) {
+          metrics.requestCount = lifecycleStats.totalCreated || 0
+          metrics.throughput = lifecycleStats.totalCreated > 0 ?
+            lifecycleStats.totalCreated / (process.uptime() / 60) : 0 // 每分钟请求数
+        }
+      }
+    } catch (error) {
+      metrics.collectionError = error.message
+    }
+
+    return metrics
+  }
+
+  // ❌ 收集错误历史
+  collectErrorHistory() {
+    const errors = []
+
+    try {
+      // 从各个组件收集错误
+      if (this.globalConnectionPoolManager && this.globalConnectionPoolManager.errorHistory) {
+        errors.push(...this.globalConnectionPoolManager.errorHistory.slice(-10))
+      }
+
+      if (this.hybridConnectionManager && this.hybridConnectionManager.errorHistory) {
+        errors.push(...this.hybridConnectionManager.errorHistory.slice(-10))
+      }
+    } catch (error) {
+      errors.push({
+        timestamp: Date.now(),
+        type: 'debug_collection_error',
+        message: error.message
+      })
+    }
+
+    return errors.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+  }
+
+  // 🔧 配置验证
+  async validateConfigurations() {
+    const validation = {
+      proxy: { valid: 0, invalid: 0, details: [] },
+      accounts: { valid: 0, invalid: 0, details: [] },
+      system: { valid: true, issues: [] }
+    }
+
+    try {
+      // 验证账户配置
+      if (this.globalConnectionPoolManager) {
+        for (const [accountId, pool] of this.globalConnectionPoolManager.pools) {
+          try {
+            const status = pool.getStatus()
+            if (status.proxyInfo) {
+              validation.proxy.valid++
+              validation.proxy.details.push({
+                accountId,
+                type: status.proxyInfo.type,
+                status: 'valid'
+              })
+            } else {
+              validation.proxy.invalid++
+              validation.proxy.details.push({
+                accountId,
+                status: 'no_proxy_config'
+              })
+            }
+
+            validation.accounts.valid++
+            validation.accounts.details.push({
+              accountId,
+              initialized: status.isInitialized,
+              connections: status.totalConnections,
+              healthy: status.healthyConnections
+            })
+          } catch (error) {
+            validation.accounts.invalid++
+            validation.accounts.details.push({
+              accountId,
+              error: error.message
+            })
+          }
+        }
+      }
+
+      // 系统配置验证
+      if (!process.env.ENCRYPTION_KEY) {
+        validation.system.valid = false
+        validation.system.issues.push('Missing ENCRYPTION_KEY')
+      }
+
+      if (!process.env.JWT_SECRET) {
+        validation.system.valid = false
+        validation.system.issues.push('Missing JWT_SECRET')
+      }
+
+    } catch (error) {
+      validation.system.valid = false
+      validation.system.issues.push(`Configuration validation error: ${error.message}`)
+    }
+
+    return validation
+  }
+
+  // 📦 检查依赖状态
+  async checkDependencies() {
+    const dependencies = {
+      redis: { status: 'unknown', details: {} },
+      accounts: { status: 'unknown', details: {} }
+    }
+
+    try {
+      // Redis健康检查
+      if (redis.isConnected) {
+        dependencies.redis.status = 'connected'
+        dependencies.redis.details = {
+          connected: true,
+          uptime: redis.uptime || 0
+        }
+      } else {
+        dependencies.redis.status = 'disconnected'
+        dependencies.redis.details = {
+          connected: false,
+          error: 'Not connected to Redis'
+        }
+      }
+
+      // 账户配置检查
+      try {
+        const accountKeys = await redis.client.keys('claude:account:*')
+        dependencies.accounts.status = 'available'
+        dependencies.accounts.details = {
+          totalAccounts: accountKeys.length,
+          accountKeys: accountKeys.slice(0, 5) // 只显示前5个
+        }
+      } catch (error) {
+        dependencies.accounts.status = 'error'
+        dependencies.accounts.details = {
+          error: error.message
+        }
+      }
+
+    } catch (error) {
+      dependencies.checkError = error.message
+    }
+
+    return dependencies
+  }
+
+  // 💡 生成操作建议
+  generateRecommendations(debugInfo) {
+    const recommendations = []
+
+    try {
+      // 连接池建议
+      if (debugInfo.connections.detailed) {
+        const totalConnections = debugInfo.connections.detailed.reduce(
+          (sum, pool) => sum + (pool.connections ? pool.connections.length : 0), 0
+        )
+
+        if (totalConnections === 0) {
+          recommendations.push({
+            type: 'warning',
+            category: 'connections',
+            message: 'No active connections found. Check if Claude accounts are properly configured.',
+            action: 'Verify Claude account configurations and proxy settings'
+          })
+        }
+
+        // 检查不健康的连接
+        const unhealthyPools = debugInfo.connections.detailed.filter(
+          pool => pool.connections && pool.connections.some(conn => !conn.isHealthy)
+        )
+
+        if (unhealthyPools.length > 0) {
+          recommendations.push({
+            type: 'error',
+            category: 'health',
+            message: `${unhealthyPools.length} pools have unhealthy connections`,
+            action: 'Review proxy configurations and network connectivity'
+          })
+        }
+      }
+
+      // 性能建议
+      if (debugInfo.connections.performance) {
+        const avgLatency = debugInfo.connections.performance.averageLatency
+        if (avgLatency > 5000) { // 5秒
+          recommendations.push({
+            type: 'warning',
+            category: 'performance',
+            message: `High average latency detected: ${avgLatency}ms`,
+            action: 'Check proxy server performance and network conditions'
+          })
+        }
+
+        const errorRate = debugInfo.connections.performance.errorRate
+        if (errorRate > 0.1) { // 10%错误率
+          recommendations.push({
+            type: 'error',
+            category: 'reliability',
+            message: `High error rate detected: ${(errorRate * 100).toFixed(1)}%`,
+            action: 'Review error logs and proxy configurations'
+          })
+        }
+      }
+
+      // 配置建议
+      if (debugInfo.configurations) {
+        if (debugInfo.configurations.proxy && debugInfo.configurations.proxy.invalid > 0) {
+          recommendations.push({
+            type: 'error',
+            category: 'configuration',
+            message: `${debugInfo.configurations.proxy.invalid} accounts have invalid proxy configurations`,
+            action: 'Update proxy settings for affected accounts'
+          })
+        }
+
+        if (!debugInfo.configurations.system.valid) {
+          recommendations.push({
+            type: 'critical',
+            category: 'security',
+            message: 'System configuration issues detected',
+            action: `Address: ${debugInfo.configurations.system.issues.join(', ')}`
+          })
+        }
+      }
+
+      // 依赖建议
+      if (debugInfo.dependencies) {
+        if (debugInfo.dependencies.redis.status !== 'connected') {
+          recommendations.push({
+            type: 'critical',
+            category: 'infrastructure',
+            message: 'Redis connection issue detected',
+            action: 'Check Redis server status and connection parameters'
+          })
+        }
+      }
+
+    } catch (error) {
+      recommendations.push({
+        type: 'error',
+        category: 'system',
+        message: 'Failed to generate some recommendations',
+        action: `Check system logs: ${error.message}`
+      })
+    }
+
+    return recommendations
   }
 
   async start() {

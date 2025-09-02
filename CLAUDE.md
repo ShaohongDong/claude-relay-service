@@ -250,6 +250,14 @@ npm run install:web
   - 混合连接管理器监控报告
   - 连接生命周期管理器统计
   - 所有账户连接池的健康状态
+- `GET /connection-pools?debug=true` - 连接池详细DEBUG信息
+  - **系统信息**: Node.js版本、平台架构、内存使用、CPU使用情况
+  - **连接详细信息**: 每个连接的状态、延迟历史、错误历史、使用次数
+  - **事件历史**: 最近20个连接事件（连接、断开、错误、重连）
+  - **性能指标**: 平均延迟、请求数、错误率、吞吐量趋势
+  - **配置验证**: 代理配置、账户配置、系统环境变量完整性检查
+  - **依赖健康检查**: Redis连接状态、Claude账户配置可用性
+  - **智能建议**: 基于当前状态自动生成的操作建议和优化建议
 - `GET /health` - 健康检查中的connectionPools组件
   - 连接池系统总体健康状态
   - 总连接数和健康连接数
@@ -304,6 +312,11 @@ npm run install:web
 6. **健康检查**: 使用`curl http://localhost:3000/health`检查连接池组件状态
 7. **性能监控**: 监控连接池延迟和错误率，优化代理配置
 8. **连接池重建**: 连接池出现问题时可通过重启服务自动重建
+9. **DEBUG模式诊断**: 使用`/connection-pools?debug=true`获取详细诊断信息
+   - 系统资源使用情况（内存、CPU）
+   - 连接详细状态和历史记录
+   - 配置验证和依赖检查结果
+   - 自动生成的问题诊断和修复建议
 
 **数据加密问题**:
 1. **密钥长度错误**: 确保`ENCRYPTION_KEY`为32字符长度
@@ -634,7 +647,13 @@ node scripts/data-integrity-check.js     # 检查系统数据完整性和安全�
 
 # 连接池系统管理
 curl http://localhost:3000/connection-pools | jq '.'  # 查看连接池详细状态
+curl "http://localhost:3000/connection-pools?debug=true" | jq '.'  # 查看详细DEBUG信息
 curl http://localhost:3000/health | jq '.components.connectionPools'  # 连接池健康检查
+
+# DEBUG信息分析示例
+curl -s "http://localhost:3000/connection-pools?debug=true" | jq '.debug.recommendations'  # 查看系统建议
+curl -s "http://localhost:3000/connection-pools?debug=true" | jq '.debug.systemInfo'  # 查看系统信息
+curl -s "http://localhost:3000/connection-pools?debug=true" | jq '.debug.dependencies'  # 查看依赖状态
 ```
 
 # important-instruction-reminders
