@@ -17,10 +17,10 @@ class ConnectionLifecycleManager extends EventEmitter {
 
     // 生命周期配置
     this.config = {
-      maxConnectionAge: 60 * 60 * 1000, // 60分钟最大连接寿命
+      maxConnectionAge: 30 * 60 * 1000, // 30分钟最大连接寿命（降低老化）
       healthCheckInterval: 5 * 60 * 1000, // 5分钟兜底健康检查
-      connectionRotationInterval: 30 * 60 * 1000, // 30分钟连接轮换检查
-      inactiveConnectionThreshold: 20 * 60 * 1000, // 20分钟非活跃连接阈值
+      connectionRotationInterval: 5 * 60 * 1000, // 5分钟连接轮换检查（更频繁）
+      inactiveConnectionThreshold: 10 * 60 * 1000, // 10分钟非活跃连接阈值（更严格）
       memoryCleanupInterval: 10 * 60 * 1000, // 10分钟内存清理检查
       performanceAnalysisInterval: 2 * 60 * 1000, // 2分钟性能分析
       maxConnectionsPerAccount: 3, // 每个账户最大连接数限制
@@ -287,6 +287,9 @@ class ConnectionLifecycleManager extends EventEmitter {
           connection.status = 'unhealthy'
           logger.warn(`🏥 发现不健康连接: ${connectionId} (账户: ${connection.accountId})`)
 
+          // 立即从注册表中移除不健康连接，避免幻影连接问题
+          this.unregisterConnection(connectionId, connection.accountId, 'unhealthy_detected')
+
           // 触发连接重建
           this.scheduleConnectionRecreation(connection)
         }
@@ -315,16 +318,17 @@ class ConnectionLifecycleManager extends EventEmitter {
   async checkConnectionHealth(connection) {
     // 预热连接特殊处理 (usageCount === 0)
     if (connection.usageCount === 0) {
-      // 只检查基本连接状态，放宽其他条件
+      // 预热连接也需要检查年龄，但使用相同的标准
       const age = Date.now() - connection.createdAt
-      if (age > this.config.maxConnectionAge * 1.5) {
-        // 预热连接延长50%寿命
+      if (age > this.config.maxConnectionAge) {
+        // 预热连接也遵循正常的最大寿命限制
         logger.debug(
-          `♻️ 预热连接超龄: ${connection.connectionId} (${age}ms > ${this.config.maxConnectionAge * 1.5}ms)`
+          `♻️ 预热连接超龄: ${connection.connectionId} (${age}ms > ${this.config.maxConnectionAge}ms)`
         )
         return false
       }
-      return true // 预热连接默认健康
+      // 对于预热连接，不检查最后使用时间和错误率
+      return true
     }
 
     // 检查连接年龄
@@ -432,9 +436,11 @@ class ConnectionLifecycleManager extends EventEmitter {
     for (const [connectionId, connection] of this.connections) {
       const age = Date.now() - connection.createdAt
 
-      // 检查是否需要轮换
+      // 检查是否需要轮换（包括预热连接）
       if (age > this.config.maxConnectionAge || this.shouldRotateConnection(connection)) {
-        logger.info(`🔄 轮换连接: ${connectionId} (账户: ${connection.accountId}, 寿命: ${age}ms)`)
+        logger.info(
+          `🔄 轮换连接: ${connectionId} (账户: ${connection.accountId}, 寿命: ${age}ms, 使用次数: ${connection.usageCount})`
+        )
         this.scheduleConnectionRecreation(connection)
         rotatedCount++
         this.stats.totalRotated++
@@ -450,19 +456,30 @@ class ConnectionLifecycleManager extends EventEmitter {
    * 判断是否应该轮换连接
    */
   shouldRotateConnection(connection) {
-    // 高错误率的连接
-    if (connection.usageCount > 10 && connection.errorCount / connection.usageCount > 0.15) {
-      return true
-    }
+    const now = Date.now()
 
-    // 性能低的连接
-    if (connection.averageLatency && connection.averageLatency > 5000) {
-      return true
+    // 检查连接年龄
+    const age = now - connection.createdAt
+
+    // 超过最大年龄的50%就开始考虑轮换
+    if (age > this.config.maxConnectionAge * 0.5) {
+      // 高错误率的连接（降低阈值）
+      if (connection.usageCount > 5 && connection.errorCount / connection.usageCount > 0.1) {
+        logger.debug(`Connection ${connection.connectionId} marked for rotation: high error rate`)
+        return true
+      }
+
+      // 性能低的连接（降低阈值）
+      if (connection.averageLatency && connection.averageLatency > 3000) {
+        logger.debug(`Connection ${connection.connectionId} marked for rotation: high latency`)
+        return true
+      }
     }
 
     // 长时间未使用的连接
-    const inactiveTime = Date.now() - connection.lastUsedAt
+    const inactiveTime = now - (connection.lastUsedAt || connection.createdAt)
     if (inactiveTime > this.config.inactiveConnectionThreshold) {
+      logger.debug(`Connection ${connection.connectionId} marked for rotation: inactive`)
       return true
     }
 
@@ -473,6 +490,12 @@ class ConnectionLifecycleManager extends EventEmitter {
    * 调度连接重建
    */
   scheduleConnectionRecreation(connection) {
+    // 先检查连接是否仍在注册表中，避免重复处理
+    if (!this.connections.has(connection.connectionId)) {
+      logger.debug(`🔄 连接已被清理，跳过重建请求: ${connection.connectionId}`)
+      return
+    }
+
     // 发出连接重建请求事件
     this.emit('connection:recreation:requested', {
       accountId: connection.accountId,
@@ -580,6 +603,9 @@ class ConnectionLifecycleManager extends EventEmitter {
 
     // 检查是否有性能问题需要处理
     this.checkPerformanceIssues(analysis)
+
+    // 同步连接池中的实际连接
+    this.syncWithConnectionPools()
   }
 
   /**
@@ -779,6 +805,104 @@ class ConnectionLifecycleManager extends EventEmitter {
     return Array.from(connectionIds)
       .map((id) => this.connections.get(id))
       .filter(Boolean)
+  }
+
+  /**
+   * 同步连接池中的实际连接
+   */
+  syncWithConnectionPools() {
+    if (!this.poolManager) {
+      return
+    }
+
+    const poolStatus = this.poolManager.getAllPoolStatus()
+    if (!poolStatus || !poolStatus.pools) {
+      return
+    }
+
+    // 清理不存在的连接
+    const validConnections = new Map()
+    const validAccountConnections = new Map()
+
+    poolStatus.pools.forEach((poolInfo) => {
+      const { accountId } = poolInfo
+      if (!accountId) {
+        return
+      }
+
+      const accountConns = new Set()
+
+      // 获取该账户连接池的实际连接
+      const pool = this.poolManager.pools.get(accountId)
+      if (pool && pool.connections) {
+        pool.connections.forEach((conn) => {
+          if (conn && conn.id) {
+            // 更新或创建连接记录
+            validConnections.set(conn.id, {
+              connectionId: conn.id,
+              accountId,
+              status: conn.isHealthy ? 'active' : 'unhealthy',
+              createdAt: conn.createdAt || Date.now(),
+              lastUsedAt: conn.lastUsedAt || Date.now(),
+              usageCount: conn.usageCount || 0,
+              errorCount: 0,
+              averageLatency: conn.averageLatency || 0,
+              agent: conn.agent
+            })
+            accountConns.add(conn.id)
+          }
+        })
+      }
+
+      if (accountConns.size > 0) {
+        validAccountConnections.set(accountId, accountConns)
+      }
+    })
+
+    // 更新连接映射
+    this.connections = validConnections
+    this.accountConnections = validAccountConnections
+
+    logger.debug(`🔄 Connection sync completed: ${this.connections.size} connections tracked`)
+  }
+
+  /**
+   * 设置连接池管理器引用
+   */
+  setPoolManager(poolManager) {
+    this.poolManager = poolManager
+    logger.info('🔗 Connection pool manager reference set')
+  }
+
+  /**
+   * 强制清理所有连接注册信息
+   * 用于处理安全清理等场景下的状态同步
+   */
+  forceCleanupRegistrations(reason = 'security_cleanup') {
+    const cleanedCount = this.connections.size
+    const accountCount = this.accountConnections.size
+
+    logger.warn(
+      `🧹 执行强制清理: 原因=${reason}, 清理连接数=${cleanedCount}, 影响账户数=${accountCount}`
+    )
+
+    // 清理所有连接注册
+    this.connections.clear()
+    this.accountConnections.clear()
+
+    // 更新统计
+    this.stats.totalDestroyed += cleanedCount
+    this.stats.activeConnections = 0
+
+    logger.success(`✅ 强制清理完成: ${cleanedCount}个连接记录已清理`)
+
+    // 发出清理完成事件
+    this.emit('cleanup:forced:completed', {
+      reason,
+      cleanedConnections: cleanedCount,
+      cleanedAccounts: accountCount,
+      timestamp: Date.now()
+    })
   }
 
   /**

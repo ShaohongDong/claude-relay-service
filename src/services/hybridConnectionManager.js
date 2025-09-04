@@ -13,9 +13,10 @@ const timerManager = require('../utils/timerManager')
  * - Performance monitoring and statistics
  */
 class HybridConnectionManager extends EventEmitter {
-  constructor(globalConnectionPoolManager) {
+  constructor(globalConnectionPoolManager, lifecycleManager = null) {
     super()
     this.poolManager = globalConnectionPoolManager
+    this.lifecycleManager = lifecycleManager
     this.isRunning = false
 
     // Monitoring configuration
@@ -67,6 +68,11 @@ class HybridConnectionManager extends EventEmitter {
     try {
       // 注册全局连接池管理器事件监听
       this.setupPoolManagerEvents()
+
+      // 如果有生命周期管理器，监听其事件
+      if (this.lifecycleManager) {
+        this.setupLifecycleManagerEvents()
+      }
 
       // 启动定期健康检查
       this.startHealthCheckScheduler()
@@ -353,6 +359,68 @@ class HybridConnectionManager extends EventEmitter {
       healthyConnections: statusData.healthyConnections,
       timestamp: Date.now()
     })
+  }
+
+  /**
+   * 设置生命周期管理器事件监听
+   */
+  setupLifecycleManagerEvents() {
+    if (!this.lifecycleManager) {
+      return
+    }
+
+    // 监听连接重建请求事件
+    this.lifecycleManager.on('connection:recreation:requested', (recreationData) => {
+      this.handleConnectionRecreationRequest(recreationData)
+    })
+
+    logger.debug('🎧 已设置生命周期管理器事件监听')
+  }
+
+  /**
+   * 处理连接重建请求
+   */
+  async handleConnectionRecreationRequest(recreationData) {
+    const { accountId, connectionId, reason } = recreationData
+    logger.info(`🔄 收到连接重建请求: 账户 ${accountId}, 连接 ${connectionId}, 原因: ${reason}`)
+
+    try {
+      // 调用全局连接池管理器的重建方法
+      const success = await this.poolManager.recreateConnectionForAccount(
+        accountId,
+        connectionId,
+        reason
+      )
+
+      if (success) {
+        logger.success(`✅ 连接重建已触发: ${connectionId} (账户: ${accountId})`)
+        this.emit('connection:recreation:completed', {
+          accountId,
+          connectionId,
+          reason,
+          success: true,
+          timestamp: Date.now()
+        })
+      } else {
+        logger.warn(`⚠️ 连接重建失败: ${connectionId} (账户: ${accountId})`)
+        this.emit('connection:recreation:failed', {
+          accountId,
+          connectionId,
+          reason,
+          success: false,
+          timestamp: Date.now()
+        })
+      }
+    } catch (error) {
+      logger.error(`❌ 处理连接重建请求时出错: ${error.message}`)
+      this.emit('connection:recreation:error', {
+        accountId,
+        connectionId,
+        reason,
+        error: error.message,
+        timestamp: Date.now()
+      })
+    }
   }
 
   /**

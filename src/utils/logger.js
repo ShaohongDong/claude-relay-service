@@ -773,7 +773,7 @@ let isShuttingDown = false
 // 设置优雅关闭状态
 logger.setShuttingDown = (shutting = true) => {
   isShuttingDown = shutting
-  
+
   if (shutting) {
     // 在关闭过程中，将console transport的handleExceptions设置为false，避免EPIPE
     logger.transports.forEach((transport) => {
@@ -796,14 +796,16 @@ logger.setShuttingDown = (shutting = true) => {
 }
 
 // 重写console transport的write方法，在关闭期间防止EPIPE
-const originalConsoleTransports = logger.transports.filter(t => t.constructor.name === 'Console')
+const originalConsoleTransports = logger.transports.filter((t) => t.constructor.name === 'Console')
 originalConsoleTransports.forEach((transport) => {
   if (transport.log) {
     const originalLog = transport.log
-    transport.log = function(info, callback) {
+    transport.log = function (info, callback) {
       // 在关闭期间，直接调用callback而不实际写入
       if (isShuttingDown) {
-        if (callback) callback()
+        if (callback) {
+          callback()
+        }
         return true
       }
       return originalLog.call(this, info, callback)
@@ -816,7 +818,7 @@ logger.cleanup = () => {
   try {
     // 设置关闭状态，阻止进一步的console输出
     logger.setShuttingDown(true)
-    
+
     // 使用console.log记录开始清理，避免winston循环
     console.log('🧹 Starting logger system cleanup...')
 

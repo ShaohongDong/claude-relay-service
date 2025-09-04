@@ -189,14 +189,51 @@ async function exchangeCodeForTokens(authorizationCode, codeVerifier, state, pro
     logger.debug('🌐 No proxy configured for OAuth token exchange')
   }
 
-  // 添加代理监控
-  ProxyHelper.addProxyMonitoring(axiosConfig, proxyConfig)
+  // 准备请求数据 - 统一处理代理和非代理情况
+  let requestData
+  if (proxyConfig) {
+    // 为代理请求设置正确的 Content-Type
+    axiosConfig.headers['Content-Type'] = 'application/x-www-form-urlencoded'
+    
+    // 使用 URLSearchParams 格式化数据
+    const formData = new URLSearchParams()
+    for (const [key, value] of Object.entries(params)) {
+      formData.append(key, value)
+    }
+    requestData = formData.toString()
+    
+    // 添加代理监控
+    const startTime = performance.now()
+    const proxyInfo = ProxyHelper.maskProxyInfo(proxyConfig)
+    
+    // 在请求配置中记录开始时间和代理信息
+    axiosConfig.metadata = {
+      proxyStartTime: startTime,
+      proxyInfo
+    }
+  } else {
+    // 没有代理时，直接使用 params
+    requestData = params
+  }
 
   try {
-    const response = await axios.post(OAUTH_CONFIG.TOKEN_URL, params, axiosConfig)
+    // 统一发送请求，不管是否使用代理
+    const response = await axios.post(OAUTH_CONFIG.TOKEN_URL, requestData, axiosConfig)
 
     // 记录代理连接耗时
-    ProxyHelper.logProxyConnectTime(response)
+    if (proxyConfig && response.config.metadata) {
+      const { proxyStartTime, proxyInfo } = response.config.metadata
+      const connectTime = performance.now() - proxyStartTime
+      
+      // 连接耗时超过1秒时使用warn级别，否则使用debug级别
+      if (connectTime > 1000) {
+        logger.warn(
+          `🔗 代理连接耗时较长 - ${proxyInfo} - 总耗时: ${connectTime.toFixed(2)}ms`
+        )
+      } else {
+        logger.debug(`🔗 代理连接成功 - ${proxyInfo} - 总耗时: ${connectTime.toFixed(2)}ms`)
+      }
+    }
 
     // 记录完整的响应数据到专门的认证详细日志
     logger.authDetail('OAuth token exchange response', response.data)
@@ -408,14 +445,49 @@ async function exchangeSetupTokenCode(authorizationCode, codeVerifier, state, pr
     logger.debug('🌐 No proxy configured for Setup Token exchange')
   }
 
-  // 添加代理监控
-  ProxyHelper.addProxyMonitoring(axiosConfig, proxyConfig)
+  // 准备请求数据 - 统一处理代理和非代理情况
+  let requestData
+  if (proxyConfig) {
+    // 为代理请求设置正确的 Content-Type
+    axiosConfig.headers['Content-Type'] = 'application/x-www-form-urlencoded'
+
+    // 使用 URLSearchParams 格式化数据
+    const formData = new URLSearchParams()
+    for (const [key, value] of Object.entries(params)) {
+      formData.append(key, value)
+    }
+    requestData = formData.toString()
+
+    // 添加代理监控
+    const startTime = performance.now()
+    const proxyInfo = ProxyHelper.maskProxyInfo(proxyConfig)
+
+    // 在请求配置中记录开始时间和代理信息
+    axiosConfig.metadata = {
+      proxyStartTime: startTime,
+      proxyInfo
+    }
+  } else {
+    // 没有代理时，直接使用 params
+    requestData = params
+  }
 
   try {
-    const response = await axios.post(OAUTH_CONFIG.TOKEN_URL, params, axiosConfig)
+    // 统一发送请求，不管是否使用代理
+    const response = await axios.post(OAUTH_CONFIG.TOKEN_URL, requestData, axiosConfig)
 
     // 记录代理连接耗时
-    ProxyHelper.logProxyConnectTime(response)
+    if (proxyConfig && response.config.metadata) {
+      const { proxyStartTime, proxyInfo } = response.config.metadata
+      const connectTime = performance.now() - proxyStartTime
+
+      // 连接耗时超过1秒时使用warn级别，否则使用debug级别
+      if (connectTime > 1000) {
+        logger.warn(`🔗 代理连接耗时较长 - ${proxyInfo} - 总耗时: ${connectTime.toFixed(2)}ms`)
+      } else {
+        logger.debug(`🔗 代理连接成功 - ${proxyInfo} - 总耗时: ${connectTime.toFixed(2)}ms`)
+      }
+    }
 
     // 记录完整的响应数据到专门的认证详细日志
     logger.authDetail('Setup Token exchange response', response.data)

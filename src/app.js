@@ -465,15 +465,21 @@ class Application {
       this.globalConnectionPoolManager = globalConnectionPoolManager
       logger.info('🌐 Global connection pool manager created')
 
-      // 步骤2: 初始化混合连接管理器
-      const HybridConnectionManager = require('./services/hybridConnectionManager')
-      this.hybridConnectionManager = new HybridConnectionManager(this.globalConnectionPoolManager)
-      logger.info('🔄 Hybrid connection manager created')
-
-      // 步骤3: 初始化连接生命周期管理器
+      // 步骤2: 初始化连接生命周期管理器
       const ConnectionLifecycleManager = require('./services/connectionLifecycleManager')
       this.connectionLifecycleManager = new ConnectionLifecycleManager()
       logger.info('♻️ Connection lifecycle manager created')
+      
+      // 设置连接池管理器引用，以便同步连接
+      this.connectionLifecycleManager.setPoolManager(this.globalConnectionPoolManager)
+      
+      // 步骤3: 初始化混合连接管理器 (传入生命周期管理器)
+      const HybridConnectionManager = require('./services/hybridConnectionManager')
+      this.hybridConnectionManager = new HybridConnectionManager(
+        this.globalConnectionPoolManager,
+        this.connectionLifecycleManager
+      )
+      logger.info('🔄 Hybrid connection manager created')
 
       // 步骤4: 设置组件间的事件连接 (在创建连接之前!)
       this.setupConnectionPoolEvents()
@@ -486,6 +492,10 @@ class Application {
       // 步骤6: 启动连接生命周期管理器
       this.connectionLifecycleManager.start()
       logger.info('♻️ Connection lifecycle manager started')
+
+      // 设置缓存监控器与连接生命周期管理器的引用关系
+      cacheMonitor.setLifecycleManager(this.connectionLifecycleManager)
+      logger.info('🔗 Cache monitor integrated with lifecycle manager for security cleanup sync')
 
       // 步骤7: 现在所有事件监听器都就位，可以安全地初始化连接池了
       logger.info('🔗 Starting connection pool initialization with event listeners ready...')

@@ -32,7 +32,9 @@ class GlobalConnectionPoolManager {
    */
   async initializeAllPools() {
     if (this.isInitialized) {
-      logger.info('⚠️ Connection pool manager already initialized, skipping duplicate initialization')
+      logger.info(
+        '⚠️ Connection pool manager already initialized, skipping duplicate initialization'
+      )
       return
     }
 
@@ -52,7 +54,9 @@ class GlobalConnectionPoolManager {
         try {
           await this.initializeAccountPool(account.id, account.name, account.proxy)
           successCount++
-          logger.success(`✅ Account connection pool initialized successfully: ${account.name} (${account.id})`)
+          logger.success(
+            `✅ Account connection pool initialized successfully: ${account.name} (${account.id})`
+          )
         } catch (error) {
           failureCount++
           logger.error(
@@ -130,7 +134,9 @@ class GlobalConnectionPoolManager {
               try {
                 proxyConfig = JSON.parse(accountData.proxy)
               } catch (parseError) {
-                logger.warn(`⚠️ Account ${accountData.id} proxy configuration parsing failed: ${parseError.message}`)
+                logger.warn(
+                  `⚠️ Account ${accountData.id} proxy configuration parsing failed: ${parseError.message}`
+                )
                 continue
               }
             }
@@ -156,7 +162,9 @@ class GlobalConnectionPoolManager {
           return false
         }
         if (!account.proxy) {
-          logger.debug(`⏸️ Skipping account without proxy configuration: ${account.name} (${account.id})`)
+          logger.debug(
+            `⏸️ Skipping account without proxy configuration: ${account.name} (${account.id})`
+          )
           return false
         }
         return true
@@ -292,7 +300,61 @@ class GlobalConnectionPoolManager {
       logger.success(`✅ New account connection pool added: ${accountName} (${accountId})`)
       return true
     } catch (error) {
-      logger.error(`❌ Failed to add account connection pool: ${accountName} (${accountId}) - ${error.message}`)
+      logger.error(
+        `❌ Failed to add account connection pool: ${accountName} (${accountId}) - ${error.message}`
+      )
+      return false
+    }
+  }
+
+  /**
+   * Recreate connection for specified account
+   */
+  async recreateConnectionForAccount(accountId, connectionId, reason = 'lifecycle_management') {
+    const pool = this.pools.get(accountId)
+    if (!pool) {
+      logger.warn(
+        `⚠️ No connection pool found for account ${accountId}, cannot recreate connection`
+      )
+      return false
+    }
+
+    try {
+      logger.info(
+        `♻️ Recreating connection for account ${accountId}, connection ${connectionId}, reason: ${reason}`
+      )
+
+      // Find and remove the old connection
+      const oldConnection = pool.connections.find((conn) => conn.id === connectionId)
+      if (oldConnection) {
+        // Mark as unhealthy and remove
+        oldConnection.isHealthy = false
+        pool.removeConnection(oldConnection)
+
+        // Trigger auto-reconnect mechanism
+        await pool.autoReconnect(oldConnection, reason)
+        logger.success(
+          `✅ Connection recreation triggered: ${connectionId} (account: ${accountId})`
+        )
+        return true
+      } else {
+        logger.warn(`⚠️ Connection ${connectionId} not found in pool for account ${accountId}`)
+        // For lifecycle management, always ensure pool maintains target size
+        if (reason === 'lifecycle_management' || pool.connections.length < pool.targetSize) {
+          logger.info(`🔄 Creating new connection to maintain pool size for account ${accountId}`)
+          const newConnection = await pool.createMonitoredConnection()
+          if (newConnection) {
+            pool.connections.push(newConnection)
+            logger.success(`✅ New connection created for account ${accountId}`)
+            return true
+          }
+        }
+        return false
+      }
+    } catch (error) {
+      logger.error(
+        `❌ Failed to recreate connection: ${connectionId} (account: ${accountId}) - ${error.message}`
+      )
       return false
     }
   }
@@ -346,8 +408,12 @@ class GlobalConnectionPoolManager {
       // Set timeout handling
       const timeoutHandle = setTimeout(() => {
         const elapsedTime = Date.now() - startTime
-        logger.warn(`⚠️ Connection pool destruction timeout (${elapsedTime}ms), forcing cleanup completion`)
-        logger.warn(`📊 Destruction status: Completed ${completedPools}/${totalPools}, Errors ${errorPools}`)
+        logger.warn(
+          `⚠️ Connection pool destruction timeout (${elapsedTime}ms), forcing cleanup completion`
+        )
+        logger.warn(
+          `📊 Destruction status: Completed ${completedPools}/${totalPools}, Errors ${errorPools}`
+        )
 
         // Force cleanup remaining state
         this.pools.clear()
@@ -416,14 +482,18 @@ class GlobalConnectionPoolManager {
                 poolResolve(true)
               }
             } catch (error) {
-              logger.error(`❌ Failed to destroy connection pool: Account ${accountId} - ${error.message}`)
+              logger.error(
+                `❌ Failed to destroy connection pool: Account ${accountId} - ${error.message}`
+              )
               poolResolve(false)
             }
           }),
           // Single pool timeout Promise
           new Promise((poolResolve) => {
             setTimeout(() => {
-              logger.warn(`⚠️ Connection pool destruction timeout: Account ${accountId} (${poolTimeout}ms)`)
+              logger.warn(
+                `⚠️ Connection pool destruction timeout: Account ${accountId} (${poolTimeout}ms)`
+              )
               poolResolve(false)
             }, poolTimeout)
           })

@@ -292,8 +292,32 @@ class SmartConnectionPool extends EventEmitter {
   removeConnection(connection) {
     const index = this.connections.findIndex((conn) => conn.id === connection.id)
     if (index !== -1) {
+      // 先销毁连接资源，再从数组移除
+      this.destroyConnection(connection)
+
       this.connections.splice(index, 1)
-      logger.debug(`🗑️ 连接已移除: 账户 ${this.accountId}, 连接 ${connection.id}`)
+      logger.debug(`🗑️ 连接已移除和销毁: 账户 ${this.accountId}, 连接 ${connection.id}`)
+    }
+  }
+
+  /**
+   * 销毁单个连接的资源
+   */
+  destroyConnection(connection) {
+    try {
+      // 标记为不健康
+      connection.isHealthy = false
+
+      // 释放代理Agent资源
+      if (connection.agent && typeof connection.agent.destroy === 'function') {
+        connection.agent.destroy()
+        logger.debug(`🔌 代理连接已关闭: 连接 ${connection.id}`)
+      }
+
+      // 清理引用
+      connection.agent = null
+    } catch (error) {
+      logger.warn(`⚠️ 销毁连接资源失败: ${connection.id}, 错误: ${error.message}`)
     }
   }
 

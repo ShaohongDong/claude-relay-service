@@ -13,6 +13,7 @@ class CacheMonitor {
     this.totalHits = 0
     this.totalMisses = 0
     this.totalEvictions = 0
+    this.lifecycleManager = null // 连接生命周期管理器引用
 
     // 🔒 安全配置
     this.securityConfig = {
@@ -185,6 +186,15 @@ class CacheMonitor {
       for (const [name, monitor] of this.monitors) {
         monitor.cache.clear()
         logger.info(`🗑️ Force cleared cache: ${name}`)
+      }
+
+      // 同步清理连接生命周期管理器的注册表
+      if (this.lifecycleManager) {
+        try {
+          this.lifecycleManager.forceCleanupRegistrations('cache_security_cleanup')
+        } catch (error) {
+          logger.error('❌ Failed to cleanup lifecycle manager registrations:', error.message)
+        }
       }
     }, this.securityConfig.forceCleanupInterval)
 
@@ -360,6 +370,15 @@ class CacheMonitor {
       totalTimers,
       activeCacheMonitors: this.monitors.size
     }
+  }
+
+  /**
+   * 设置连接生命周期管理器引用
+   * @param {ConnectionLifecycleManager} lifecycleManager
+   */
+  setLifecycleManager(lifecycleManager) {
+    this.lifecycleManager = lifecycleManager
+    logger.info('🔗 设置连接生命周期管理器引用用于安全清理同步')
   }
 }
 
