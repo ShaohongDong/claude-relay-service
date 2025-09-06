@@ -35,7 +35,6 @@ class ApiKeyService {
       expiresAt = null,
       claudeAccountId = null,
       claudeConsoleAccountId = null,
-      geminiAccountId = null,
       isActive = true
     } = options
 
@@ -52,7 +51,6 @@ class ApiKeyService {
       isActive: String(isActive),
       claudeAccountId: claudeAccountId || '',
       claudeConsoleAccountId: claudeConsoleAccountId || '',
-      geminiAccountId: geminiAccountId || '',
       createdAt: new Date().toISOString(),
       lastUsedAt: '',
       expiresAt: expiresAt || '',
@@ -72,7 +70,6 @@ class ApiKeyService {
       isActive: keyData.isActive === 'true',
       claudeAccountId: keyData.claudeAccountId,
       claudeConsoleAccountId: keyData.claudeConsoleAccountId,
-      geminiAccountId: keyData.geminiAccountId,
       createdAt: keyData.createdAt,
       expiresAt: keyData.expiresAt,
       createdBy: keyData.createdBy
@@ -217,7 +214,6 @@ class ApiKeyService {
         expiresAt: keyData.expiresAt || '',
         claudeAccountId: keyData.claudeAccountId || '',
         claudeConsoleAccountId: keyData.claudeConsoleAccountId || '',
-        geminiAccountId: keyData.geminiAccountId || '',
         isActive: keyData.isActive === 'true'
       }
     }
@@ -256,7 +252,6 @@ class ApiKeyService {
         'isActive',
         'claudeAccountId',
         'claudeConsoleAccountId',
-        'geminiAccountId',
         'expiresAt'
       ]
       const updatedData = { ...keyData }

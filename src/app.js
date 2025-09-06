@@ -17,7 +17,6 @@ const apiRoutes = require('./routes/api')
 const adminRoutes = require('./routes/admin')
 const webRoutes = require('./routes/web')
 const apiStatsRoutes = require('./routes/apiStats')
-const geminiRoutes = require('./routes/geminiRoutes')
 const webhookRoutes = require('./routes/webhook')
 
 // Import middleware
@@ -235,7 +234,6 @@ class Application {
       // 使用 web 路由（包含 auth 和页面重定向）
       this.app.use('/web', webRoutes)
       this.app.use('/apiStats', apiStatsRoutes)
-      this.app.use('/gemini', geminiRoutes)
       this.app.use('/admin/webhook', webhookRoutes)
 
       // 🏠 根路径重定向到新版管理界面

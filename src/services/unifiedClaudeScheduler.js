@@ -518,7 +518,7 @@ class UnifiedClaudeScheduler {
   // 🚫 标记账户为未授权状态（401错误）
   async markAccountUnauthorized(accountId, accountType, sessionHash = null) {
     try {
-      // 只处理claude-official类型的账户，不处理claude-console和gemini
+      // 只处理claude-official类型的账户，不处理claude-console
       if (accountType === 'claude-official') {
         await claudeAccountService.markAccountUnauthorized(accountId, sessionHash)
 
@@ -615,10 +615,6 @@ class UnifiedClaudeScheduler {
               accountType = 'claude-console'
             }
           }
-        } else if (group.platform === 'gemini') {
-          // Gemini暂时不支持，预留接口
-          logger.warn('⚠️ Gemini group scheduling not yet implemented')
-          continue
         }
 
         if (!account) {

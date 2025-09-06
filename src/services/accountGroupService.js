@@ -13,7 +13,7 @@ class AccountGroupService {
    * 创建账户分组
    * @param {Object} groupData - 分组数据
    * @param {string} groupData.name - 分组名称
-   * @param {string} groupData.platform - 平台类型 (claude/gemini)
+   * @param {string} groupData.platform - 平台类型 (claude)
    * @param {string} groupData.description - 分组描述
    * @returns {Object} 创建的分组
    */
@@ -27,8 +27,8 @@ class AccountGroupService {
       }
 
       // 验证平台类型
-      if (!['claude', 'gemini'].includes(platform)) {
-        throw new Error('平台类型必须是 claude 或 gemini')
+      if (!['claude'].includes(platform)) {
+        throw new Error('平台类型必须是 claude')
       }
 
       const client = redis.getClientSafe()
@@ -307,10 +307,7 @@ class AccountGroupService {
 
       for (const keyId of apiKeyIds) {
         const keyData = await client.hgetall(`api_key:${keyId}`)
-        if (
-          keyData &&
-          (keyData.claudeAccountId === groupKey || keyData.geminiAccountId === groupKey)
-        ) {
+        if (keyData && keyData.claudeAccountId === groupKey) {
           boundApiKeys.push({
             id: keyId,
             name: keyData.name

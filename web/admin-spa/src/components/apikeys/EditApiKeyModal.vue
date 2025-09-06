@@ -361,9 +361,7 @@
                   v-model="form.permissions"
                   class="mr-2 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
                   type="radio"
-                  value="gemini"
                 />
-                <span class="text-sm text-gray-700 dark:text-gray-300">仅 Gemini</span>
               </label>
             </div>
             <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
@@ -402,24 +400,18 @@
                   v-model="form.claudeAccountId"
                   :accounts="localAccounts.claude"
                   default-option-text="使用共享账号池"
-                  :disabled="form.permissions === 'gemini'"
                   :groups="localAccounts.claudeGroups"
                   placeholder="请选择Claude账号"
                   platform="claude"
                 />
               </div>
               <div>
-                <label class="mb-1 block text-sm font-medium text-gray-600 dark:text-gray-400"
-                  >Gemini 专属账号</label
-                >
+                <label class="mb-1 block text-sm font-medium text-gray-600 dark:text-gray-400">
+                  绑定账号
+                </label>
                 <AccountSelector
-                  v-model="form.geminiAccountId"
-                  :accounts="localAccounts.gemini"
                   default-option-text="使用共享账号池"
                   :disabled="form.permissions === 'claude'"
-                  :groups="localAccounts.geminiGroups"
-                  placeholder="请选择Gemini账号"
-                  platform="gemini"
                 />
               </div>
             </div>
@@ -611,7 +603,7 @@ const props = defineProps({
   },
   accounts: {
     type: Object,
-    default: () => ({ claude: [], gemini: [] })
+    default: () => ({ claude: [] })
   }
 })
 

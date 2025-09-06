@@ -469,15 +469,6 @@ class="mt-2 text-xs text-gray-500 dark:text-gray-400">
                 />
                 <span class="text-sm text-gray-700 dark:text-gray-300">仅 Claude</span>
               </label>
-              <label class="flex cursor-pointer items-center">
-                <input
-                  v-model="form.permissions"
-                  class="mr-2 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
-                  type="radio"
-                  value="gemini"
-                />
-                <span class="text-sm text-gray-700 dark:text-gray-300">仅 Gemini</span>
-              </label>
             </div>
             <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
               控制此 API Key 可以访问哪些服务
@@ -515,24 +506,9 @@ class="mt-2 text-xs text-gray-500 dark:text-gray-400">
                   v-model="form.claudeAccountId"
                   :accounts="localAccounts.claude"
                   default-option-text="使用共享账号池"
-                  :disabled="form.permissions === 'gemini'"
                   :groups="localAccounts.claudeGroups"
                   placeholder="请选择Claude账号"
                   platform="claude"
-                />
-              </div>
-              <div>
-                <label class="mb-1 block text-sm font-medium text-gray-600 dark:text-gray-400"
-                  >Gemini 专属账号</label
-                >
-                <AccountSelector
-                  v-model="form.geminiAccountId"
-                  :accounts="localAccounts.gemini"
-                  default-option-text="使用共享账号池"
-                  :disabled="form.permissions === 'claude'"
-                  :groups="localAccounts.geminiGroups"
-                  placeholder="请选择Gemini账号"
-                  platform="gemini"
                 />
               </div>
               <div>
@@ -543,7 +519,6 @@ class="mt-2 text-xs text-gray-500 dark:text-gray-400">
                   v-model="form.claudeAccount"
                   :accounts="localAccounts.claude"
                   default-option-text="使用共享账号池"
-                  :disabled="form.permissions === 'gemini'"
                   :groups="localAccounts.claudeGroups"
                 />
               </div>
@@ -727,7 +702,7 @@ import AccountSelector from '@/components/common/AccountSelector.vue'
 const props = defineProps({
   accounts: {
     type: Object,
-    default: () => ({ claude: [], gemini: [] })
+    default: () => ({ claude: [] })
   }
 })
 
@@ -739,9 +714,7 @@ const loading = ref(false)
 const accountsLoading = ref(false)
 const localAccounts = ref({
   claude: [],
-  gemini: [],
-  claudeGroups: [],
-  geminiGroups: []
+  claudeGroups: []
 })
 
 // 表单验证状态
@@ -778,7 +751,6 @@ const form = reactive({
   expiresAt: null,
   permissions: 'all',
   claudeAccountId: '',
-  geminiAccountId: '',
   enableModelRestriction: false,
   restrictedModels: [],
   modelInput: '',
@@ -795,9 +767,7 @@ onMounted(async () => {
   if (props.accounts) {
     localAccounts.value = {
       claude: props.accounts.claude || [],
-      gemini: props.accounts.gemini || [],
-      claudeGroups: props.accounts.claudeGroups || [],
-      geminiGroups: props.accounts.geminiGroups || []
+      claudeGroups: props.accounts.claudeGroups || []
     }
   }
 })
@@ -806,10 +776,9 @@ onMounted(async () => {
 const refreshAccounts = async () => {
   accountsLoading.value = true
   try {
-    const [claudeData, claudeConsoleData, geminiData, groupsData] = await Promise.all([
+    const [claudeData, claudeConsoleData, groupsData] = await Promise.all([
       apiClient.get('/admin/claude-accounts'),
       apiClient.get('/admin/claude-console-accounts'),
-      apiClient.get('/admin/gemini-accounts'),
       apiClient.get('/admin/account-groups')
     ])
 
@@ -838,18 +807,11 @@ const refreshAccounts = async () => {
 
     localAccounts.value.claude = claudeAccounts
 
-    if (geminiData.success) {
-      localAccounts.value.gemini = (geminiData.data || []).map((account) => ({
-        ...account,
-        isDedicated: account.accountType === 'dedicated' // 保留以便向后兼容
-      }))
-    }
 
     // 处理分组数据
     if (groupsData.success) {
       const allGroups = groupsData.data || []
       localAccounts.value.claudeGroups = allGroups.filter((g) => g.platform === 'claude')
-      localAccounts.value.geminiGroups = allGroups.filter((g) => g.platform === 'gemini')
     }
 
     showToast('账号列表已刷新', 'success')
@@ -1065,10 +1027,6 @@ const createApiKey = async () => {
       }
     }
 
-    // Gemini账户绑定
-    if (form.geminiAccountId) {
-      baseData.geminiAccountId = form.geminiAccountId
-    }
 
     if (form.createType === 'single') {
       // 单个创建

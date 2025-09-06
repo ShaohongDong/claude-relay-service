@@ -53,7 +53,6 @@ const authenticateApiKey = async (req, res, next) => {
       name: validation.keyData.name,
       claudeAccountId: validation.keyData.claudeAccountId,
       claudeConsoleAccountId: validation.keyData.claudeConsoleAccountId,
-      geminiAccountId: validation.keyData.geminiAccountId,
       isActive: validation.keyData.isActive
     }
 
