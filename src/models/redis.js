@@ -197,14 +197,14 @@ class RedisClient {
   async incrementTokenUsage(
     _keyId,
     _tokens,
-    __inputTokens = 0,
-    __outputTokens = 0,
-    __cacheCreateTokens = 0,
-    __cacheReadTokens = 0,
-    __model = 'unknown',
-    __ephemeral5mTokens = 0,
-    __ephemeral1hTokens = 0,
-    __isLongContextRequest = false
+    _inputTokens = 0,
+    _outputTokens = 0,
+    _cacheCreateTokens = 0,
+    _cacheReadTokens = 0,
+    _model = 'unknown',
+    _ephemeral5mTokens = 0,
+    _ephemeral1hTokens = 0,
+    _isLongContextRequest = false
   ) {
     // 精简版：不再进行使用统计，直接返回
     return
@@ -214,12 +214,12 @@ class RedisClient {
   async incrementAccountUsage(
     _accountId,
     _totalTokens,
-    __inputTokens = 0,
-    __outputTokens = 0,
-    __cacheCreateTokens = 0,
-    __cacheReadTokens = 0,
-    __model = 'unknown',
-    __isLongContextRequest = false
+    _inputTokens = 0,
+    _outputTokens = 0,
+    _cacheCreateTokens = 0,
+    _cacheReadTokens = 0,
+    _model = 'unknown',
+    _isLongContextRequest = false
   ) {
     // 精简版：不再进行使用统计，直接返回
     return

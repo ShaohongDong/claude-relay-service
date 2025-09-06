@@ -392,8 +392,8 @@ const removeIcon = async () => {
 
 // 处理图标加载错误
 const handleIconError = () => {
-  // 可以设置一个默认图标或隐藏图标
-  console.warn('图标加载失败')
+  // 图标加载失败时的静默处理
+  // 浏览器会自动显示默认的图片加载失败状态
 }
 
 // 格式化日期时间

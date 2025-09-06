@@ -295,7 +295,7 @@
                 <div class="flex items-center gap-1">
                   <!-- 平台图标和名称 -->
                   <div
-                    v-else-if="account.platform === 'claude-console'"
+                    v-if="account.platform === 'claude-console'"
                     class="flex items-center gap-1.5 rounded-lg border border-purple-200 bg-gradient-to-r from-purple-100 to-pink-100 px-2.5 py-1"
                   >
                     <i class="fas fa-terminal text-xs text-purple-700" />
