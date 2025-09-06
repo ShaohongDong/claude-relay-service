@@ -7,7 +7,7 @@
             账户管理
           </h3>
           <p class="text-sm text-gray-600 dark:text-gray-400 sm:text-base">
-            管理您的 Claude 和 Gemini 账户及代理配置
+            管理您的 Claude 账户及代理配置
           </p>
         </div>
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -98,14 +98,12 @@
         </div>
       </div>
 
-      <div v-if="accountsLoading"
-class="py-12 text-center">
+      <div v-if="accountsLoading" class="py-12 text-center">
         <div class="loading-spinner mx-auto mb-4" />
         <p class="text-gray-500 dark:text-gray-400">正在加载账户...</p>
       </div>
 
-      <div v-else-if="sortedAccounts.length === 0"
-class="py-12 text-center">
+      <div v-else-if="sortedAccounts.length === 0" class="py-12 text-center">
         <div
           class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700"
         >
@@ -116,8 +114,7 @@ class="py-12 text-center">
       </div>
 
       <!-- 桌面端表格视图 -->
-      <div v-else
-class="table-container hidden md:block">
+      <div v-else class="table-container hidden md:block">
         <table class="w-full table-fixed">
           <thead class="bg-gray-50/80 backdrop-blur-sm dark:bg-gray-700/80">
             <tr>
@@ -134,8 +131,7 @@ class="table-container hidden md:block">
                     'ml-1'
                   ]"
                 />
-                <i v-else
-class="fas fa-sort ml-1 text-gray-400" />
+                <i v-else class="fas fa-sort ml-1 text-gray-400" />
               </th>
               <th
                 class="w-[15%] min-w-[120px] cursor-pointer px-3 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-600"
@@ -150,8 +146,7 @@ class="fas fa-sort ml-1 text-gray-400" />
                     'ml-1'
                   ]"
                 />
-                <i v-else
-class="fas fa-sort ml-1 text-gray-400" />
+                <i v-else class="fas fa-sort ml-1 text-gray-400" />
               </th>
               <th
                 class="w-[12%] min-w-[100px] cursor-pointer px-3 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-600"
@@ -166,8 +161,7 @@ class="fas fa-sort ml-1 text-gray-400" />
                     'ml-1'
                   ]"
                 />
-                <i v-else
-class="fas fa-sort ml-1 text-gray-400" />
+                <i v-else class="fas fa-sort ml-1 text-gray-400" />
               </th>
               <th
                 class="w-[8%] min-w-[80px] cursor-pointer px-3 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-600"
@@ -182,8 +176,7 @@ class="fas fa-sort ml-1 text-gray-400" />
                     'ml-1'
                   ]"
                 />
-                <i v-else
-class="fas fa-sort ml-1 text-gray-400" />
+                <i v-else class="fas fa-sort ml-1 text-gray-400" />
               </th>
               <th
                 class="w-[10%] min-w-[100px] px-3 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300"
@@ -245,8 +238,7 @@ class="fas fa-sort ml-1 text-gray-400" />
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-200/50 dark:divide-gray-600/50">
-            <tr v-for="account in sortedAccounts"
-:key="account.id" class="table-row">
+            <tr v-for="account in sortedAccounts" :key="account.id" class="table-row">
               <td class="px-3 py-4">
                 <div class="flex items-center">
                   <div
@@ -302,17 +294,6 @@ class="fas fa-sort ml-1 text-gray-400" />
               <td class="px-3 py-4">
                 <div class="flex items-center gap-1">
                   <!-- 平台图标和名称 -->
-                  <div
-                    v-if="account.platform === 'gemini'"
-                    class="flex items-center gap-1.5 rounded-lg border border-yellow-200 bg-gradient-to-r from-yellow-100 to-amber-100 px-2.5 py-1"
-                  >
-                    <i class="fas fa-robot text-xs text-yellow-700" />
-                    <span class="text-xs font-semibold text-yellow-800">Gemini</span>
-                    <span class="mx-1 h-4 w-px bg-yellow-300" />
-                    <span class="text-xs font-medium text-yellow-700">
-                      {{ getGeminiAuthType() }}
-                    </span>
-                  </div>
                   <div
                     v-else-if="account.platform === 'claude-console'"
                     class="flex items-center gap-1.5 rounded-lg border border-purple-200 bg-gradient-to-r from-purple-100 to-pink-100 px-2.5 py-1"
@@ -430,11 +411,7 @@ class="fas fa-sort ml-1 text-gray-400" />
               </td>
               <td class="whitespace-nowrap px-3 py-4">
                 <div
-                  v-if="
-                    account.platform === 'claude' ||
-                    account.platform === 'claude-console' ||
-                    account.platform === 'gemini'
-                  "
+                  v-if="account.platform === 'claude' || account.platform === 'claude-console'"
                   class="flex items-center gap-2"
                 >
                   <div class="h-2 w-16 rounded-full bg-gray-200">
@@ -447,8 +424,7 @@ class="fas fa-sort ml-1 text-gray-400" />
                     {{ account.priority || 50 }}
                   </span>
                 </div>
-                <div v-else
-class="text-sm text-gray-400">
+                <div v-else class="text-sm text-gray-400">
                   <span class="text-xs">N/A</span>
                 </div>
               </td>
@@ -460,12 +436,10 @@ class="text-sm text-gray-400">
                 >
                   {{ formatProxyDisplay(account.proxy) }}
                 </div>
-                <div
-v-else class="text-gray-400">无代理</div>
+                <div v-else class="text-gray-400">无代理</div>
               </td>
               <td class="whitespace-nowrap px-3 py-4 text-sm">
-                <div v-if="account.usage && account.usage.daily"
-class="space-y-1">
+                <div v-if="account.usage && account.usage.daily" class="space-y-1">
                   <div class="flex items-center gap-2">
                     <div class="h-2 w-2 rounded-full bg-blue-500" />
                     <span class="text-sm font-medium text-gray-900 dark:text-gray-100"
@@ -491,8 +465,7 @@ class="space-y-1">
                     平均 {{ account.usage.averages.rpm.toFixed(2) }} RPM
                   </div>
                 </div>
-                <div
-v-else class="text-xs text-gray-400">暂无数据</div>
+                <div v-else class="text-xs text-gray-400">暂无数据</div>
               </td>
               <td class="whitespace-nowrap px-3 py-4">
                 <div
@@ -556,12 +529,10 @@ v-else class="text-xs text-gray-400">暂无数据</div>
                     </div>
                   </div>
                 </div>
-                <div v-else-if="account.platform === 'claude'"
-class="text-sm text-gray-400">
+                <div v-else-if="account.platform === 'claude'" class="text-sm text-gray-400">
                   <i class="fas fa-minus" />
                 </div>
-                <div v-else
-class="text-sm text-gray-400">
+                <div v-else class="text-sm text-gray-400">
                   <span class="text-xs">N/A</span>
                 </div>
               </td>
@@ -632,8 +603,7 @@ class="text-sm text-gray-400">
       </div>
 
       <!-- 移动端卡片视图 -->
-      <div v-if="!accountsLoading && sortedAccounts.length > 0"
-class="space-y-3 md:hidden">
+      <div v-if="!accountsLoading && sortedAccounts.length > 0" class="space-y-3 md:hidden">
         <div
           v-for="account in sortedAccounts"
           :key="account.id"
@@ -716,8 +686,7 @@ class="space-y-3 md:hidden">
             </div>
             <div>
               <p class="text-xs text-gray-500 dark:text-gray-400">会话窗口</p>
-              <div v-if="account.usage && account.usage.sessionWindow"
-class="space-y-1">
+              <div v-if="account.usage && account.usage.sessionWindow" class="space-y-1">
                 <div class="flex items-center gap-1.5">
                   <div class="h-1.5 w-1.5 rounded-full bg-purple-500" />
                   <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
@@ -731,8 +700,7 @@ class="space-y-1">
                   </p>
                 </div>
               </div>
-              <div
-v-else class="text-sm font-semibold text-gray-400">-</div>
+              <div v-else class="text-sm font-semibold text-gray-400">-</div>
             </div>
           </div>
 
@@ -787,8 +755,7 @@ v-else class="text-sm font-semibold text-gray-400">-</div>
                 >
                   剩余 {{ formatRemainingTime(account.sessionWindow.remainingTime) }}
                 </span>
-                <span v-else
-class="text-gray-500"> 已结束 </span>
+                <span v-else class="text-gray-500"> 已结束 </span>
               </div>
             </div>
 
@@ -924,8 +891,7 @@ const sortOptions = ref([
 const platformOptions = ref([
   { value: 'all', label: '所有平台', icon: 'fa-globe' },
   { value: 'claude', label: 'Claude', icon: 'fa-brain' },
-  { value: 'claude-console', label: 'Claude Console', icon: 'fa-terminal' },
-  { value: 'gemini', label: 'Gemini', icon: 'fa-google' }
+  { value: 'claude-console', label: 'Claude Console', icon: 'fa-terminal' }
 ])
 
 const groupOptions = computed(() => {
@@ -936,8 +902,8 @@ const groupOptions = computed(() => {
   accountGroups.value.forEach((group) => {
     options.push({
       value: group.id,
-      label: `${group.name} (${group.platform === 'claude' ? 'Claude' : 'Gemini'})`,
-      icon: group.platform === 'claude' ? 'fa-brain' : 'fa-robot'
+      label: `${group.name} (Claude)`,
+      icon: 'fa-brain'
     })
   })
   return options
@@ -1009,8 +975,7 @@ const loadAccounts = async (forceReload = false) => {
       // 请求所有平台
       requests.push(
         apiClient.get('/admin/claude-accounts', { params }),
-        apiClient.get('/admin/claude-console-accounts', { params }),
-        apiClient.get('/admin/gemini-accounts', { params })
+        apiClient.get('/admin/claude-console-accounts', { params })
       )
     } else {
       // 只请求指定平台，其他平台设为null占位
@@ -1018,22 +983,13 @@ const loadAccounts = async (forceReload = false) => {
         case 'claude':
           requests.push(
             apiClient.get('/admin/claude-accounts', { params }),
-            Promise.resolve({ success: true, data: [] }), // claude-console 占位
-            Promise.resolve({ success: true, data: [] }) // gemini 占位
+            Promise.resolve({ success: true, data: [] }) // claude-console 占位
           )
           break
         case 'claude-console':
           requests.push(
             Promise.resolve({ success: true, data: [] }), // claude 占位
-            apiClient.get('/admin/claude-console-accounts', { params }),
-            Promise.resolve({ success: true, data: [] }) // gemini 占位
-          )
-          break
-        case 'gemini':
-          requests.push(
-            Promise.resolve({ success: true, data: [] }), // claude 占位
-            Promise.resolve({ success: true, data: [] }), // claude-console 占位
-            apiClient.get('/admin/gemini-accounts', { params })
+            apiClient.get('/admin/claude-console-accounts', { params })
           )
           break
       }
@@ -1045,7 +1001,7 @@ const loadAccounts = async (forceReload = false) => {
     // 后端账户API已经包含分组信息，不需要单独加载分组成员关系
     // await loadGroupMembers(forceReload)
 
-    const [claudeData, claudeConsoleData, geminiData] = await Promise.all(requests)
+    const [claudeData, claudeConsoleData] = await Promise.all(requests)
 
     const allAccounts = []
 
@@ -1068,18 +1024,6 @@ const loadAccounts = async (forceReload = false) => {
         return { ...acc, platform: 'claude-console', boundApiKeysCount: 0 }
       })
       allAccounts.push(...claudeConsoleAccounts)
-    }
-
-    if (geminiData.success) {
-      const geminiAccounts = (geminiData.data || []).map((acc) => {
-        // 计算每个Gemini账户绑定的API Key数量
-        const boundApiKeysCount = apiKeys.value.filter(
-          (key) => key.geminiAccountId === acc.id
-        ).length
-        // 后端已经包含了groupInfos，直接使用
-        return { ...acc, platform: 'gemini', boundApiKeysCount }
-      })
-      allAccounts.push(...geminiAccounts)
     }
 
     accounts.value = allAccounts
@@ -1247,9 +1191,7 @@ const editAccount = (account) => {
 // 删除账户
 const deleteAccount = async (account) => {
   // 检查是否有API Key绑定到此账号
-  const boundKeysCount = apiKeys.value.filter(
-    (key) => key.claudeAccountId === account.id || key.geminiAccountId === account.id
-  ).length
+  const boundKeysCount = apiKeys.value.filter((key) => key.claudeAccountId === account.id).length
 
   if (boundKeysCount > 0) {
     showToast(
@@ -1274,8 +1216,6 @@ const deleteAccount = async (account) => {
       endpoint = `/admin/claude-accounts/${account.id}`
     } else if (account.platform === 'claude-console') {
       endpoint = `/admin/claude-console-accounts/${account.id}`
-    } else {
-      endpoint = `/admin/gemini-accounts/${account.id}`
     }
 
     const data = await apiClient.delete(endpoint)
@@ -1340,8 +1280,6 @@ const toggleSchedulable = async (account) => {
       endpoint = `/admin/claude-accounts/${account.id}/toggle-schedulable`
     } else if (account.platform === 'claude-console') {
       endpoint = `/admin/claude-console-accounts/${account.id}/toggle-schedulable`
-    } else if (account.platform === 'gemini') {
-      endpoint = `/admin/gemini-accounts/${account.id}/toggle-schedulable`
     } else {
       showToast('该账户类型暂不支持调度控制', 'warning')
       return
@@ -1386,12 +1324,6 @@ const getClaudeAuthType = (account) => {
   if (!account.lastRefreshAt || account.lastRefreshAt === '') {
     return 'Setup' // 缩短显示文本
   }
-  return 'OAuth'
-}
-
-// 获取 Gemini 账号的添加方式
-const getGeminiAuthType = () => {
-  // Gemini 统一显示 OAuth
   return 'OAuth'
 }
 
