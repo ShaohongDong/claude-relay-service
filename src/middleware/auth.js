@@ -2,8 +2,6 @@ const apiKeyService = require('../services/apiKeyService')
 const logger = require('../utils/logger')
 const redis = require('../models/redis')
 // const { RateLimiterRedis } = require('rate-limiter-flexible') // 暂时未使用
-// 精简版：不再需要config配置
-// const config = require('../../config/config')
 
 // 🔑 API Key验证中间件（精简版）
 const authenticateApiKey = async (req, res, next) => {

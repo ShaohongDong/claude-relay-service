@@ -325,21 +325,6 @@ class ClaudeAccountService {
         accountData.status = 'error'
         accountData.errorMessage = error.message
         await redis.setClaudeAccount(accountId, accountData)
-
-        // 发送Webhook通知
-        try {
-          const webhookNotifier = require('../utils/webhookNotifier')
-          await webhookNotifier.sendAccountAnomalyNotification({
-            accountId,
-            accountName: accountData.name,
-            platform: 'claude-oauth',
-            status: 'error',
-            errorCode: 'CLAUDE_OAUTH_ERROR',
-            reason: `Token refresh failed: ${error.message}`
-          })
-        } catch (webhookError) {
-          logger.error('Failed to send webhook notification:', webhookError)
-        }
       }
 
       logger.error(`❌ Failed to refresh token for account ${accountId}:`, error)
@@ -582,26 +567,6 @@ class ClaudeAccountService {
       }
 
       updatedData.updatedAt = new Date().toISOString()
-
-      // 检查是否手动禁用了账号，如果是则发送webhook通知
-      if (updates.isActive === 'false' && accountData.isActive === 'true') {
-        try {
-          const webhookNotifier = require('../utils/webhookNotifier')
-          await webhookNotifier.sendAccountAnomalyNotification({
-            accountId,
-            accountName: updatedData.name || 'Unknown Account',
-            platform: 'claude-oauth',
-            status: 'disabled',
-            errorCode: 'CLAUDE_OAUTH_MANUALLY_DISABLED',
-            reason: 'Account manually disabled by administrator'
-          })
-        } catch (webhookError) {
-          logger.error(
-            'Failed to send webhook notification for manual account disable:',
-            webhookError
-          )
-        }
-      }
 
       await redis.setClaudeAccount(accountId, updatedData)
 
@@ -1111,22 +1076,6 @@ class ClaudeAccountService {
         logger.info(`🗑️ Deleted sticky session mapping for rate limited account: ${accountId}`)
       }
 
-      // 发送Webhook通知
-      try {
-        const webhookNotifier = require('../utils/webhookNotifier')
-        await webhookNotifier.sendAccountAnomalyNotification({
-          accountId,
-          accountName: accountData.name || 'Claude Account',
-          platform: 'claude-oauth',
-          status: 'error',
-          errorCode: 'CLAUDE_OAUTH_RATE_LIMITED',
-          reason: `Account rate limited (429 error). ${rateLimitResetTimestamp ? `Reset at: ${new Date(rateLimitResetTimestamp * 1000).toISOString()}` : 'Estimated reset in 1-5 hours'}`,
-          timestamp: new Date().toISOString()
-        })
-      } catch (webhookError) {
-        logger.error('Failed to send rate limit webhook notification:', webhookError)
-      }
-
       return { success: true }
     } catch (error) {
       logger.error(`❌ Failed to mark account as rate limited: ${accountId}`, error)
@@ -1312,22 +1261,6 @@ class ClaudeAccountService {
         accountData.schedulable = 'true'
         delete accountData.stoppedReason
         delete accountData.autoStoppedAt
-
-        // 发送Webhook通知
-        try {
-          const webhookNotifier = require('../utils/webhookNotifier')
-          await webhookNotifier.sendAccountAnomalyNotification({
-            accountId,
-            accountName: accountData.name || 'Claude Account',
-            platform: 'claude',
-            status: 'resumed',
-            errorCode: 'CLAUDE_5H_LIMIT_RESUMED',
-            reason: '进入新的5小时窗口，已自动恢复调度',
-            timestamp: new Date().toISOString()
-          })
-        } catch (webhookError) {
-          logger.error('Failed to send webhook notification:', webhookError)
-        }
       }
 
       // 保存更新后的数据到Redis
@@ -1723,21 +1656,6 @@ class ClaudeAccountService {
         `⚠️ Account ${accountData.name} (${accountId}) marked as unauthorized and disabled for scheduling`
       )
 
-      // 发送Webhook通知
-      try {
-        const webhookNotifier = require('../utils/webhookNotifier')
-        await webhookNotifier.sendAccountAnomalyNotification({
-          accountId,
-          accountName: accountData.name,
-          platform: 'claude-oauth',
-          status: 'unauthorized',
-          errorCode: 'CLAUDE_OAUTH_UNAUTHORIZED',
-          reason: 'Account unauthorized (401 errors detected)'
-        })
-      } catch (webhookError) {
-        logger.error('Failed to send webhook notification:', webhookError)
-      }
-
       return { success: true }
     } catch (error) {
       logger.error(`❌ Failed to mark account ${accountId} as unauthorized:`, error)
@@ -1920,21 +1838,6 @@ class ClaudeAccountService {
         `⚠️ Account ${accountData.name} (${accountId}) marked as temp_error and disabled for scheduling`
       )
 
-      // 发送Webhook通知
-      try {
-        const webhookNotifier = require('../utils/webhookNotifier')
-        await webhookNotifier.sendAccountAnomalyNotification({
-          accountId,
-          accountName: accountData.name,
-          platform: 'claude-oauth',
-          status: 'temp_error',
-          errorCode: 'CLAUDE_OAUTH_TEMP_ERROR',
-          reason: 'Account temporarily disabled due to consecutive 500 errors'
-        })
-      } catch (webhookError) {
-        logger.error('Failed to send webhook notification:', webhookError)
-      }
-
       return { success: true }
     } catch (error) {
       logger.error(`❌ Failed to mark account ${accountId} as temp_error:`, error)
@@ -1978,22 +1881,6 @@ class ClaudeAccountService {
         accountData.schedulable = 'false'
         accountData.stoppedReason = '5小时使用量接近限制，自动停止调度'
         accountData.autoStoppedAt = new Date().toISOString()
-
-        // 发送Webhook通知
-        try {
-          const webhookNotifier = require('../utils/webhookNotifier')
-          await webhookNotifier.sendAccountAnomalyNotification({
-            accountId,
-            accountName: accountData.name || 'Claude Account',
-            platform: 'claude',
-            status: 'warning',
-            errorCode: 'CLAUDE_5H_LIMIT_WARNING',
-            reason: '5小时使用量接近限制，已自动停止调度',
-            timestamp: new Date().toISOString()
-          })
-        } catch (webhookError) {
-          logger.error('Failed to send webhook notification:', webhookError)
-        }
       }
 
       await redis.setClaudeAccount(accountId, accountData)

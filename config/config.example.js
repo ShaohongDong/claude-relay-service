@@ -111,15 +111,6 @@ const config = {
     allowCustomClients: process.env.ALLOW_CUSTOM_CLIENTS === 'true'
   },
 
-  // 📢 Webhook通知配置
-  webhook: {
-    enabled: process.env.WEBHOOK_ENABLED !== 'false', // 默认启用
-    urls: process.env.WEBHOOK_URLS
-      ? process.env.WEBHOOK_URLS.split(',').map((url) => url.trim())
-      : [],
-    timeout: parseInt(process.env.WEBHOOK_TIMEOUT) || 10000, // 10秒超时
-    retries: parseInt(process.env.WEBHOOK_RETRIES) || 3 // 重试3次
-  },
 
   // 🛠️ 开发配置
   development: {

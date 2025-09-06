@@ -280,26 +280,6 @@ class ClaudeConsoleAccountService {
 
       updatedData.updatedAt = new Date().toISOString()
 
-      // 检查是否手动禁用了账号，如果是则发送webhook通知
-      if (updates.isActive === false && existingAccount.isActive === true) {
-        try {
-          const webhookNotifier = require('../utils/webhookNotifier')
-          await webhookNotifier.sendAccountAnomalyNotification({
-            accountId,
-            accountName: updatedData.name || existingAccount.name || 'Unknown Account',
-            platform: 'claude-console',
-            status: 'disabled',
-            errorCode: 'CLAUDE_CONSOLE_MANUALLY_DISABLED',
-            reason: 'Account manually disabled by administrator'
-          })
-        } catch (webhookError) {
-          logger.error(
-            'Failed to send webhook notification for manual account disable:',
-            webhookError
-          )
-        }
-      }
-
       logger.debug(`[DEBUG] Final updatedData to save: ${JSON.stringify(updatedData, null, 2)}`)
       logger.debug(`[DEBUG] Updating Redis key: ${this.ACCOUNT_KEY_PREFIX}${accountId}`)
 
@@ -365,22 +345,6 @@ class ClaudeConsoleAccountService {
       }
 
       await client.hset(`${this.ACCOUNT_KEY_PREFIX}${accountId}`, updates)
-
-      // 发送Webhook通知
-      try {
-        const webhookNotifier = require('../utils/webhookNotifier')
-        await webhookNotifier.sendAccountAnomalyNotification({
-          accountId,
-          accountName: account.name || 'Claude Console Account',
-          platform: 'claude-console',
-          status: 'error',
-          errorCode: 'CLAUDE_CONSOLE_RATE_LIMITED',
-          reason: `Account rate limited (429 error). ${account.rateLimitDuration ? `Will be blocked for ${account.rateLimitDuration} hours` : 'Temporary rate limit'}`,
-          timestamp: new Date().toISOString()
-        })
-      } catch (webhookError) {
-        logger.error('Failed to send rate limit webhook notification:', webhookError)
-      }
 
       logger.warn(
         `🚫 Claude Console account marked as rate limited: ${account.name} (${accountId})`
@@ -473,22 +437,6 @@ class ClaudeConsoleAccountService {
 
       await client.hset(`${this.ACCOUNT_KEY_PREFIX}${accountId}`, updates)
 
-      // 发送Webhook通知
-      try {
-        const webhookNotifier = require('../utils/webhookNotifier')
-        await webhookNotifier.sendAccountAnomalyNotification({
-          accountId,
-          accountName: account.name || 'Claude Console Account',
-          platform: 'claude-console',
-          status: 'error',
-          errorCode: 'CLAUDE_CONSOLE_UNAUTHORIZED',
-          reason: 'API Key无效或已过期（401错误），账户已停止调度',
-          timestamp: new Date().toISOString()
-        })
-      } catch (webhookError) {
-        logger.error('Failed to send unauthorized webhook notification:', webhookError)
-      }
-
       logger.warn(
         `🚫 Claude Console account marked as unauthorized: ${account.name} (${accountId})`
       )
@@ -516,22 +464,6 @@ class ClaudeConsoleAccountService {
       }
 
       await client.hset(`${this.ACCOUNT_KEY_PREFIX}${accountId}`, updates)
-
-      // 发送Webhook通知
-      try {
-        const webhookNotifier = require('../utils/webhookNotifier')
-        await webhookNotifier.sendAccountAnomalyNotification({
-          accountId,
-          accountName: account.name || 'Claude Console Account',
-          platform: 'claude-console',
-          status: 'error',
-          errorCode: 'CLAUDE_CONSOLE_OVERLOADED',
-          reason: '服务过载（529错误）。账户将暂时停止调度',
-          timestamp: new Date().toISOString()
-        })
-      } catch (webhookError) {
-        logger.error('Failed to send overload webhook notification:', webhookError)
-      }
 
       logger.warn(`🚫 Claude Console account marked as overloaded: ${account.name} (${accountId})`)
       return { success: true }
@@ -596,8 +528,8 @@ class ClaudeConsoleAccountService {
     try {
       const client = redis.getClientSafe()
 
-      // 获取账户信息用于webhook通知
-      const accountData = await client.hgetall(`${this.ACCOUNT_KEY_PREFIX}${accountId}`)
+      // 获取账户信息（暂时未使用）
+      const _accountData = await client.hgetall(`${this.ACCOUNT_KEY_PREFIX}${accountId}`)
 
       const updates = {
         status: 'blocked',
@@ -608,23 +540,6 @@ class ClaudeConsoleAccountService {
       await client.hset(`${this.ACCOUNT_KEY_PREFIX}${accountId}`, updates)
 
       logger.warn(`🚫 Claude Console account blocked: ${accountId} - ${reason}`)
-
-      // 发送Webhook通知
-      if (accountData && Object.keys(accountData).length > 0) {
-        try {
-          const webhookNotifier = require('../utils/webhookNotifier')
-          await webhookNotifier.sendAccountAnomalyNotification({
-            accountId,
-            accountName: accountData.name || 'Unknown Account',
-            platform: 'claude-console',
-            status: 'blocked',
-            errorCode: 'CLAUDE_CONSOLE_BLOCKED',
-            reason
-          })
-        } catch (webhookError) {
-          logger.error('Failed to send webhook notification:', webhookError)
-        }
-      }
 
       return { success: true }
     } catch (error) {
