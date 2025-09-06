@@ -147,7 +147,7 @@ class CostCalculator {
       const cacheReadPrice = (pricingData.cache_read_input_token_cost || 0) * 1000000
 
       // 缓存创建价格处理
-      let cacheWritePrice = (pricingData.cache_creation_input_token_cost || 0) * 1000000
+      const cacheWritePrice = (pricingData.cache_creation_input_token_cost || 0) * 1000000
 
       pricing = {
         input: inputPrice,

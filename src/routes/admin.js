@@ -13,11 +13,13 @@ const pricingService = require('../services/pricingService')
 const claudeCodeHeadersService = require('../services/claudeCodeHeadersService')
 const webhookNotifier = require('../utils/webhookNotifier')
 const axios = require('axios')
-const crypto = require('crypto')
+// 精简版：不再使用crypto
+// const crypto = require('crypto')
 const fs = require('fs')
 const path = require('path')
 const config = require('../../config/config')
-const ProxyHelper = require('../utils/proxyHelper')
+// 精简版：不再使用ProxyHelper
+// const ProxyHelper = require('../utils/proxyHelper')
 
 const router = express.Router()
 
@@ -562,7 +564,7 @@ router.post('/api-keys/batch', authenticateAdmin, async (req, res) => {
           claudeAccountId,
           claudeConsoleAccountId,
           geminiAccountId,
-              permissions,
+          permissions,
           concurrencyLimit,
           rateLimitWindow,
           rateLimitRequests,
@@ -860,7 +862,6 @@ router.put('/api-keys/:keyId', authenticateAdmin, async (req, res) => {
       // 空字符串表示解绑，null或空字符串都设置为空字符串
       updates.geminiAccountId = geminiAccountId || ''
     }
-
 
     if (permissions !== undefined) {
       // 验证权限值
@@ -1185,7 +1186,6 @@ router.get('/account-groups/:groupId/members', authenticateAdmin, async (req, re
       if (!account) {
         account = await geminiAccountService.getAccount(memberId)
       }
-
 
       if (account) {
         members.push(account)
@@ -2150,7 +2150,6 @@ router.put(
   }
 )
 
-
 // 🤖 Gemini 账户管理
 
 // 生成 Gemini OAuth 授权 URL
@@ -2746,32 +2745,18 @@ router.get('/dashboard', authenticateAdmin, async (req, res) => {
         (acc.rateLimitStatus && acc.rateLimitStatus.isRateLimited)
     ).length
 
-
     const dashboard = {
       overview: {
         totalApiKeys: apiKeys.length,
         activeApiKeys,
         // 总账户统计（所有平台）
-        totalAccounts:
-          claudeAccounts.length +
-          claudeConsoleAccounts.length +
-          geminiAccounts.length,
-        normalAccounts:
-          normalClaudeAccounts +
-          normalClaudeConsoleAccounts +
-          normalGeminiAccounts,
+        totalAccounts: claudeAccounts.length + claudeConsoleAccounts.length + geminiAccounts.length,
+        normalAccounts: normalClaudeAccounts + normalClaudeConsoleAccounts + normalGeminiAccounts,
         abnormalAccounts:
-          abnormalClaudeAccounts +
-          abnormalClaudeConsoleAccounts +
-          abnormalGeminiAccounts,
-        pausedAccounts:
-          pausedClaudeAccounts +
-          pausedClaudeConsoleAccounts +
-          pausedGeminiAccounts,
+          abnormalClaudeAccounts + abnormalClaudeConsoleAccounts + abnormalGeminiAccounts,
+        pausedAccounts: pausedClaudeAccounts + pausedClaudeConsoleAccounts + pausedGeminiAccounts,
         rateLimitedAccounts:
-          rateLimitedClaudeAccounts +
-          rateLimitedClaudeConsoleAccounts +
-          rateLimitedGeminiAccounts,
+          rateLimitedClaudeAccounts + rateLimitedClaudeConsoleAccounts + rateLimitedGeminiAccounts,
         // 各平台详细统计
         accountsByPlatform: {
           claude: {
@@ -2797,10 +2782,7 @@ router.get('/dashboard', authenticateAdmin, async (req, res) => {
           }
         },
         // 保留旧字段以兼容
-        activeAccounts:
-          normalClaudeAccounts +
-          normalClaudeConsoleAccounts +
-          normalGeminiAccounts,
+        activeAccounts: normalClaudeAccounts + normalClaudeConsoleAccounts + normalGeminiAccounts,
         totalClaudeAccounts: claudeAccounts.length + claudeConsoleAccounts.length,
         activeClaudeAccounts: normalClaudeAccounts + normalClaudeConsoleAccounts,
         rateLimitedClaudeAccounts: rateLimitedClaudeAccounts + rateLimitedClaudeConsoleAccounts,
@@ -2938,7 +2920,6 @@ router.get('/model-stats', authenticateAdmin, async (req, res) => {
       if (!model || model === 'unknown') {
         return model
       }
-
 
       // 对于其他模型，去掉常见的版本后缀
       return model.replace(/-v\d+:\d+$|:latest$/, '')
@@ -3839,7 +3820,6 @@ router.get('/usage-costs', authenticateAdmin, async (req, res) => {
         return model
       }
 
-
       // 对于其他模型，去掉常见的版本后缀
       return model.replace(/-v\d+:\d+$|:latest$/, '')
     }
@@ -4472,6 +4452,5 @@ router.put('/oem-settings', authenticateAdmin, async (req, res) => {
     return res.status(500).json({ error: 'Failed to update OEM settings', message: error.message })
   }
 })
-
 
 module.exports = router

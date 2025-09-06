@@ -3,10 +3,8 @@ const claudeRelayService = require('../services/claudeRelayService')
 const claudeConsoleRelayService = require('../services/claudeConsoleRelayService')
 const unifiedClaudeScheduler = require('../services/unifiedClaudeScheduler')
 const apiKeyService = require('../services/apiKeyService')
-const pricingService = require('../services/pricingService')
 const { authenticateApiKey } = require('../middleware/auth')
 const logger = require('../utils/logger')
-const redis = require('../models/redis')
 const sessionHelper = require('../utils/sessionHelper')
 
 const router = express.Router()
@@ -60,8 +58,6 @@ async function handleMessagesRequest(req, res) {
 
       // 流式响应不需要额外处理，中间件已经设置了监听器
 
-      let usageDataCaptured = false
-
       // 生成会话哈希用于sticky会话
       const sessionHash = sessionHelper.generateSessionHash(req.body)
 
@@ -75,228 +71,41 @@ async function handleMessagesRequest(req, res) {
 
       // 根据账号类型选择对应的转发服务并调用
       if (accountType === 'claude-official') {
-        // 官方Claude账号使用原有的转发服务（会自己选择账号）
+        // 官方Claude账号使用原有的转发服务（精简版）
         await claudeRelayService.relayStreamRequestWithUsageCapture(
           req.body,
           req.apiKey,
           res,
           req.headers,
           (usageData) => {
-            // 回调函数：当检测到完整usage数据时记录真实token使用量
-            logger.info(
-              '🎯 Usage callback triggered with complete data:',
-              JSON.stringify(usageData, null, 2)
-            )
-
-            if (
-              usageData &&
-              usageData.input_tokens !== undefined &&
-              usageData.output_tokens !== undefined
-            ) {
-              const inputTokens = usageData.input_tokens || 0
-              const outputTokens = usageData.output_tokens || 0
-              // 兼容处理：如果有详细的 cache_creation 对象，使用它；否则使用总的 cache_creation_input_tokens
-              let cacheCreateTokens = usageData.cache_creation_input_tokens || 0
-              let ephemeral5mTokens = 0
-              let ephemeral1hTokens = 0
-
-              if (usageData.cache_creation && typeof usageData.cache_creation === 'object') {
-                ephemeral5mTokens = usageData.cache_creation.ephemeral_5m_input_tokens || 0
-                ephemeral1hTokens = usageData.cache_creation.ephemeral_1h_input_tokens || 0
-                // 总的缓存创建 tokens 是两者之和
-                cacheCreateTokens = ephemeral5mTokens + ephemeral1hTokens
-              }
-
-              const cacheReadTokens = usageData.cache_read_input_tokens || 0
-              const model = usageData.model || 'unknown'
-
-              // 记录真实的token使用量（包含模型信息和所有4种token以及账户ID）
-              const { accountId: usageAccountId } = usageData
-
-              // 构建 usage 对象以传递给 recordUsage
-              const usageObject = {
-                input_tokens: inputTokens,
-                output_tokens: outputTokens,
-                cache_creation_input_tokens: cacheCreateTokens,
-                cache_read_input_tokens: cacheReadTokens
-              }
-
-              // 如果有详细的缓存创建数据，添加到 usage 对象中
-              if (ephemeral5mTokens > 0 || ephemeral1hTokens > 0) {
-                usageObject.cache_creation = {
-                  ephemeral_5m_input_tokens: ephemeral5mTokens,
-                  ephemeral_1h_input_tokens: ephemeral1hTokens
-                }
-              }
-
-              apiKeyService
-                .recordUsageWithDetails(req.apiKey.id, usageObject, model, usageAccountId, 'claude')
-                .catch((error) => {
-                  logger.error('❌ Failed to record stream usage:', error)
-                })
-
-              // 更新时间窗口内的token计数和费用
-              if (req.rateLimitInfo) {
-                const totalTokens = inputTokens + outputTokens + cacheCreateTokens + cacheReadTokens
-
-                // 更新Token计数（向后兼容）
-                redis
-                  .getClient()
-                  .incrby(req.rateLimitInfo.tokenCountKey, totalTokens)
-                  .catch((error) => {
-                    logger.error('❌ Failed to update rate limit token count:', error)
-                  })
-                logger.api(`📊 Updated rate limit token count: +${totalTokens} tokens`)
-
-                // 计算并更新费用计数（新功能）
-                if (req.rateLimitInfo.costCountKey) {
-                  const costInfo = pricingService.calculateCost(usageData, model)
-                  if (costInfo.totalCost > 0) {
-                    redis
-                      .getClient()
-                      .incrbyfloat(req.rateLimitInfo.costCountKey, costInfo.totalCost)
-                      .catch((error) => {
-                        logger.error('❌ Failed to update rate limit cost count:', error)
-                      })
-                    logger.api(
-                      `💰 Updated rate limit cost count: +$${costInfo.totalCost.toFixed(6)}`
-                    )
-                  }
-                }
-              }
-
-              usageDataCaptured = true
-              logger.api(
-                `📊 Stream usage recorded (real) - Model: ${model}, Input: ${inputTokens}, Output: ${outputTokens}, Cache Create: ${cacheCreateTokens}, Cache Read: ${cacheReadTokens}, Total: ${inputTokens + outputTokens + cacheCreateTokens + cacheReadTokens} tokens`
-              )
-            } else {
-              logger.warn(
-                '⚠️ Usage callback triggered but data is incomplete:',
-                JSON.stringify(usageData)
-              )
+            // 精简的回调函数：只更新最后使用时间
+            if (usageData && req.apiKey.id) {
+              apiKeyService.updateLastUsedTime(req.apiKey.id).catch((error) => {
+                logger.error('❌ Failed to update last used time:', error)
+              })
             }
           }
         )
       } else if (accountType === 'claude-console') {
-        // Claude Console账号使用Console转发服务（需要传递accountId）
+        // Claude Console账号使用Console转发服务（精简版）
         await claudeConsoleRelayService.relayStreamRequestWithUsageCapture(
           req.body,
           req.apiKey,
           res,
           req.headers,
           (usageData) => {
-            // 回调函数：当检测到完整usage数据时记录真实token使用量
-            logger.info(
-              '🎯 Usage callback triggered with complete data:',
-              JSON.stringify(usageData, null, 2)
-            )
-
-            if (
-              usageData &&
-              usageData.input_tokens !== undefined &&
-              usageData.output_tokens !== undefined
-            ) {
-              const inputTokens = usageData.input_tokens || 0
-              const outputTokens = usageData.output_tokens || 0
-              // 兼容处理：如果有详细的 cache_creation 对象，使用它；否则使用总的 cache_creation_input_tokens
-              let cacheCreateTokens = usageData.cache_creation_input_tokens || 0
-              let ephemeral5mTokens = 0
-              let ephemeral1hTokens = 0
-
-              if (usageData.cache_creation && typeof usageData.cache_creation === 'object') {
-                ephemeral5mTokens = usageData.cache_creation.ephemeral_5m_input_tokens || 0
-                ephemeral1hTokens = usageData.cache_creation.ephemeral_1h_input_tokens || 0
-                // 总的缓存创建 tokens 是两者之和
-                cacheCreateTokens = ephemeral5mTokens + ephemeral1hTokens
-              }
-
-              const cacheReadTokens = usageData.cache_read_input_tokens || 0
-              const model = usageData.model || 'unknown'
-
-              // 记录真实的token使用量（包含模型信息和所有4种token以及账户ID）
-              const usageAccountId = usageData.accountId
-
-              // 构建 usage 对象以传递给 recordUsage
-              const usageObject = {
-                input_tokens: inputTokens,
-                output_tokens: outputTokens,
-                cache_creation_input_tokens: cacheCreateTokens,
-                cache_read_input_tokens: cacheReadTokens
-              }
-
-              // 如果有详细的缓存创建数据，添加到 usage 对象中
-              if (ephemeral5mTokens > 0 || ephemeral1hTokens > 0) {
-                usageObject.cache_creation = {
-                  ephemeral_5m_input_tokens: ephemeral5mTokens,
-                  ephemeral_1h_input_tokens: ephemeral1hTokens
-                }
-              }
-
-              apiKeyService
-                .recordUsageWithDetails(
-                  req.apiKey.id,
-                  usageObject,
-                  model,
-                  usageAccountId,
-                  'claude-console'
-                )
-                .catch((error) => {
-                  logger.error('❌ Failed to record stream usage:', error)
-                })
-
-              // 更新时间窗口内的token计数和费用
-              if (req.rateLimitInfo) {
-                const totalTokens = inputTokens + outputTokens + cacheCreateTokens + cacheReadTokens
-
-                // 更新Token计数（向后兼容）
-                redis
-                  .getClient()
-                  .incrby(req.rateLimitInfo.tokenCountKey, totalTokens)
-                  .catch((error) => {
-                    logger.error('❌ Failed to update rate limit token count:', error)
-                  })
-                logger.api(`📊 Updated rate limit token count: +${totalTokens} tokens`)
-
-                // 计算并更新费用计数（新功能）
-                if (req.rateLimitInfo.costCountKey) {
-                  const costInfo = pricingService.calculateCost(usageData, model)
-                  if (costInfo.totalCost > 0) {
-                    redis
-                      .getClient()
-                      .incrbyfloat(req.rateLimitInfo.costCountKey, costInfo.totalCost)
-                      .catch((error) => {
-                        logger.error('❌ Failed to update rate limit cost count:', error)
-                      })
-                    logger.api(
-                      `💰 Updated rate limit cost count: +$${costInfo.totalCost.toFixed(6)}`
-                    )
-                  }
-                }
-              }
-
-              usageDataCaptured = true
-              logger.api(
-                `📊 Stream usage recorded (real) - Model: ${model}, Input: ${inputTokens}, Output: ${outputTokens}, Cache Create: ${cacheCreateTokens}, Cache Read: ${cacheReadTokens}, Total: ${inputTokens + outputTokens + cacheCreateTokens + cacheReadTokens} tokens`
-              )
-            } else {
-              logger.warn(
-                '⚠️ Usage callback triggered but data is incomplete:',
-                JSON.stringify(usageData)
-              )
+            // 精简的回调函数：只更新最后使用时间
+            if (usageData && req.apiKey.id) {
+              apiKeyService.updateLastUsedTime(req.apiKey.id).catch((error) => {
+                logger.error('❌ Failed to update last used time:', error)
+              })
             }
           },
           accountId
         )
       }
 
-      // 流式请求完成后 - 如果没有捕获到usage数据，记录警告但不进行估算
-      setTimeout(() => {
-        if (!usageDataCaptured) {
-          logger.warn(
-            '⚠️ No usage data captured from SSE stream - no statistics recorded (official data only)'
-          )
-        }
-      }, 1000) // 1秒后检查
+      // 流式请求已处理完成
     } else {
       // 非流式响应 - 只使用官方真实usage数据
       logger.info('📄 Starting non-streaming request', {
@@ -361,78 +170,21 @@ async function handleMessagesRequest(req, res) {
         }
       })
 
-      let usageRecorded = false
-
-      // 尝试解析JSON响应并提取usage信息
+      // 尝试解析JSON响应并返回
       try {
         const jsonData = JSON.parse(response.body)
 
-        logger.info('📊 Parsed Claude API response:', JSON.stringify(jsonData, null, 2))
-
-        // 从Claude API响应中提取usage信息（完整的token分类体系）
-        if (
-          jsonData.usage &&
-          jsonData.usage.input_tokens !== undefined &&
-          jsonData.usage.output_tokens !== undefined
-        ) {
-          const inputTokens = jsonData.usage.input_tokens || 0
-          const outputTokens = jsonData.usage.output_tokens || 0
-          const cacheCreateTokens = jsonData.usage.cache_creation_input_tokens || 0
-          const cacheReadTokens = jsonData.usage.cache_read_input_tokens || 0
-          const model = jsonData.model || req.body.model || 'unknown'
-
-          // 记录真实的token使用量（包含模型信息和所有4种token以及账户ID）
-          const { accountId: responseAccountId } = response
-          await apiKeyService.recordUsage(
-            req.apiKey.id,
-            inputTokens,
-            outputTokens,
-            cacheCreateTokens,
-            cacheReadTokens,
-            model,
-            responseAccountId
-          )
-
-          // 更新时间窗口内的token计数和费用
-          if (req.rateLimitInfo) {
-            const totalTokens = inputTokens + outputTokens + cacheCreateTokens + cacheReadTokens
-
-            // 更新Token计数（向后兼容）
-            await redis.getClient().incrby(req.rateLimitInfo.tokenCountKey, totalTokens)
-            logger.api(`📊 Updated rate limit token count: +${totalTokens} tokens`)
-
-            // 计算并更新费用计数（新功能）
-            if (req.rateLimitInfo.costCountKey) {
-              const costInfo = pricingService.calculateCost(jsonData.usage, model)
-              if (costInfo.totalCost > 0) {
-                await redis
-                  .getClient()
-                  .incrbyfloat(req.rateLimitInfo.costCountKey, costInfo.totalCost)
-                logger.api(`💰 Updated rate limit cost count: +$${costInfo.totalCost.toFixed(6)}`)
-              }
-            }
-          }
-
-          usageRecorded = true
-          logger.api(
-            `📊 Non-stream usage recorded (real) - Model: ${model}, Input: ${inputTokens}, Output: ${outputTokens}, Cache Create: ${cacheCreateTokens}, Cache Read: ${cacheReadTokens}, Total: ${inputTokens + outputTokens + cacheCreateTokens + cacheReadTokens} tokens`
-          )
-        } else {
-          logger.warn('⚠️ No usage data found in Claude API JSON response')
-        }
+        // 更新最后使用时间
+        apiKeyService.updateLastUsedTime(req.apiKey.id).catch(() => {})
 
         res.json(jsonData)
       } catch (parseError) {
         logger.warn('⚠️ Failed to parse Claude API response as JSON:', parseError.message)
-        logger.info('📄 Raw response body:', response.body)
-        res.send(response.body)
-      }
 
-      // 如果没有记录usage，只记录警告，不进行估算
-      if (!usageRecorded) {
-        logger.warn(
-          '⚠️ No usage data recorded for non-stream request - no statistics recorded (official data only)'
-        )
+        // 更新最后使用时间
+        apiKeyService.updateLastUsedTime(req.apiKey.id).catch(() => {})
+
+        res.send(response.body)
       }
     }
 

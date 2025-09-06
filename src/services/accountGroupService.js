@@ -309,8 +309,7 @@ class AccountGroupService {
         const keyData = await client.hgetall(`api_key:${keyId}`)
         if (
           keyData &&
-          (keyData.claudeAccountId === groupKey ||
-            keyData.geminiAccountId === groupKey)
+          (keyData.claudeAccountId === groupKey || keyData.geminiAccountId === groupKey)
         ) {
           boundApiKeys.push({
             id: keyId,
