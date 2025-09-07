@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require('uuid')
 const EventEmitter = require('events')
 const ProxyHelper = require('../utils/proxyHelper')
 const logger = require('../utils/logger')
+const performanceOptimizer = require('../utils/performanceOptimizer')
 
 /**
  * 智能连接池 - 为单个账户管理代理连接
@@ -80,7 +81,7 @@ class SmartConnectionPool extends EventEmitter {
       }
 
       const connection = {
-        id: uuidv4(),
+        id: performanceOptimizer.getPooledUUID(),
         accountId: this.accountId,
         agent,
         createdAt: Date.now(),
@@ -112,7 +113,7 @@ class SmartConnectionPool extends EventEmitter {
   }
 
   /**
-   * 为连接附加事件监听器
+   * 为连接附加事件监听器 - 优化内存管理
    */
   attachEventListeners(connection) {
     if (!connection.agent || typeof connection.agent.createSocket !== 'function') {
@@ -123,39 +124,81 @@ class SmartConnectionPool extends EventEmitter {
     try {
       // Hook createSocket方法以监听socket事件
       const originalCreateSocket = connection.agent.createSocket.bind(connection.agent)
+      
+      // 存储原始方法的引用以便清理
+      connection._originalCreateSocket = originalCreateSocket
 
       connection.agent.createSocket = (options, callback) => {
         const socket = originalCreateSocket(options, callback)
 
-        // 监听socket断开事件
-        socket.on('close', (hadError) => {
-          logger.info(
-            `🔌 Socket断开: 账户 ${this.accountId}, 连接 ${connection.id}, 错误: ${hadError}`
-          )
-          this.handleConnectionClose(connection, hadError)
-        })
+        // 使用WeakRef和FinalizationRegistry来优化内存管理
+        const connectionRef = new WeakRef(connection)
+        const poolRef = new WeakRef(this)
 
-        socket.on('error', (error) => {
-          logger.warn(
-            `⚠️ Socket错误: 账户 ${this.accountId}, 连接 ${connection.id}, 错误: ${error.message}`
-          )
-          this.handleConnectionError(connection, error)
-        })
+        // 创建优化的事件处理器，避免强引用
+        const createHandler = (handlerType) => {
+          return (...args) => {
+            const conn = connectionRef.deref()
+            const pool = poolRef.deref()
+            
+            if (!conn || !pool) {
+              // 连接或池已被回收，移除监听器
+              socket.removeAllListeners()
+              return
+            }
 
-        socket.on('timeout', () => {
-          logger.warn(`⏰ Socket超时: 账户 ${this.accountId}, 连接 ${connection.id}`)
-          this.handleConnectionTimeout(connection)
-        })
+            switch (handlerType) {
+              case 'close':
+                pool.handleConnectionClose(conn, args[0])
+                break
+              case 'error':
+                pool.handleConnectionError(conn, args[0])
+                break
+              case 'timeout':
+                pool.handleConnectionTimeout(conn)
+                break
+              case 'end':
+                pool.handleConnectionEnd(conn)
+                break
+            }
+          }
+        }
 
-        socket.on('end', () => {
-          logger.debug(`🏁 Socket结束: 账户 ${this.accountId}, 连接 ${connection.id}`)
-          this.handleConnectionEnd(connection)
+        // 存储事件处理器引用以便清理
+        const handlers = {
+          close: createHandler('close'),
+          error: createHandler('error'),
+          timeout: createHandler('timeout'),
+          end: createHandler('end')
+        }
+
+        // 附加事件监听器
+        socket.on('close', handlers.close)
+        socket.on('error', handlers.error)
+        socket.on('timeout', handlers.timeout)
+        socket.on('end', handlers.end)
+
+        // 存储处理器引用和socket引用用于清理
+        if (!connection._sockets) {
+          connection._sockets = new Set()
+        }
+        if (!connection._handlers) {
+          connection._handlers = new Map()
+        }
+
+        connection._sockets.add(socket)
+        connection._handlers.set(socket, handlers)
+
+        // 自动清理断开的socket
+        socket.once('close', () => {
+          connection._sockets?.delete(socket)
+          connection._handlers?.delete(socket)
         })
 
         return socket
       }
 
-      logger.debug(`👂 事件监听已附加: 账户 ${this.accountId}, 连接 ${connection.id}`)
+      logger.debug(`👂 优化事件监听已附加: 账户 ${this.accountId}, 连接 ${connection.id}`)
     } catch (error) {
       logger.error(`❌ 附加事件监听失败: 账户 ${this.accountId}`, error.message)
     }
@@ -301,12 +344,21 @@ class SmartConnectionPool extends EventEmitter {
   }
 
   /**
-   * 销毁单个连接的资源
+   * 销毁单个连接的资源 - 优化内存管理
    */
   destroyConnection(connection) {
     try {
       // 标记为不健康
       connection.isHealthy = false
+
+      // 清理socket监听器和引用
+      this._cleanupConnectionListeners(connection)
+
+      // 恢复原始的createSocket方法
+      if (connection.agent && connection._originalCreateSocket) {
+        connection.agent.createSocket = connection._originalCreateSocket
+        connection._originalCreateSocket = null
+      }
 
       // 释放代理Agent资源
       if (connection.agent && typeof connection.agent.destroy === 'function') {
@@ -314,10 +366,51 @@ class SmartConnectionPool extends EventEmitter {
         logger.debug(`🔌 代理连接已关闭: 连接 ${connection.id}`)
       }
 
-      // 清理引用
+      // 回收UUID到对象池
+      if (connection.id) {
+        performanceOptimizer.recycleUUID(connection.id)
+      }
+
+      // 清理所有引用
       connection.agent = null
+      connection.id = null
+      connection._sockets = null
+      connection._handlers = null
     } catch (error) {
       logger.warn(`⚠️ 销毁连接资源失败: ${connection.id}, 错误: ${error.message}`)
+    }
+  }
+
+  /**
+   * 清理连接的监听器和Socket引用
+   * @param {object} connection - 连接对象
+   * @private
+   */
+  _cleanupConnectionListeners(connection) {
+    try {
+      // 清理所有socket的监听器
+      if (connection._sockets && connection._handlers) {
+        for (const socket of connection._sockets) {
+          const handlers = connection._handlers.get(socket)
+          if (handlers) {
+            // 移除特定的事件监听器
+            socket.removeListener('close', handlers.close)
+            socket.removeListener('error', handlers.error)
+            socket.removeListener('timeout', handlers.timeout)
+            socket.removeListener('end', handlers.end)
+          }
+          
+          // 如果socket仍然活跃，优雅关闭
+          if (!socket.destroyed) {
+            socket.destroy()
+          }
+        }
+        
+        connection._sockets.clear()
+        connection._handlers.clear()
+      }
+    } catch (error) {
+      logger.debug(`⚠️ 清理连接监听器时出错: ${error.message}`)
     }
   }
 
