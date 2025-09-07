@@ -98,9 +98,18 @@ class ApiClient {
 
   // GET 请求
   async get(url, options = {}) {
-    const fullUrl = createApiUrl(url)
+    // 处理查询参数
+    let fullUrl = createApiUrl(url)
+    if (options.params) {
+      const params = new URLSearchParams(options.params)
+      fullUrl += '?' + params.toString()
+    }
+
+    // 移除 params 避免传递给 fetch
+    // eslint-disable-next-line no-unused-vars
+    const { params, ...configOptions } = options
     const config = this.buildConfig({
-      ...options,
+      ...configOptions,
       method: 'GET'
     })
 
@@ -145,6 +154,24 @@ class ApiClient {
       return await this.handleResponse(response)
     } catch (error) {
       console.error('API PUT Error:', error)
+      throw error
+    }
+  }
+
+  // PATCH 请求
+  async patch(url, data = null, options = {}) {
+    const fullUrl = createApiUrl(url)
+    const config = this.buildConfig({
+      ...options,
+      method: 'PATCH',
+      body: data ? JSON.stringify(data) : undefined
+    })
+
+    try {
+      const response = await fetch(fullUrl, config)
+      return await this.handleResponse(response)
+    } catch (error) {
+      console.error('API PATCH Error:', error)
       throw error
     }
   }
