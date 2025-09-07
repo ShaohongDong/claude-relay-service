@@ -102,6 +102,12 @@ class HybridConnectionManager extends EventEmitter {
 
     logger.info('🛑 停止混合连接管理器...')
 
+    // 🔧 移除对连接池的事件监听器（防止内存泄漏）
+    this.removePoolManagerEventListeners()
+
+    // 🔧 移除生命周期管理器事件监听器
+    this.removeLifecycleManagerEventListeners()
+
     // 清除定时器（使用timerManager安全清理）
     if (this.timers.healthCheckId) {
       timerManager.safeCleanTimer(this.timers.healthCheckId)
@@ -115,19 +121,35 @@ class HybridConnectionManager extends EventEmitter {
       this.timers.performanceCheckId = null
     }
 
-    // 移除事件监听器
+    // 🔧 清理连接状态缓存
+    this.connectionStates.clear()
+    logger.debug(`🧹 已清理连接状态缓存`)
+
+    // 🔧 清理对象引用（防止循环引用）
+    this.poolManager = null
+    this.lifecycleManager = null
+
+    // 移除自身事件监听器
     this.removeAllListeners()
 
     this.isRunning = false
-    logger.success('✅ 混合连接管理器已停止')
+    logger.success('✅ 混合连接管理器已停止 - 内存已清理')
   }
 
   /**
    * 设置连接池管理器事件监听
    */
   setupPoolManagerEvents() {
+    if (!this.poolManager || !this.poolManager.pools) {
+      logger.warn('⚠️ 连接池管理器或pools不可用')
+      return
+    }
+
+    // 🔧 存储事件监听器引用用于后续清理
+    this.poolEventListeners = new Map()
+
     // 监听单个连接池的事件
-    this.poolManager.pools?.forEach((pool, accountId) => {
+    this.poolManager.pools.forEach((pool, accountId) => {
       this.setupPoolEvents(pool, accountId)
     })
 
@@ -138,29 +160,36 @@ class HybridConnectionManager extends EventEmitter {
    * 设置单个连接池事件监听
    */
   setupPoolEvents(pool, accountId) {
-    // 连接成功事件
-    pool.on('connection:connected', (connectionData) => {
-      this.handleConnectionConnected(accountId, connectionData)
-    })
+    // 🔧 创建事件监听器函数并存储引用
+    const eventListeners = {
+      onConnected: (connectionData) => {
+        this.handleConnectionConnected(accountId, connectionData)
+      },
+      onDisconnected: (connectionData) => {
+        this.handleConnectionDisconnected(accountId, connectionData)
+      },
+      onError: (connectionData) => {
+        this.handleConnectionError(accountId, connectionData)
+      },
+      onReconnected: (connectionData) => {
+        this.handleConnectionReconnected(accountId, connectionData)
+      },
+      onStatusChanged: (statusData) => {
+        this.handlePoolStatusChanged(accountId, statusData)
+      }
+    }
 
-    // 连接断开事件
-    pool.on('connection:disconnected', (connectionData) => {
-      this.handleConnectionDisconnected(accountId, connectionData)
-    })
+    // 注册事件监听器
+    pool.on('connection:connected', eventListeners.onConnected)
+    pool.on('connection:disconnected', eventListeners.onDisconnected)
+    pool.on('connection:error', eventListeners.onError)
+    pool.on('connection:reconnected', eventListeners.onReconnected)
+    pool.on('pool:status:changed', eventListeners.onStatusChanged)
 
-    // 连接错误事件
-    pool.on('connection:error', (connectionData) => {
-      this.handleConnectionError(accountId, connectionData)
-    })
-
-    // 重连成功事件
-    pool.on('connection:reconnected', (connectionData) => {
-      this.handleConnectionReconnected(accountId, connectionData)
-    })
-
-    // 连接池状态变化事件
-    pool.on('pool:status:changed', (statusData) => {
-      this.handlePoolStatusChanged(accountId, statusData)
+    // 🔧 存储监听器引用用于清理
+    this.poolEventListeners.set(accountId, {
+      pool,
+      listeners: eventListeners
     })
 
     logger.debug(`🎧 已设置账户连接池事件监听: ${accountId}`)
@@ -369,10 +398,13 @@ class HybridConnectionManager extends EventEmitter {
       return
     }
 
-    // 监听连接重建请求事件
-    this.lifecycleManager.on('connection:recreation:requested', (recreationData) => {
+    // 🔧 创建事件监听器函数并存储引用
+    this.lifecycleEventListener = (recreationData) => {
       this.handleConnectionRecreationRequest(recreationData)
-    })
+    }
+
+    // 监听连接重建请求事件
+    this.lifecycleManager.on('connection:recreation:requested', this.lifecycleEventListener)
 
     logger.debug('🎧 已设置生命周期管理器事件监听')
   }
@@ -583,9 +615,64 @@ class HybridConnectionManager extends EventEmitter {
   }
 
   /**
+   * 🔧 移除连接池管理器事件监听器
+   */
+  removePoolManagerEventListeners() {
+    if (!this.poolEventListeners) {
+      return
+    }
+
+    let removedCount = 0
+    for (const [accountId, { pool, listeners }] of this.poolEventListeners) {
+      try {
+        // 移除所有事件监听器
+        pool.removeListener('connection:connected', listeners.onConnected)
+        pool.removeListener('connection:disconnected', listeners.onDisconnected)
+        pool.removeListener('connection:error', listeners.onError)
+        pool.removeListener('connection:reconnected', listeners.onReconnected)
+        pool.removeListener('pool:status:changed', listeners.onStatusChanged)
+        removedCount++
+      } catch (error) {
+        logger.warn(`⚠️ 移除连接池事件监听器失败: ${accountId} - ${error.message}`)
+      }
+    }
+
+    this.poolEventListeners.clear()
+    logger.debug(`🧹 已移除连接池事件监听器: ${removedCount}个`)
+  }
+
+  /**
+   * 🔧 移除生命周期管理器事件监听器
+   */
+  removeLifecycleManagerEventListeners() {
+    if (this.lifecycleManager && this.lifecycleEventListener) {
+      try {
+        this.lifecycleManager.removeListener(
+          'connection:recreation:requested',
+          this.lifecycleEventListener
+        )
+        this.lifecycleEventListener = null
+        logger.debug('🧹 已移除生命周期管理器事件监听器')
+      } catch (error) {
+        logger.warn(`⚠️ 移除生命周期管理器事件监听器失败: ${error.message}`)
+      }
+    }
+  }
+
+  /**
    * 获取详细的监控报告
    */
   getMonitoringReport() {
+    // 🔧 安全检查，防止在停止后访问已清理的对象
+    if (!this.isRunning || !this.poolManager) {
+      return {
+        manager: { isRunning: false, error: 'Manager is stopped or not initialized' },
+        pools: null,
+        connectionStates: [],
+        timestamp: Date.now()
+      }
+    }
+
     const poolStatus = this.poolManager.getAllPoolStatus()
 
     return {

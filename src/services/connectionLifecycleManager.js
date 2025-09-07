@@ -1,5 +1,6 @@
 const EventEmitter = require('events')
 const logger = require('../utils/logger')
+const timerManager = require('../utils/timerManager')
 
 /**
  * 连接生命周期管理器
@@ -93,12 +94,17 @@ class ConnectionLifecycleManager extends EventEmitter {
 
     logger.info('🛑 停止连接生命周期管理器...')
 
-    // 清除所有定时器
-    Object.values(this.timers).forEach((timer) => {
-      if (timer) {
-        clearInterval(timer)
-      }
-    })
+    // 🔧 使用timerManager安全清理所有定时器
+    if (this.timers.healthCheck) {
+      timerManager.clearTimersByService('connectionLifecycleManager')
+    } else {
+      // 后备方案：手动清理
+      Object.values(this.timers).forEach((timer) => {
+        if (timer) {
+          clearInterval(timer)
+        }
+      })
+    }
 
     // 清理所有定时器引用
     Object.keys(this.timers).forEach((key) => {
@@ -108,8 +114,14 @@ class ConnectionLifecycleManager extends EventEmitter {
     // 销毁所有活跃连接
     this.destroyAllConnections()
 
+    // 🔧 移除所有事件监听器（防止内存泄漏）
+    this.removeAllListeners()
+
+    // 🔧 清理对象引用（防止循环引用）
+    this.poolManager = null
+
     this.isRunning = false
-    logger.success('✅ 连接生命周期管理器已停止')
+    logger.success('✅ 连接生命周期管理器已停止 - 内存已清理')
     this.emit('lifecycle:stopped')
   }
 
@@ -256,9 +268,21 @@ class ConnectionLifecycleManager extends EventEmitter {
    * 启动兜底健康检查
    */
   startFallbackHealthCheck() {
-    this.timers.healthCheck = setInterval(() => {
-      this.performFallbackHealthCheck()
-    }, this.config.healthCheckInterval)
+    // 🔧 使用timerManager创建定时器，便于统一管理和清理
+    const result = timerManager.setInterval(
+      () => {
+        this.performFallbackHealthCheck()
+      },
+      this.config.healthCheckInterval,
+      {
+        name: 'fallback-health-check',
+        service: 'connectionLifecycleManager',
+        description: 'Fallback health check for connection lifecycle'
+      }
+    )
+
+    this.timers.healthCheck = result.intervalId
+    this.timers.healthCheckId = result.timerId
 
     logger.info(`🏥 兜底健康检查已启动: ${this.config.healthCheckInterval}ms间隔`)
   }
@@ -418,9 +442,21 @@ class ConnectionLifecycleManager extends EventEmitter {
    * 启动连接轮换
    */
   startConnectionRotation() {
-    this.timers.rotation = setInterval(() => {
-      this.performConnectionRotation()
-    }, this.config.connectionRotationInterval)
+    // 🔧 使用timerManager创建定时器
+    const result = timerManager.setInterval(
+      () => {
+        this.performConnectionRotation()
+      },
+      this.config.connectionRotationInterval,
+      {
+        name: 'connection-rotation',
+        service: 'connectionLifecycleManager',
+        description: 'Connection rotation and renewal'
+      }
+    )
+
+    this.timers.rotation = result.intervalId
+    this.timers.rotationId = result.timerId
 
     logger.info(`🔄 连接轮换检查已启动: ${this.config.connectionRotationInterval}ms间隔`)
   }
@@ -531,9 +567,21 @@ class ConnectionLifecycleManager extends EventEmitter {
    * 启动内存清理
    */
   startMemoryCleanup() {
-    this.timers.memoryCleanup = setInterval(() => {
-      this.performMemoryCleanup()
-    }, this.config.memoryCleanupInterval)
+    // 🔧 使用timerManager创建定时器
+    const result = timerManager.setInterval(
+      () => {
+        this.performMemoryCleanup()
+      },
+      this.config.memoryCleanupInterval,
+      {
+        name: 'memory-cleanup',
+        service: 'connectionLifecycleManager',
+        description: 'Memory cleanup and garbage collection'
+      }
+    )
+
+    this.timers.memoryCleanup = result.intervalId
+    this.timers.memoryCleanupId = result.timerId
 
     logger.info(`🧹 内存清理已启动: ${this.config.memoryCleanupInterval}ms间隔`)
   }
@@ -545,24 +593,55 @@ class ConnectionLifecycleManager extends EventEmitter {
     logger.debug('🧹 开始内存清理...')
 
     let cleanedCount = 0
+    let staleConnectionsRemoved = 0
+    let emptyAccountMappingsRemoved = 0
 
-    // 清理无效连接引用
+    // 🔧 清理无效连接引用
+    const connectionsToRemove = []
     for (const [connectionId, connection] of this.connections) {
       if (connection.status === 'destroyed' || connection.status === 'error') {
-        this.unregisterConnection(connectionId, 'memory_cleanup')
-        cleanedCount++
+        connectionsToRemove.push(connectionId)
+      }
+      // 🔧 清理过期连接（超过最大年龄的2倍）
+      const age = Date.now() - connection.createdAt
+      if (age > this.config.maxConnectionAge * 2) {
+        connectionsToRemove.push(connectionId)
+        staleConnectionsRemoved++
       }
     }
 
-    // 清理空的账户连接映射
+    // 批量移除连接
+    connectionsToRemove.forEach((connectionId) => {
+      this.unregisterConnection(connectionId, 'memory_cleanup')
+      cleanedCount++
+    })
+
+    // 🔧 清理空的账户连接映射
+    const accountsToRemove = []
     for (const [accountId, connections] of this.accountConnections) {
       if (connections.size === 0) {
-        this.accountConnections.delete(accountId)
-        cleanedCount++
+        accountsToRemove.push(accountId)
       }
+      // 🔧 清理孤立的连接ID（在accountConnections中但不在connections中）
+      const orphanIds = []
+      connections.forEach((connId) => {
+        if (!this.connections.has(connId)) {
+          orphanIds.push(connId)
+        }
+      })
+      orphanIds.forEach((orphanId) => {
+        connections.delete(orphanId)
+        cleanedCount++
+      })
     }
 
-    // 触发垃圾回收提示
+    accountsToRemove.forEach((accountId) => {
+      this.accountConnections.delete(accountId)
+      emptyAccountMappingsRemoved++
+      cleanedCount++
+    })
+
+    // 🔧 强制垃圾回收（如果可用且有清理操作）
     if (global.gc && cleanedCount > 0) {
       try {
         global.gc()
@@ -575,7 +654,12 @@ class ConnectionLifecycleManager extends EventEmitter {
     this.stats.memoryCleanups++
 
     if (cleanedCount > 0) {
-      logger.info(`🧹 内存清理完成: 清理 ${cleanedCount} 项`)
+      logger.info(
+        `🧹 内存清理完成: 总计清理 ${cleanedCount} 项 ` +
+          `(过期连接: ${staleConnectionsRemoved}, 空账户映射: ${emptyAccountMappingsRemoved})`
+      )
+    } else {
+      logger.debug('🧹 内存清理完成: 无需清理项目')
     }
   }
 
@@ -583,9 +667,21 @@ class ConnectionLifecycleManager extends EventEmitter {
    * 启动性能分析
    */
   startPerformanceAnalysis() {
-    this.timers.performanceAnalysis = setInterval(() => {
-      this.performPerformanceAnalysis()
-    }, this.config.performanceAnalysisInterval)
+    // 🔧 使用timerManager创建定时器
+    const result = timerManager.setInterval(
+      () => {
+        this.performPerformanceAnalysis()
+      },
+      this.config.performanceAnalysisInterval,
+      {
+        name: 'performance-analysis',
+        service: 'connectionLifecycleManager',
+        description: 'Performance analysis and monitoring'
+      }
+    )
+
+    this.timers.performanceAnalysis = result.intervalId
+    this.timers.performanceAnalysisId = result.timerId
 
     logger.info(`📊 性能分析已启动: ${this.config.performanceAnalysisInterval}ms间隔`)
   }
@@ -738,6 +834,7 @@ class ConnectionLifecycleManager extends EventEmitter {
 
     const connectionIds = Array.from(this.connections.keys())
     let destroyedCount = 0
+    let errors = 0
 
     connectionIds.forEach((connectionId) => {
       try {
@@ -745,14 +842,19 @@ class ConnectionLifecycleManager extends EventEmitter {
         destroyedCount++
       } catch (error) {
         logger.error(`❌ 销毁连接失败: ${connectionId} - ${error.message}`)
+        errors++
       }
     })
 
-    // 清理所有映射
+    // 🔧 强制清理所有映射，确保彻底清理
     this.connections.clear()
     this.accountConnections.clear()
 
-    logger.success(`✅ 所有连接已销毁: ${destroyedCount}个`)
+    // 🔧 重置统计计数器
+    this.stats.activeConnections = 0
+    this.stats.totalDestroyed += destroyedCount
+
+    logger.success(`✅ 所有连接已销毁: ${destroyedCount}个成功, ${errors}个失败`)
   }
 
   /**
@@ -906,9 +1008,65 @@ class ConnectionLifecycleManager extends EventEmitter {
   }
 
   /**
+   * 🔧 强制清理所有内存引用（紧急清理方法）
+   */
+  forceMemoryCleanup(reason = 'emergency_cleanup') {
+    logger.warn(`🧹 执行强制内存清理: 原因=${reason}`)
+
+    const beforeStats = {
+      connections: this.connections.size,
+      accountConnections: this.accountConnections.size
+    }
+
+    // 清理所有连接引用
+    this.connections.clear()
+    this.accountConnections.clear()
+
+    // 重置统计
+    this.stats.activeConnections = 0
+    this.stats.memoryCleanups++
+
+    // 清理对象引用
+    if (this.poolManager) {
+      this.poolManager = null
+    }
+
+    // 强制垃圾回收
+    if (global.gc) {
+      try {
+        global.gc()
+      } catch (error) {
+        // 忽略垃圾回收错误
+      }
+    }
+
+    logger.success(
+      `✅ 强制内存清理完成: 连接 ${beforeStats.connections}→0, 账户映射 ${beforeStats.accountConnections}→0`
+    )
+
+    this.emit('memory:force:cleaned', {
+      reason,
+      beforeStats,
+      afterStats: { connections: 0, accountConnections: 0 },
+      timestamp: Date.now()
+    })
+  }
+
+  /**
    * 获取完整状态报告
    */
   getStatusReport() {
+    // 🔧 安全检查，防止在停止后访问已清理的对象
+    if (!this.isRunning) {
+      return {
+        config: this.config,
+        stats: { ...this.stats, isRunning: false },
+        performanceReport: null,
+        timestamp: Date.now(),
+        note: 'Lifecycle manager is stopped'
+      }
+    }
+
     return {
       config: this.config,
       stats: this.getLifecycleStats(),

@@ -140,7 +140,7 @@ class ApiKeyService {
     try {
       const cacheKey = this._generateValidationCacheKey(apiKey)
 
-      // 尝试从缓存中删除
+      // 尝试从缓存中删除（直接访问内部Map，同步操作）
       if (this._validationCache.cache && this._validationCache.cache.has(cacheKey)) {
         this._validationCache.cache.delete(cacheKey)
         this._cacheStats.invalidations++
@@ -156,10 +156,10 @@ class ApiKeyService {
   }
 
   // 🧹 清除所有验证缓存
-  _clearAllValidationCache() {
+  async _clearAllValidationCache() {
     try {
       const beforeSize = this._validationCache.cache ? this._validationCache.cache.size : 0
-      this._validationCache.clear()
+      await this._validationCache.clear()
       this._cacheStats.invalidations += beforeSize
       logger.info(`🧹 Cleared all validation cache (${beforeSize} entries)`)
     } catch (error) {
@@ -197,7 +197,8 @@ class ApiKeyService {
       const cacheKey = this._generateValidationCacheKey(apiKey)
       let cached = null
       try {
-        cached = this._validationCache.get(cacheKey)
+        // 使用同步版本以避免阻塞验证流程
+        cached = this._validationCache.getSync(cacheKey)
       } catch (cacheError) {
         logger.warn('⚠️ Cache get operation failed, falling back to normal validation:', cacheError)
         // 继续执行正常验证，不抛出异常
@@ -214,14 +215,14 @@ class ApiKeyService {
       this._cacheStats.misses++
       const result = await this._performFullValidation(apiKey, startTime)
 
-      // 🔄 只缓存有效的验证结果
+      // 🔄 只缓存有效的验证结果 - 异步存储不阻塞验证
       if (result.valid) {
-        try {
-          this._validationCache.set(cacheKey, result, 5 * 60 * 1000) // 5分钟TTL
-        } catch (cacheError) {
-          logger.warn('⚠️ Cache set operation failed:', cacheError)
-          // 继续执行，不影响验证结果
-        }
+        this._validationCache
+          .set(cacheKey, result, 5 * 60 * 1000) // 5分钟TTL
+          .catch((cacheError) => {
+            logger.warn('⚠️ Cache set operation failed:', cacheError)
+            // 继续执行，不影响验证结果
+          })
       }
 
       return result
@@ -510,7 +511,7 @@ class ApiKeyService {
       // 🔄 清除相关的验证缓存
       // 注意：由于我们没有原始API Key，我们清除所有缓存以确保一致性
       // 在真实环境中可以考虑存储keyId到apiKey的映射以实现精确清除
-      this._clearAllValidationCache()
+      await this._clearAllValidationCache()
 
       logger.success(`📝 Updated API key: ${keyId}`)
 
@@ -548,7 +549,7 @@ class ApiKeyService {
 
       // 🔄 清除相关的验证缓存
       // 注意：由于我们没有原始API Key，我们清除所有缓存以确保一致性
-      this._clearAllValidationCache()
+      await this._clearAllValidationCache()
 
       logger.success(`🗑️ Soft deleted API key: ${keyId} by ${deletedBy} (${deletedByType})`)
 

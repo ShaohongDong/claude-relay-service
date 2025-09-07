@@ -183,7 +183,7 @@ class SystemIntegrationTester {
       try {
         const startTime = performance.now()
 
-        const response = await axios.post(
+        const _response = await axios.post(
           `${this.baseUrl}/api/v1/messages`,
           {
             messages: [testMessage],
@@ -203,21 +203,21 @@ class SystemIntegrationTester {
         const endTime = performance.now()
         const totalLatency = endTime - startTime
 
-        if (response.status === 200 && response.data.content) {
+        if (_response.status === 200 && _response.data.content) {
           this.testResults.endToEndTests.push({
             testIndex: i + 1,
             message: `${testMessage.content.slice(0, 50)}...`,
             totalLatency,
-            responseLength: response.data.content[0]?.text?.length || 0,
+            responseLength: _response.data.content[0]?.text?.length || 0,
             success: true,
             timestamp: new Date().toISOString()
           })
 
           logger.success(
-            `✅ 端到端测试 ${i + 1}: ${totalLatency.toFixed(2)}ms - ${response.data.content[0]?.text?.slice(0, 50)}...`
+            `✅ 端到端测试 ${i + 1}: ${totalLatency.toFixed(2)}ms - ${_response.data.content[0]?.text?.slice(0, 50)}...`
           )
         } else {
-          throw new Error(`Invalid response: ${response.status}`)
+          throw new Error(`Invalid response: ${_response.status}`)
         }
 
         // 避免过度频繁请求
@@ -248,7 +248,7 @@ class SystemIntegrationTester {
         const startTime = performance.now()
 
         // 执行简单的API请求来测量整体延迟
-        const response = await axios.post(
+        const _response = await axios.post(
           `${this.baseUrl}/api/v1/messages`,
           {
             messages: [{ role: 'user', content: 'Performance test. Reply: OK' }],
@@ -268,7 +268,7 @@ class SystemIntegrationTester {
         const endTime = performance.now()
         const latency = endTime - startTime
 
-        if (response.status === 200) {
+        if (_response.status === 200) {
           latencies.push(latency)
           logger.info(`⚡ 性能测试 ${i}: ${latency.toFixed(2)}ms`)
         }
@@ -384,7 +384,7 @@ class SystemIntegrationTester {
       // 测试无效API Key
       logger.info('🔑 测试无效API Key处理...')
       try {
-        const response = await axios.post(
+        const _response = await axios.post(
           `${this.baseUrl}/api/v1/messages`,
           {
             messages: [{ role: 'user', content: 'Test invalid key' }],
@@ -425,7 +425,7 @@ class SystemIntegrationTester {
       // 测试请求超时处理
       logger.info('⏱️ 测试请求超时处理...')
       try {
-        const response = await axios.post(
+        const _response = await axios.post(
           `${this.baseUrl}/api/v1/messages`,
           {
             messages: [{ role: 'user', content: 'Test timeout' }],

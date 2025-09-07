@@ -349,7 +349,7 @@ class ConnectionPoolTester {
   }
 
   // 模拟连接失败
-  async simulateConnectionFailure(pool, accountId) {
+  async simulateConnectionFailure(pool, _accountId) {
     try {
       // 强制销毁当前连接
       if (pool.connections && pool.connections.size > 0) {
@@ -538,7 +538,7 @@ class ConnectionPoolTester {
     const recommendations = []
     const preheat = this.analyzePreheatResults()
     const reconnection = this.analyzeReconnectionResults()
-    const performance = this.analyzePerformanceResults()
+    const _performanceResults = this.analyzePerformanceResults()
     const stability = this.analyzeStabilityResults()
 
     if (preheat.status === 'poor') {
@@ -643,7 +643,7 @@ if (require.main === module) {
 
   tester
     .runAllTests()
-    .then((report) => {
+    .then((_report) => {
       logger.success('✅ 连接池测试完成')
       process.exit(0)
     })

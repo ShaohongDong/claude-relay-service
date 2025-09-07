@@ -39,8 +39,8 @@ class ClaudeAccountService {
 
     // 🧹 定期清理缓存（每10分钟）- 使用timerManager统一管理
     const cleanupResult = timerManager.setInterval(
-      () => {
-        this._decryptCache.cleanup()
+      async () => {
+        await this._decryptCache.cleanup()
         logger.info('🧹 Claude decrypt cache cleanup completed', this._decryptCache.getStats())
       },
       10 * 60 * 1000,
@@ -944,9 +944,9 @@ class ClaudeAccountService {
       return ''
     }
 
-    // 🎯 检查缓存
+    // 🎯 检查缓存（使用同步版本以避免阻塞解密流程）
     const cacheKey = crypto.createHash('sha256').update(encryptedData).digest('hex')
-    const cached = this._decryptCache.get(cacheKey)
+    const cached = this._decryptCache.getSync(cacheKey)
     if (cached !== undefined) {
       return cached
     }
@@ -967,8 +967,10 @@ class ClaudeAccountService {
           decrypted = decipher.update(encrypted, 'hex', 'utf8')
           decrypted += decipher.final('utf8')
 
-          // 💾 存入缓存（5分钟过期）
-          this._decryptCache.set(cacheKey, decrypted, 5 * 60 * 1000)
+          // 💾 存入缓存（5分钟过期）- 异步存储不阻塞返回
+          this._decryptCache.set(cacheKey, decrypted, 5 * 60 * 1000).catch((error) => {
+            logger.warn('⚠️ Failed to cache decrypted data:', error)
+          })
 
           // 📊 定期打印缓存统计
           if ((this._decryptCache.hits + this._decryptCache.misses) % 1000 === 0) {
@@ -986,8 +988,10 @@ class ClaudeAccountService {
         decrypted = decipher.update(encryptedData, 'hex', 'utf8')
         decrypted += decipher.final('utf8')
 
-        // 💾 旧格式也存入缓存
-        this._decryptCache.set(cacheKey, decrypted, 5 * 60 * 1000)
+        // 💾 旧格式也存入缓存 - 异步存储不阻塞返回
+        this._decryptCache.set(cacheKey, decrypted, 5 * 60 * 1000).catch((error) => {
+          logger.warn('⚠️ Failed to cache decrypted data:', error)
+        })
 
         return decrypted
       } catch (oldError) {
@@ -2081,7 +2085,7 @@ class ClaudeAccountService {
    * 🧹 清理服务资源
    * 在应用关闭时调用，清理定时器防止内存泄漏
    */
-  cleanup() {
+  async cleanup() {
     logger.info('🧹 Starting Claude account service cleanup...')
 
     if (this._cleanupTimerId) {
@@ -2099,7 +2103,7 @@ class ClaudeAccountService {
     if (this._decryptCache) {
       try {
         const stats = this._decryptCache.getStats()
-        this._decryptCache.clear()
+        await this._decryptCache.clear()
         logger.debug(`✅ Claude service decrypt cache cleared (had ${stats.size} items)`)
       } catch (error) {
         logger.error('❌ Error clearing Claude service decrypt cache:', error.message)

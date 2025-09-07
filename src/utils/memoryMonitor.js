@@ -17,7 +17,7 @@ class MemoryMonitor {
       rss: 1024 * 1024 * 1024, // RSS超过1GB触发GC
       external: 512 * 1024 * 1024 // 外部内存超过512MB触发GC
     }
-    
+
     // 历史数据记录
     this.memoryHistory = []
     this.gcHistory = []
@@ -48,7 +48,8 @@ class MemoryMonitor {
    * 启动内存监控
    * @param {number} intervalMs - 监控间隔（毫秒）
    */
-  startMonitoring(intervalMs = 30000) { // 默认30秒
+  startMonitoring(intervalMs = 30000) {
+    // 默认30秒
     if (this.isMonitoring) {
       logger.warn('⚠️ 内存监控已在运行中')
       return
@@ -73,7 +74,7 @@ class MemoryMonitor {
     }
 
     this.isMonitoring = false
-    
+
     if (this.monitorInterval) {
       clearInterval(this.monitorInterval)
       this.monitorInterval = null
@@ -88,7 +89,7 @@ class MemoryMonitor {
    */
   performMemoryCheck() {
     const memoryUsage = this.getCurrentMemoryUsage()
-    
+
     // 记录内存历史
     this.recordMemoryHistory(memoryUsage)
 
@@ -135,7 +136,7 @@ class MemoryMonitor {
    */
   recordMemoryHistory(memoryUsage) {
     this.memoryHistory.push(memoryUsage)
-    
+
     // 保持历史记录大小
     if (this.memoryHistory.length > this.maxHistorySize) {
       this.memoryHistory.shift()
@@ -180,7 +181,7 @@ class MemoryMonitor {
    */
   performOptimizedGC(reason, beforeMemory) {
     const startTime = process.hrtime.bigint()
-    
+
     logger.info(`🗑️ 触发垃圾回收: ${reason}`)
 
     try {
@@ -209,7 +210,7 @@ class MemoryMonitor {
         memorySaved,
         effectiveness: (memorySaved / beforeMemory.heapUsed) * 100
       }
-      
+
       this.gcHistory.push(gcRecord)
       if (this.gcHistory.length > this.maxHistorySize) {
         this.gcHistory.shift()
@@ -218,8 +219,9 @@ class MemoryMonitor {
       // 更新统计
       this.stats.totalGCCalls++
       this.stats.totalMemorySaved += memorySaved
-      this.stats.averageGCTime = 
-        (this.stats.averageGCTime * (this.stats.totalGCCalls - 1) + gcDuration) / this.stats.totalGCCalls
+      this.stats.averageGCTime =
+        (this.stats.averageGCTime * (this.stats.totalGCCalls - 1) + gcDuration) /
+        this.stats.totalGCCalls
       this.stats.lastGCTime = Date.now()
 
       logger.info(
@@ -250,7 +252,7 @@ class MemoryMonitor {
    */
   checkMemoryLeak(currentMemory) {
     this.leakDetection.currentCheck++
-    
+
     if (this.leakDetection.currentCheck % this.leakDetection.checkInterval !== 0) {
       return
     }
@@ -261,17 +263,17 @@ class MemoryMonitor {
     }
 
     const memoryGrowth = currentMemory.heapUsed - this.leakDetection.baselineMemory.heapUsed
-    
+
     if (memoryGrowth > this.leakDetection.thresholdGrowth) {
       this.stats.memoryLeaksDetected++
-      
+
       logger.warn(
         `🚨 可能存在内存泄漏: 内存增长 ${(memoryGrowth / 1024 / 1024).toFixed(1)}MB 超过阈值 ${(this.leakDetection.thresholdGrowth / 1024 / 1024).toFixed(1)}MB`
       )
 
       // 触发强制GC以确认是否为泄漏
       this.performOptimizedGC('内存泄漏检测', currentMemory)
-      
+
       // 重新设置基线
       setTimeout(() => {
         this.leakDetection.baselineMemory = this.getCurrentMemoryUsage()
@@ -285,7 +287,7 @@ class MemoryMonitor {
    */
   getStats() {
     const currentMemory = this.getCurrentMemoryUsage()
-    
+
     return {
       current: currentMemory,
       monitoring: {
@@ -301,8 +303,9 @@ class MemoryMonitor {
       leakDetection: {
         enabled: this.leakDetection.enabled,
         detectedLeaks: this.stats.memoryLeaksDetected,
-        currentGrowth: this.leakDetection.baselineMemory ? 
-          currentMemory.heapUsed - this.leakDetection.baselineMemory.heapUsed : 0
+        currentGrowth: this.leakDetection.baselineMemory
+          ? currentMemory.heapUsed - this.leakDetection.baselineMemory.heapUsed
+          : 0
       },
       thresholds: this.gcThresholds
     }
@@ -314,7 +317,7 @@ class MemoryMonitor {
    */
   generateDetailedReport() {
     const stats = this.getStats()
-    
+
     // 计算内存趋势
     const recentHistory = this.memoryHistory.slice(-10) // 最近10次记录
     let memoryTrend = 'stable'
@@ -323,7 +326,7 @@ class MemoryMonitor {
       const lastMemory = recentHistory[recentHistory.length - 1].heapUsed
       const growth = lastMemory - firstMemory
       const growthPercent = (growth / firstMemory) * 100
-      
+
       if (growthPercent > 10) {
         memoryTrend = 'increasing'
       } else if (growthPercent < -10) {
@@ -333,8 +336,10 @@ class MemoryMonitor {
 
     // 计算平均GC效率
     const recentGCs = this.gcHistory.slice(-10)
-    const averageEffectiveness = recentGCs.length > 0 ?
-      recentGCs.reduce((sum, gc) => sum + gc.effectiveness, 0) / recentGCs.length : 0
+    const averageEffectiveness =
+      recentGCs.length > 0
+        ? recentGCs.reduce((sum, gc) => sum + gc.effectiveness, 0) / recentGCs.length
+        : 0
 
     return {
       ...stats,
@@ -343,7 +348,7 @@ class MemoryMonitor {
         averageGCEffectiveness: averageEffectiveness,
         recommendations: this.generateRecommendations(stats, memoryTrend, averageEffectiveness)
       },
-      recentGCs: recentGCs.map(gc => ({
+      recentGCs: recentGCs.map((gc) => ({
         timestamp: new Date(gc.timestamp).toISOString(),
         reason: gc.reason,
         duration: gc.duration,

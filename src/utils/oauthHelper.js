@@ -194,18 +194,18 @@ async function exchangeCodeForTokens(authorizationCode, codeVerifier, state, pro
   if (proxyConfig) {
     // 为代理请求设置正确的 Content-Type
     axiosConfig.headers['Content-Type'] = 'application/x-www-form-urlencoded'
-    
+
     // 使用 URLSearchParams 格式化数据
     const formData = new URLSearchParams()
     for (const [key, value] of Object.entries(params)) {
       formData.append(key, value)
     }
     requestData = formData.toString()
-    
+
     // 添加代理监控
     const startTime = performance.now()
     const proxyInfo = ProxyHelper.maskProxyInfo(proxyConfig)
-    
+
     // 在请求配置中记录开始时间和代理信息
     axiosConfig.metadata = {
       proxyStartTime: startTime,
@@ -224,12 +224,10 @@ async function exchangeCodeForTokens(authorizationCode, codeVerifier, state, pro
     if (proxyConfig && response.config.metadata) {
       const { proxyStartTime, proxyInfo } = response.config.metadata
       const connectTime = performance.now() - proxyStartTime
-      
+
       // 连接耗时超过1秒时使用warn级别，否则使用debug级别
       if (connectTime > 1000) {
-        logger.warn(
-          `🔗 代理连接耗时较长 - ${proxyInfo} - 总耗时: ${connectTime.toFixed(2)}ms`
-        )
+        logger.warn(`🔗 代理连接耗时较长 - ${proxyInfo} - 总耗时: ${connectTime.toFixed(2)}ms`)
       } else {
         logger.debug(`🔗 代理连接成功 - ${proxyInfo} - 总耗时: ${connectTime.toFixed(2)}ms`)
       }

@@ -421,8 +421,8 @@ class ClaudeRelayService {
 
     // 使用智能拷贝策略替代深拷贝
     const processedBody = performanceOptimizer.smartCopyRequestBody(
-      body, 
-      needsSystemModification, 
+      body,
+      needsSystemModification,
       false // 不强制深拷贝
     )
 
@@ -579,7 +579,7 @@ class ClaudeRelayService {
       } else {
         // 使用预编译模板
         processedBody.system = performanceOptimizer.getPrecompiledPrompt(
-          'claude_code_with_string', 
+          'claude_code_with_string',
           processedBody.system
         )
       }
@@ -589,18 +589,17 @@ class ClaudeRelayService {
     if (Array.isArray(processedBody.system)) {
       // 检查第一个元素是否已经是Claude Code提示词
       const firstItem = processedBody.system[0]
-      const isFirstItemClaudeCode = firstItem && 
-        firstItem.type === 'text' && 
-        firstItem.text === this.claudeCodeSystemPrompt
+      const isFirstItemClaudeCode =
+        firstItem && firstItem.type === 'text' && firstItem.text === this.claudeCodeSystemPrompt
 
       if (!isFirstItemClaudeCode) {
         // 使用缓存的正则表达式过滤重复的Claude Code提示词
         const claudeCodeRegex = performanceOptimizer.getCachedRegExp(
-          '^' + this.claudeCodeSystemPrompt.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$'
+          `^${this.claudeCodeSystemPrompt.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`
         )
-        
-        const filteredSystem = processedBody.system.filter(item => 
-          !(item && item.type === 'text' && claudeCodeRegex.test(item.text))
+
+        const filteredSystem = processedBody.system.filter(
+          (item) => !(item && item.type === 'text' && claudeCodeRegex.test(item.text))
         )
         processedBody.system = [claudeCodePrompt, ...filteredSystem]
       }
@@ -617,12 +616,12 @@ class ClaudeRelayService {
     try {
       // 尝试从缓存获取账户配置
       let account = performanceOptimizer.getCachedAccountConfig(accountId)
-      
+
       if (!account) {
         // 缓存未命中，查询数据库
         const accountData = await claudeAccountService.getAllAccounts()
         account = accountData.find((acc) => acc.id === accountId)
-        
+
         if (account) {
           // 缓存账户配置
           performanceOptimizer.cacheAccountConfig(accountId, account)

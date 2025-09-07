@@ -82,7 +82,7 @@ class PerformanceOptimizer {
     // 如果需要修改system字段，对其进行深拷贝
     if (needsSystemModification && body.system) {
       if (Array.isArray(body.system)) {
-        result.system = [...body.system.map(item => ({ ...item }))]
+        result.system = [...body.system.map((item) => ({ ...item }))]
       } else if (typeof body.system === 'string') {
         result.system = body.system // 字符串是不可变的，直接复用
       } else {
@@ -92,9 +92,9 @@ class PerformanceOptimizer {
 
     // 如果有messages且包含复杂结构，进行选择性深拷贝
     if (body.messages && Array.isArray(body.messages) && this._hasComplexMessages(body.messages)) {
-      result.messages = body.messages.map(msg => {
+      result.messages = body.messages.map((msg) => {
         if (Array.isArray(msg.content)) {
-          return { ...msg, content: [...msg.content.map(item => ({ ...item }))] }
+          return { ...msg, content: [...msg.content.map((item) => ({ ...item }))] }
         }
         return { ...msg }
       })
@@ -115,7 +115,7 @@ class PerformanceOptimizer {
     }
 
     if (Array.isArray(obj)) {
-      return obj.map(item => this._optimizedDeepCopy(item))
+      return obj.map((item) => this._optimizedDeepCopy(item))
     }
 
     const result = {}
@@ -161,9 +161,7 @@ class PerformanceOptimizer {
         const value = obj[key]
         if (Array.isArray(value) && value.length > 0) {
           // 检查数组元素是否为简单类型
-          const hasComplexItem = value.some(item => 
-            typeof item === 'object' && item !== null
-          )
+          const hasComplexItem = value.some((item) => typeof item === 'object' && item !== null)
           if (hasComplexItem) {
             return false
           }
@@ -183,7 +181,7 @@ class PerformanceOptimizer {
    * @private
    */
   _hasComplexMessages(messages) {
-    return messages.some(msg => Array.isArray(msg.content))
+    return messages.some((msg) => Array.isArray(msg.content))
   }
 
   /**
@@ -202,7 +200,8 @@ class PerformanceOptimizer {
    * @param {string} uuid - 要回收的UUID
    */
   recycleUUID(uuid) {
-    if (this.objectPool.uuids.length < 50) { // 限制池大小
+    if (this.objectPool.uuids.length < 50) {
+      // 限制池大小
       this.objectPool.uuids.push(uuid)
     }
   }
@@ -215,7 +214,7 @@ class PerformanceOptimizer {
     if (this.objectPool.requestContexts.length > 0) {
       const context = this.objectPool.requestContexts.pop()
       // 重置对象属性
-      Object.keys(context).forEach(key => delete context[key])
+      Object.keys(context).forEach((key) => delete context[key])
       return context
     }
     return {}
@@ -226,7 +225,8 @@ class PerformanceOptimizer {
    * @param {object} context - 要回收的上下文对象
    */
   recycleRequestContext(context) {
-    if (this.objectPool.requestContexts.length < 20) { // 限制池大小
+    if (this.objectPool.requestContexts.length < 20) {
+      // 限制池大小
       this.objectPool.requestContexts.push(context)
     }
   }
@@ -237,13 +237,15 @@ class PerformanceOptimizer {
    */
   initializePrecompiledPrompts() {
     const claudeCodePrompt = "You are Claude Code, Anthropic's official CLI for Claude."
-    
+
     // 预编译常用的系统提示词组合
-    this.precompiledPrompts.set('claude_code_only', [{
-      type: 'text',
-      text: claudeCodePrompt,
-      cache_control: { type: 'ephemeral' }
-    }])
+    this.precompiledPrompts.set('claude_code_only', [
+      {
+        type: 'text',
+        text: claudeCodePrompt,
+        cache_control: { type: 'ephemeral' }
+      }
+    ])
 
     this.precompiledPrompts.set('claude_code_with_string', (userPrompt) => [
       {
@@ -295,7 +297,7 @@ class PerformanceOptimizer {
   getCachedAccountConfig(accountId) {
     const cacheKey = `account_${accountId}`
     const cached = this.objectPool.accountConfigs.get(cacheKey)
-    
+
     if (!cached) {
       return null
     }
@@ -317,7 +319,7 @@ class PerformanceOptimizer {
    */
   getCachedRegExp(pattern, flags = '') {
     const cacheKey = `${pattern}_${flags}`
-    
+
     if (!this.objectPool.regexCache.has(cacheKey)) {
       this.objectPool.regexCache.set(cacheKey, {
         regex: new RegExp(pattern, flags),
@@ -326,7 +328,7 @@ class PerformanceOptimizer {
     }
 
     const cached = this.objectPool.regexCache.get(cacheKey)
-    
+
     // 检查TTL
     if (Date.now() - cached.timestamp > this.cacheTTL.regexCache) {
       this.objectPool.regexCache.delete(cacheKey)
@@ -388,10 +390,13 @@ class PerformanceOptimizer {
    */
   startCleanupTask() {
     // 每5分钟清理一次过期缓存
-    this.cleanupInterval = setInterval(() => {
-      this.cleanupExpiredCache()
-      logger.debug('🧹 执行定期缓存清理')
-    }, 5 * 60 * 1000)
+    this.cleanupInterval = setInterval(
+      () => {
+        this.cleanupExpiredCache()
+        logger.debug('🧹 执行定期缓存清理')
+      },
+      5 * 60 * 1000
+    )
 
     logger.info('🕐 性能优化器定期清理任务已启动')
   }
@@ -412,7 +417,7 @@ class PerformanceOptimizer {
    */
   destroy() {
     this.stopCleanupTask()
-    
+
     // 清空所有缓存
     this.objectPool.uuids = []
     this.objectPool.requestContexts = []

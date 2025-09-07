@@ -124,7 +124,7 @@ class SmartConnectionPool extends EventEmitter {
     try {
       // Hook createSocket方法以监听socket事件
       const originalCreateSocket = connection.agent.createSocket.bind(connection.agent)
-      
+
       // 存储原始方法的引用以便清理
       connection._originalCreateSocket = originalCreateSocket
 
@@ -136,11 +136,12 @@ class SmartConnectionPool extends EventEmitter {
         const poolRef = new WeakRef(this)
 
         // 创建优化的事件处理器，避免强引用
-        const createHandler = (handlerType) => {
-          return (...args) => {
+        const createHandler =
+          (handlerType) =>
+          (...args) => {
             const conn = connectionRef.deref()
             const pool = poolRef.deref()
-            
+
             if (!conn || !pool) {
               // 连接或池已被回收，移除监听器
               socket.removeAllListeners()
@@ -162,7 +163,6 @@ class SmartConnectionPool extends EventEmitter {
                 break
             }
           }
-        }
 
         // 存储事件处理器引用以便清理
         const handlers = {
@@ -399,13 +399,13 @@ class SmartConnectionPool extends EventEmitter {
             socket.removeListener('timeout', handlers.timeout)
             socket.removeListener('end', handlers.end)
           }
-          
+
           // 如果socket仍然活跃，优雅关闭
           if (!socket.destroyed) {
             socket.destroy()
           }
         }
-        
+
         connection._sockets.clear()
         connection._handlers.clear()
       }
