@@ -233,8 +233,59 @@ class ClaudeRelayService {
           )
           await unifiedClaudeScheduler.markAccountBlocked(accountId, accountType, sessionHash)
         }
-        // 检查是否为5xx状态码
-        else if (response.statusCode >= 500 && response.statusCode < 600) {
+        // 检查是否为502状态码（Bad Gateway - 需要重试和账户切换）
+        else if (response.statusCode === 502) {
+          logger.warn(`🌐 Bad Gateway error (502) detected for account ${accountId}, attempting retries`)
+          
+          try {
+            // 502错误重试逻辑：重试3次，每次间隔递增
+            const retryResponse = await this._retry502Error(
+              processedBody,
+              accessToken,
+              proxyAgent,
+              clientHeaders,
+              accountId,
+              options
+            )
+            
+            if (retryResponse) {
+              logger.info(`✅ 502 retry successful for account ${accountId}`)
+              return retryResponse
+            }
+          } catch (retryError) {
+            logger.warn(`🔄 502 retries failed for account ${accountId}, attempting account switch`)
+          }
+          
+          // 重试失败，尝试切换账户（但不标记原账户状态）
+          try {
+            logger.info(
+              `🔄 Initiating account switch retry for 502 error - API Key: ${apiKeyData.name}`
+            )
+            const retryResponse = await this._retryWithAccountSwitch(
+              requestBody,
+              apiKeyData,
+              clientRequest,
+              clientResponse,
+              clientHeaders,
+              options,
+              2, // maxRetries
+              true // skipMarkAccount - 不标记账户状态，因为502是临时网关问题
+            )
+
+            logger.info(
+              `✅ Account switch retry successful for 502 error - API Key: ${apiKeyData.name}`
+            )
+            return retryResponse
+          } catch (switchError) {
+            logger.error(
+              `❌ Account switch retry failed for 502 error - API Key: ${apiKeyData.name}:`,
+              switchError.message
+            )
+            // 重试和账户切换都失败，继续使用原始的502响应
+          }
+        }
+        // 检查是否为其他5xx状态码（排除502）
+        else if (response.statusCode >= 500 && response.statusCode < 600 && response.statusCode !== 502) {
           logger.warn(`🔥 Server error (${response.statusCode}) detected for account ${accountId}`)
           // 记录5xx错误
           await claudeAccountService.recordServerError(accountId, response.statusCode)
@@ -405,6 +456,60 @@ class ClaudeRelayService {
         `❌ Claude relay request failed for key: ${apiKeyData.name || apiKeyData.id}:`,
         error.message
       )
+      
+      // 检查是否为502相关的网络错误
+      if (this._is502RelatedError(error)) {
+        logger.warn(`🌐 Network error detected (${error.code}), treating as 502 and attempting retries`)
+        
+        try {
+          // 502错误重试逻辑：重试3次，每次间隔递增
+          const retryResponse = await this._retry502Error(
+            processedBody,
+            accessToken,
+            proxyAgent,
+            clientHeaders,
+            accountId,
+            options
+          )
+          
+          if (retryResponse) {
+            logger.info(`✅ 502 network error retry successful for account ${accountId}`)
+            retryResponse.accountId = accountId
+            return retryResponse
+          }
+        } catch (retryError) {
+          logger.warn(`🔄 502 network error retries failed for account ${accountId}, attempting account switch`)
+        }
+        
+        // 重试失败，尝试切换账户（但不标记原账户状态）
+        try {
+          logger.info(
+            `🔄 Initiating account switch retry for network error - API Key: ${apiKeyData.name}`
+          )
+          const retryResponse = await this._retryWithAccountSwitch(
+            requestBody,
+            apiKeyData,
+            clientRequest,
+            clientResponse,
+            clientHeaders,
+            options,
+            2, // maxRetries
+            true // skipMarkAccount - 不标记账户状态，因为是网络问题
+          )
+
+          logger.info(
+            `✅ Account switch retry successful for network error - API Key: ${apiKeyData.name}`
+          )
+          return retryResponse
+        } catch (switchError) {
+          logger.error(
+            `❌ Account switch retry failed for network error - API Key: ${apiKeyData.name}:`,
+            switchError.message
+          )
+          // 重试和账户切换都失败，抛出原始错误
+        }
+      }
+      
       throw error
     }
   }
@@ -856,6 +961,76 @@ class ClaudeRelayService {
     })
   }
 
+  // 🔄 502错误重试处理
+  async _retry502Error(body, accessToken, proxyAgent, clientHeaders, accountId, options = {}) {
+    const maxRetries = 3
+    const baseDelay = 500 // 基础延迟500ms
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        logger.info(`🔄 502 retry attempt ${attempt}/${maxRetries} for account ${accountId}`)
+        
+        // 计算延迟时间：500ms, 1000ms, 2000ms
+        if (attempt > 1) {
+          const delay = baseDelay * Math.pow(2, attempt - 2)
+          logger.info(`⏱️ Waiting ${delay}ms before retry ${attempt}`)
+          await new Promise(resolve => setTimeout(resolve, delay))
+        }
+        
+        const response = await this._makeClaudeRequest(
+          body,
+          accessToken,
+          proxyAgent,
+          clientHeaders,
+          accountId,
+          null,
+          options
+        )
+        
+        // 如果成功（非502），返回响应
+        if (response.statusCode === 200 || response.statusCode === 201) {
+          logger.info(`✅ 502 retry attempt ${attempt} successful for account ${accountId}`)
+          return response
+        }
+        
+        // 如果仍然是502，继续重试
+        if (response.statusCode === 502) {
+          logger.warn(`🌐 502 retry attempt ${attempt} still returned 502 for account ${accountId}`)
+          if (attempt === maxRetries) {
+            logger.error(`❌ All 502 retries exhausted for account ${accountId}`)
+            return null // 返回null表示重试失败
+          }
+          continue
+        }
+        
+        // 如果是其他错误，直接返回
+        logger.warn(`⚠️ 502 retry attempt ${attempt} returned ${response.statusCode} for account ${accountId}`)
+        return response
+        
+      } catch (error) {
+        logger.error(`❌ 502 retry attempt ${attempt} failed for account ${accountId}:`, error.message)
+        
+        // 如果是网络错误且还有重试机会，继续重试
+        if (attempt < maxRetries && this._is502RelatedError(error)) {
+          continue
+        }
+        
+        // 重试耗尽或非502相关错误，抛出异常
+        throw error
+      }
+    }
+    
+    return null
+  }
+  
+  // 🔍 判断是否为502相关的网络错误
+  _is502RelatedError(error) {
+    return error.code === 'ECONNRESET' || 
+           error.code === 'ENOTFOUND' || 
+           error.code === 'ECONNREFUSED' || 
+           error.code === 'ETIMEDOUT'
+  }
+
   // 🌊 处理流式响应（带usage数据捕获）
   async relayStreamRequestWithUsageCapture(
     requestBody,
@@ -998,14 +1173,18 @@ class ClaudeRelayService {
       } catch (error) {
         logger.error(`❌ Stream attempt ${attempt + 1} failed:`, error.message)
 
-        // 检查是否是可重试的错误（429限流或401未授权）
+        // 检查是否是可重试的错误（429限流、401未授权或502网关错误）
         const isRetryableError =
           error.message.includes('429') ||
           error.message.includes('Rate limit') ||
           error.message.includes('401') ||
           error.message.includes('Unauthorized') ||
+          error.message.includes('502') ||
+          error.message.includes('Bad Gateway') ||
           error.response?.statusCode === 429 ||
-          error.response?.statusCode === 401
+          error.response?.statusCode === 401 ||
+          error.response?.statusCode === 502 ||
+          this._is502RelatedError(error)
 
         if (isRetryableError && attempt < maxRetries) {
           logger.warn(
@@ -1145,7 +1324,15 @@ class ClaudeRelayService {
                 `🚫 [Stream] Forbidden error (403) detected for account ${accountId}, marking as blocked`
               )
               await unifiedClaudeScheduler.markAccountBlocked(accountId, accountType, sessionHash)
-            } else if (res.statusCode >= 500 && res.statusCode < 600) {
+            } else if (res.statusCode === 502) {
+              logger.warn(
+                `🌐 [Stream] Bad Gateway error (502) detected for account ${accountId}, rejecting for retry`
+              )
+              // 对于流式请求的502错误，直接reject以触发重试机制
+              // 不写入响应流，让上层重试逻辑处理
+              reject(new Error(`Claude API Bad Gateway (HTTP 502) for account ${accountId}`))
+              return
+            } else if (res.statusCode >= 500 && res.statusCode < 600 && res.statusCode !== 502) {
               logger.warn(
                 `🔥 [Stream] Server error (${res.statusCode}) detected for account ${accountId}`
               )
@@ -1568,20 +1755,33 @@ class ClaudeRelayService {
         // 根据错误类型提供更具体的错误信息
         let errorMessage = 'Upstream request failed'
         let statusCode = 500
+        let is502Related = false
+        
         if (error.code === 'ECONNRESET') {
           errorMessage = 'Connection reset by Claude API server'
           statusCode = 502
+          is502Related = true
         } else if (error.code === 'ENOTFOUND') {
           errorMessage = 'Unable to resolve Claude API hostname'
           statusCode = 502
+          is502Related = true
         } else if (error.code === 'ECONNREFUSED') {
           errorMessage = 'Connection refused by Claude API server'
           statusCode = 502
+          is502Related = true
         } else if (error.code === 'ETIMEDOUT') {
           errorMessage = 'Connection timed out to Claude API server'
           statusCode = 504
         }
 
+        // 对于502相关的网络错误，直接reject以触发重试机制
+        if (is502Related) {
+          logger.warn(`🌐 [Stream] Network error (${error.code}) detected, rejecting for retry`)
+          reject(new Error(`Claude API network error (${error.code}): ${errorMessage}`))
+          return
+        }
+
+        // 对于其他错误，写入响应流
         if (!responseStream.headersSent) {
           responseStream.writeHead(statusCode, {
             'Content-Type': 'text/event-stream',
@@ -1814,7 +2014,7 @@ class ClaudeRelayService {
     throw lastError
   }
 
-  // 🔄 账户切换重试逻辑（专用于429限流错误和401未授权错误）
+  // 🔄 账户切换重试逻辑（专用于429限流错误、401未授权错误和502网关错误）
   async _retryWithAccountSwitch(
     originalRequestBody,
     apiKeyData,
@@ -1822,7 +2022,8 @@ class ClaudeRelayService {
     clientResponse,
     clientHeaders,
     options = {},
-    maxRetries = 2
+    maxRetries = 2,
+    skipMarkAccount = false
   ) {
     let lastResponse = null
     let lastError = null
@@ -1954,13 +2155,17 @@ class ClaudeRelayService {
               `🚫 Retry attempt ${attempt + 1}: Account ${accountId} also rate limited (429), marking and trying next account`
             )
 
-            // 标记当前账户为限流状态
-            await unifiedClaudeScheduler.markAccountRateLimited(
-              accountId,
-              accountType,
-              currentSessionHash,
-              rateLimitResetTimestamp
-            )
+            // 标记当前账户为限流状态（502错误时跳过标记）
+            if (!skipMarkAccount) {
+              await unifiedClaudeScheduler.markAccountRateLimited(
+                accountId,
+                accountType,
+                currentSessionHash,
+                rateLimitResetTimestamp
+              )
+            } else {
+              logger.info(`⏭️ Skipping account status marking for account ${accountId} (502 gateway error)`)
+            }
 
             // 如果还有重试机会，继续下一次重试
             if (attempt < maxRetries) {

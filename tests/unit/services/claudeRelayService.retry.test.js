@@ -1,6 +1,6 @@
 /**
  * ClaudeRelayService 账户切换重试机制测试
- * 专门测试429和401错误的账户切换逻辑
+ * 专门测试429、401和502错误的账户切换逻辑
  * 目标：实现100%新增代码覆盖率
  */
 
@@ -305,6 +305,90 @@ describe('ClaudeRelayService - 账户切换重试机制', () => {
       )
     })
 
+    test('502错误 - 第一次重试成功', async () => {
+      // Mock account selection for retry
+      unifiedClaudeScheduler.selectAccountForApiKey
+        .mockResolvedValueOnce({ accountId: 'account-1', accountType: 'claude' })
+        .mockResolvedValueOnce({ accountId: 'account-2', accountType: 'claude' })
+
+      // First request returns 502, second request (after account switch) returns 200
+      const mock502Response = {
+        statusCode: 502,
+        headers: {},
+        body: JSON.stringify({
+          error: {
+            message: "Bad Gateway"
+          }
+        })
+      }
+      
+      const mock200Response = {
+        statusCode: 200,
+        body: JSON.stringify({ content: [{ text: 'Success' }] })
+      }
+      
+      claudeRelayService._makeClaudeRequest = jest.fn()
+        .mockResolvedValueOnce(mock502Response)
+        .mockResolvedValueOnce(mock200Response)
+
+      const result = await claudeRelayService._retryWithAccountSwitch(
+        mockRequestBody,
+        mockApiKeyData,
+        mockClientRequest,
+        mockClientResponse,
+        mockClientHeaders,
+        {},
+        2, // maxRetries
+        true // skipMarkAccount for 502 errors
+      )
+
+      expect(result.statusCode).toBe(200)
+      // 验证502错误时不标记账户状态
+      expect(unifiedClaudeScheduler.markAccountRateLimited).not.toHaveBeenCalled()
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining('Account switch retry successful after 2 attempts')
+      )
+    })
+
+    test('502错误 - 所有重试都失败', async () => {
+      // Mock multiple accounts for all attempts
+      unifiedClaudeScheduler.selectAccountForApiKey
+        .mockResolvedValueOnce({ accountId: 'account-1', accountType: 'claude' })
+        .mockResolvedValueOnce({ accountId: 'account-2', accountType: 'claude' })
+        .mockResolvedValueOnce({ accountId: 'account-3', accountType: 'claude' })
+
+      const mock502Response = {
+        statusCode: 502,
+        headers: {},
+        body: JSON.stringify({
+          error: {
+            message: "Bad Gateway"
+          }
+        })
+      }
+      
+      claudeRelayService._makeClaudeRequest = jest.fn()
+        .mockResolvedValue(mock502Response)
+
+      const result = await claudeRelayService._retryWithAccountSwitch(
+        mockRequestBody,
+        mockApiKeyData,
+        mockClientRequest,
+        mockClientResponse,
+        mockClientHeaders,
+        {},
+        2, // maxRetries
+        true // skipMarkAccount for 502 errors
+      )
+
+      expect(result.statusCode).toBe(502)
+      // 验证502错误时不标记任何账户状态
+      expect(unifiedClaudeScheduler.markAccountRateLimited).not.toHaveBeenCalled()
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.stringContaining('All account switch retries failed after 3 attempts')
+      )
+    })
+
     test('客户端连接断开处理', async () => {
       // Mock account selection
       unifiedClaudeScheduler.selectAccountForApiKey
@@ -505,6 +589,61 @@ describe('ClaudeRelayService - 账户切换重试机制', () => {
       )
 
       expect(claudeRelayService._makeClaudeStreamRequestWithUsageCapture).toHaveBeenCalledTimes(2)
+    })
+
+    test('502错误重试成功', async () => {
+      // Mock account selection for retry
+      unifiedClaudeScheduler.selectAccountForApiKey
+        .mockResolvedValueOnce({ accountId: 'stream-account-1', accountType: 'claude' })
+        .mockResolvedValueOnce({ accountId: 'stream-account-2', accountType: 'claude' })
+      
+      claudeRelayService._makeClaudeStreamRequestWithUsageCapture = jest.fn()
+        .mockRejectedValueOnce(new Error('Claude API Bad Gateway (HTTP 502) for account stream-account-1'))
+        .mockResolvedValueOnce()
+
+      await claudeRelayService._executeStreamRequestWithRetry(
+        mockRequestBody,
+        mockApiKeyData,
+        mockClientResponse,
+        {},
+        mockUsageCallback
+      )
+
+      expect(claudeRelayService._makeClaudeStreamRequestWithUsageCapture).toHaveBeenCalledTimes(2)
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Stream retryable error detected')
+      )
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining('Stream account switch retry successful after 2 attempts')
+      )
+    })
+
+    test('网络错误重试成功', async () => {
+      // Mock account selection for retry
+      unifiedClaudeScheduler.selectAccountForApiKey
+        .mockResolvedValueOnce({ accountId: 'stream-account-1', accountType: 'claude' })
+        .mockResolvedValueOnce({ accountId: 'stream-account-2', accountType: 'claude' })
+      
+      // Create a network error that matches the _is502RelatedError pattern
+      const networkError = new Error('Connection reset by server')
+      networkError.code = 'ECONNRESET'
+      
+      claudeRelayService._makeClaudeStreamRequestWithUsageCapture = jest.fn()
+        .mockRejectedValueOnce(networkError)
+        .mockResolvedValueOnce()
+
+      await claudeRelayService._executeStreamRequestWithRetry(
+        mockRequestBody,
+        mockApiKeyData,
+        mockClientResponse,
+        {},
+        mockUsageCallback
+      )
+
+      expect(claudeRelayService._makeClaudeStreamRequestWithUsageCapture).toHaveBeenCalledTimes(2)
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Stream retryable error detected')
+      )
     })
 
     test('所有重试都失败', async () => {
@@ -940,6 +1079,181 @@ describe('ClaudeRelayService - 账户切换重试机制', () => {
         expect.stringContaining('Failed to record 401 error for account test-account-id'),
         expect.any(Error)
       )
+    })
+  })
+
+  describe('_retry502Error - 502错误重试机制', () => {
+    const mockAccountId = 'test-account-502'
+    const mockBody = { model: 'test', messages: [] }
+    const mockClientHeaders = { 'user-agent': 'test' }
+
+    beforeEach(() => {
+      claudeRelayService._makeClaudeRequest = jest.fn()
+      // Don't mock _is502RelatedError - use the real implementation
+    })
+
+    test('第一次重试即成功', async () => {
+      claudeRelayService._makeClaudeRequest
+        .mockResolvedValueOnce({ statusCode: 200, body: '{"success": true}' })
+
+      const result = await claudeRelayService._retry502Error(
+        mockBody,
+        'mock-token',
+        null,
+        mockClientHeaders,
+        mockAccountId
+      )
+
+      expect(result.statusCode).toBe(200)
+      expect(claudeRelayService._makeClaudeRequest).toHaveBeenCalledTimes(1)
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining('502 retry attempt 1 successful')
+      )
+    })
+
+    test('3次重试后成功', async () => {
+      claudeRelayService._makeClaudeRequest
+        .mockResolvedValueOnce({ statusCode: 502, body: '{"error": "Bad Gateway"}' })
+        .mockResolvedValueOnce({ statusCode: 502, body: '{"error": "Bad Gateway"}' })
+        .mockResolvedValueOnce({ statusCode: 200, body: '{"success": true}' })
+
+      const result = await claudeRelayService._retry502Error(
+        mockBody,
+        'mock-token',
+        null,
+        mockClientHeaders,
+        mockAccountId
+      )
+
+      expect(result.statusCode).toBe(200)
+      expect(claudeRelayService._makeClaudeRequest).toHaveBeenCalledTimes(3)
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining('502 retry attempt 3 successful')
+      )
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining('Waiting 500ms before retry 2')
+      )
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining('Waiting 1000ms before retry 3')
+      )
+    })
+
+    test('所有重试都失败', async () => {
+      claudeRelayService._makeClaudeRequest
+        .mockResolvedValue({ statusCode: 502, body: '{"error": "Bad Gateway"}' })
+
+      const result = await claudeRelayService._retry502Error(
+        mockBody,
+        'mock-token',
+        null,
+        mockClientHeaders,
+        mockAccountId
+      )
+
+      expect(result).toBeNull()
+      expect(claudeRelayService._makeClaudeRequest).toHaveBeenCalledTimes(3)
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.stringContaining('All 502 retries exhausted')
+      )
+    })
+
+    test('网络错误重试', async () => {
+      const networkError = new Error('ECONNRESET')
+      networkError.code = 'ECONNRESET'
+      
+      claudeRelayService._makeClaudeRequest
+        .mockRejectedValueOnce(networkError)
+        .mockResolvedValueOnce({ statusCode: 200, body: '{"success": true}' })
+
+      const result = await claudeRelayService._retry502Error(
+        mockBody,
+        'mock-token',
+        null,
+        mockClientHeaders,
+        mockAccountId
+      )
+
+      expect(result.statusCode).toBe(200)
+      expect(claudeRelayService._makeClaudeRequest).toHaveBeenCalledTimes(2)
+    })
+
+    test('非502相关错误直接抛出', async () => {
+      const nonNetworkError = new Error('Other error')
+      nonNetworkError.code = 'OTHER_ERROR'
+      
+      claudeRelayService._makeClaudeRequest
+        .mockRejectedValue(nonNetworkError)
+
+      await expect(claudeRelayService._retry502Error(
+        mockBody,
+        'mock-token',
+        null,
+        mockClientHeaders,
+        mockAccountId
+      )).rejects.toThrow('Other error')
+
+      expect(claudeRelayService._makeClaudeRequest).toHaveBeenCalledTimes(1)
+    })
+
+    test('非502响应直接返回', async () => {
+      claudeRelayService._makeClaudeRequest
+        .mockResolvedValueOnce({ statusCode: 500, body: '{"error": "Internal Error"}' })
+
+      const result = await claudeRelayService._retry502Error(
+        mockBody,
+        'mock-token',
+        null,
+        mockClientHeaders,
+        mockAccountId
+      )
+
+      expect(result.statusCode).toBe(500)
+      expect(claudeRelayService._makeClaudeRequest).toHaveBeenCalledTimes(1)
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('502 retry attempt 1 returned 500')
+      )
+    })
+  })
+
+  describe('_is502RelatedError - 502相关错误判断', () => {
+    test('ECONNRESET错误判断', () => {
+      const error = new Error('Connection reset')
+      error.code = 'ECONNRESET'
+      
+      const result = claudeRelayService._is502RelatedError(error)
+      expect(result).toBe(true)
+    })
+
+    test('ENOTFOUND错误判断', () => {
+      const error = new Error('Host not found')
+      error.code = 'ENOTFOUND'
+      
+      const result = claudeRelayService._is502RelatedError(error)
+      expect(result).toBe(true)
+    })
+
+    test('ECONNREFUSED错误判断', () => {
+      const error = new Error('Connection refused')
+      error.code = 'ECONNREFUSED'
+      
+      const result = claudeRelayService._is502RelatedError(error)
+      expect(result).toBe(true)
+    })
+
+    test('ETIMEDOUT错误判断', () => {
+      const error = new Error('Connection timeout')
+      error.code = 'ETIMEDOUT'
+      
+      const result = claudeRelayService._is502RelatedError(error)
+      expect(result).toBe(true)
+    })
+
+    test('其他错误判断', () => {
+      const error = new Error('Other error')
+      error.code = 'OTHER'
+      
+      const result = claudeRelayService._is502RelatedError(error)
+      expect(result).toBe(false)
     })
   })
 })
