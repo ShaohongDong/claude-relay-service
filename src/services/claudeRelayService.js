@@ -452,10 +452,6 @@ class ClaudeRelayService {
       response.accountId = accountId
       return response
     } catch (error) {
-      logger.error(
-        `❌ Claude relay request failed for key: ${apiKeyData.name || apiKeyData.id}:`,
-        error.message
-      )
       
       // 检查是否为502相关的网络错误
       if (this._is502RelatedError(error)) {
@@ -480,6 +476,12 @@ class ClaudeRelayService {
         } catch (retryError) {
           logger.warn(`🔄 502 network error retries failed for account ${accountId}, attempting account switch`)
         }
+        
+        // 重试失败后才记录错误日志
+        logger.error(
+          `❌ Claude relay request failed for key: ${apiKeyData.name || apiKeyData.id}:`,
+          error.message
+        )
         
         // 重试失败，尝试切换账户（但不标记原账户状态）
         try {
@@ -1388,16 +1390,118 @@ class ClaudeRelayService {
             return
           }
 
-          // 对于其他错误，收集错误数据
+          // 对于其他错误，收集错误数据和诊断信息
           let errorData = ''
-
-          res.on('data', (chunk) => {
-            errorData += chunk.toString()
+          let errorHeaders = {}
+          let errorCollected = false
+          
+          // 记录请求诊断信息
+          const diagnosticInfo = {
+            statusCode: res.statusCode,
+            headers: res.headers || {},
+            url: res.url || 'unknown',
+            method: res.req?.method || 'unknown',
+            timestamp: new Date().toISOString()
+          }
+          
+          logger.error('❌ Claude API error diagnostics:', {
+            status: res.statusCode,
+            contentType: res.headers?.['content-type'],
+            contentLength: res.headers?.['content-length'],
+            hasBody: res.readable,
+            accountId,
+            proxyUsed: !!account.proxy
           })
 
-          res.on('end', () => {
-            console.error(': ❌ ', errorData)
-            logger.error('❌ Claude API error response:', errorData)
+          // 增强错误数据收集，处理时序问题
+          const collectErrorData = () => {
+            return new Promise((resolveCollection) => {
+              const chunks = []
+              let totalLength = 0
+              const timeout = setTimeout(() => {
+                if (!errorCollected) {
+                  logger.warn('⏰ Error data collection timeout')
+                  resolveCollection()
+                }
+              }, 5000) // 5秒超时
+
+              res.on('data', (chunk) => {
+                try {
+                  chunks.push(chunk)
+                  totalLength += chunk.length
+                  logger.debug(`📦 Error chunk received: ${chunk.length} bytes`)
+                } catch (err) {
+                  logger.error('❌ Error processing error chunk:', err)
+                }
+              })
+
+              res.on('end', () => {
+                clearTimeout(timeout)
+                if (!errorCollected) {
+                  errorCollected = true
+                  try {
+                    if (chunks.length > 0) {
+                      errorData = Buffer.concat(chunks, totalLength).toString('utf8')
+                      logger.info(`📋 Complete error response collected: ${errorData.length} chars`)
+                    } else {
+                      logger.warn('📭 No error response body received')
+                    }
+                  } catch (err) {
+                    logger.error('❌ Error concatenating error chunks:', err)
+                    errorData = chunks.map(c => c.toString()).join('')
+                  }
+                  resolveCollection()
+                }
+              })
+
+              res.on('error', (err) => {
+                clearTimeout(timeout)
+                logger.error('❌ Error stream error:', err)
+                if (!errorCollected) {
+                  errorCollected = true
+                  resolveCollection()
+                }
+              })
+
+              // 如果流已经结束，立即处理
+              if (res.readableEnded || res.destroyed) {
+                clearTimeout(timeout)
+                logger.info('🔚 Response stream already ended')
+                resolveCollection()
+              }
+            })
+          }
+
+          // 异步收集错误数据
+          collectErrorData().then(() => {
+            // 特殊处理400错误
+            if (res.statusCode === 400) {
+              logger.error('🚫 [API-ERROR] Claude API 400 Bad Request:', {
+                errorBody: errorData || '[Empty response body]',
+                contentType: res.headers?.['content-type'],
+                contentLength: res.headers?.['content-length'],
+                accountId,
+                proxyInfo: (account.proxy && account.proxy.type && account.proxy.host && account.proxy.port) 
+                  ? `${account.proxy.type}://${account.proxy.host}:${account.proxy.port}` 
+                  : 'direct',
+                requestHeaders: {
+                  authorization: req.headers?.authorization?.substring(0, 20) + '...' || 'none',
+                  contentType: req.headers?.['content-type']
+                }
+              })
+            }
+
+            // 输出完整错误信息
+            const fullErrorInfo = {
+              status: res.statusCode,
+              body: errorData || '[Empty response body]',
+              headers: res.headers,
+              diagnostic: diagnosticInfo
+            }
+            
+            console.error(': ❌ Claude API Full Error:', JSON.stringify(fullErrorInfo, null, 2))
+            logger.error('❌ Claude API error response:', fullErrorInfo)
+            
             if (!responseStream.destroyed) {
               // 发送错误事件
               responseStream.write('event: error\n')
@@ -1405,13 +1509,18 @@ class ClaudeRelayService {
                 `data: ${JSON.stringify({
                   error: 'Claude API error',
                   status: res.statusCode,
-                  details: errorData,
+                  details: errorData || '[Empty response body]',
+                  diagnostic: diagnosticInfo,
                   timestamp: new Date().toISOString()
                 })}\n\n`
               )
               responseStream.end()
             }
-            reject(new Error(`Claude API error: ${res.statusCode}`))
+            
+            reject(new Error(`Claude API error: ${res.statusCode} - ${errorData ? errorData.substring(0, 200) : 'No response body'}`))
+          }).catch((collectError) => {
+            logger.error('❌ Error collecting error data:', collectError)
+            reject(new Error(`Claude API error: ${res.statusCode} [Collection failed]`))
           })
           return
         }
